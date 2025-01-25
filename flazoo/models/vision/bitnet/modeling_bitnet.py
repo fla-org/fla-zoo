@@ -25,7 +25,7 @@ from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
 from fla.modules.activations import swiglu_bitlinear
 from fla.modules.fused_bitlinear import BitLinear, rms_norm_linear_quant
-from models.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
+from flazoo.models.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
 from ..utils import ImageEmbeddings, Pooler
 
 logger = logging.get_logger(__name__)

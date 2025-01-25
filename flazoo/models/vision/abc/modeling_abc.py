@@ -23,7 +23,7 @@ from fla.layers.attn import Attention
 from .configuration_abc import ABCVisionConfig
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
-from models.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
+from flazoo.models.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
 from ..utils import ImageEmbeddings, Pooler
 
 logger = logging.get_logger(__name__)

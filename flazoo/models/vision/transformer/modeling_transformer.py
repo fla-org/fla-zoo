@@ -25,7 +25,7 @@ from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
 from fla.modules.activations import swiglu_linear
 from fla.modules.layernorm import rms_norm_linear
-from models.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
+from flazoo.models.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
 from ..utils import ImageEmbeddings, Pooler
 if TYPE_CHECKING:
     from transformers.processing_utils import Unpack
