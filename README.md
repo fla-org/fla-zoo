@@ -39,3 +39,4 @@ As an actively developed repo, no released packages are provided.
 ## TODO
 
 - [ ] Write documentation for vision models.
+- [ ] Release training scripts for vision models.
