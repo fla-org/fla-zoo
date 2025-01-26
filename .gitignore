@@ -1,0 +1,22 @@
+data
+outputs
+# logs and configs
+log.*
+*.log
+*.cfg
+*.ini
+*.yml
+*.yaml
+
+# pycache
+__pycache__
+
+# saved model
+*.pkl
+*.pt
+
+# vscode
+.vscode
+
+*.sh
+
