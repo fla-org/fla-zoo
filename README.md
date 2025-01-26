@@ -27,17 +27,17 @@ This repository implements a collection of Flash-Linear-Attention models that ex
 
 ## Features
 
-- **Vision models:** `fla-zoo` currently supports vision models.
+- **`vision/Image Classification`:** `fla-zoo` currently supports image classification models. A simple documentation is in [here](docs/vision/image_classification/img_classification.md).
 
 ## Installation
 
 Requirements:
 - All the dependencies shown [here](https://github.com/fla-org/flash-linear-attention?tab=readme-ov-file#installation)
-- Also, [TODO]
+- [torchvision](https://github.com/pytorch/vision)
 
 As an actively developed repo, no released packages are provided.
 
 ## TODO
 
-- [ ] Write documentation for vision models.
-- [ ] Release training scripts for vision models.
+- [x] Write documentation for image classification models.
+- [ ] Release training scripts for image classification models.
