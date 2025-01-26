@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import warnings
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union, Dict
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -19,13 +19,15 @@ from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
 from fla.layers.attn import Attention
-from .configuration_transformer import TransformerVisionConfig
+from fla.layers.gated_deltanet import GatedDeltaNet
+from .configuration_gated_deltanet import \
+    GatedDeltaNetVisionConfig
 from fla.models.utils import Cache
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
 from fla.modules.activations import swiglu_linear
 from fla.modules.layernorm import rms_norm_linear
-from flazoo.models.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
+from flazoo.models.vision.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
 from ..utils import ImageEmbeddings, Pooler
 if TYPE_CHECKING:
     from transformers.processing_utils import Unpack
@@ -33,7 +35,8 @@ if TYPE_CHECKING:
 
 logger = logging.get_logger(__name__)
 
-class TransformerVisionMLP(nn.Module):
+
+class GatedDeltaNetVisionMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -46,30 +49,45 @@ class TransformerVisionMLP(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-class TransformerVisionBlock(nn.Module):
+class GatedDeltaNetVisionBlock(nn.Module):
     def __init__(self, config, layer_idx: int):
         super().__init__()
         
         if not config.norm_first:
             self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
-        self.attn = Attention(
-            hidden_size=config.hidden_size,
-            num_heads=config.num_heads,
-            num_kv_heads=config.num_kv_heads,
-            window_size=config.window_size,
-            rope_theta=config.rope_theta,
-            norm_first=config.norm_first,
-            norm_eps=config.norm_eps,
-            layer_idx=layer_idx
-        )
+        if config.attn is not None and layer_idx in config.attn['layers']:
+            self.attn = Attention(
+                hidden_size=config.hidden_size,
+                num_heads=config.attn['num_heads'],
+                num_kv_heads=config.attn['num_kv_heads'],
+                window_size=config.attn['window_size'],
+                layer_idx=layer_idx
+            )
+        else:
+            self.attn = GatedDeltaNet(
+                mode=config.attn_mode,
+                hidden_size=config.hidden_size,
+                expand_v=config.expand_v,
+                head_dim=config.head_dim,
+                num_heads=config.num_heads,
+                use_gate=config.use_gate,
+                use_short_conv=config.use_short_conv,
+                conv_size=config.conv_size,
+                norm_first=config.norm_first,
+                norm_eps=config.norm_eps,
+                layer_idx=layer_idx
+            )
             
         if not config.norm_first:
             self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = TransformerVisionMLP(config)
+        self.mlp = GatedDeltaNetVisionMLP(config)
 
-        self.scan_type = "uni-scan"
+        if config.attn is not None and layer_idx in config.attn['layers']:
+            self.scan_type = 'uni-scan'
+        else:
+            self.scan_type = config.scan_type
 
     def forward(
         self,
@@ -81,9 +99,11 @@ class TransformerVisionBlock(nn.Module):
     ) -> Union[Tuple[torch.Tensor, Optional[torch.Tensor]], Tuple[torch.Tensor]]:
         residual = hidden_states
 
+        # Pre-normalization if enabled
         if hasattr(self, 'ln_1'):
             hidden_states = self.ln_1(hidden_states)
 
+        # Apply attention
         
         hidden_states = prepare_hidden_states_for_cross_scan(hidden_states, self.scan_type)
         
@@ -97,22 +117,25 @@ class TransformerVisionBlock(nn.Module):
         
         hidden_states = prepare_hidden_states_for_cross_merge(hidden_states, self.scan_type)
 
+        # First residual connection
         hidden_states = residual + hidden_states
         residual = hidden_states
 
+        # Pre-normalization for MLP if enabled 
         if hasattr(self, 'ln_2'):
             hidden_states = self.ln_2(hidden_states)
 
         hidden_states = self.mlp(hidden_states)
         
+        # Second residual connection
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states, attentions, past_key_values)
 
         return outputs
 
-class TransformerVisionPreTrainedModel(PreTrainedModel):
-    config_class = TransformerVisionConfig
+class GatedDeltaNetVisionPreTrainedModel(PreTrainedModel):
+    config_class = GatedDeltaNetVisionConfig
     
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
@@ -132,12 +155,12 @@ class TransformerVisionPreTrainedModel(PreTrainedModel):
             ).to(module.position_embeddings.dtype)
 
 
-class TransformerVisionEncoder(nn.Module):
+class GatedDeltaNetVisionEncoder(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
         self.config = config
         self.blocks = nn.ModuleList([
-            TransformerVisionBlock(config, layer_idx) 
+            GatedDeltaNetVisionBlock(config, layer_idx) 
             for layer_idx in range(config.num_hidden_layers)
         ])
         self.gradient_checkpointing = False
@@ -192,12 +215,12 @@ class TransformerVisionEncoder(nn.Module):
             attentions=all_self_attentions,
         )
 
-class TransformerVisionModel(TransformerVisionPreTrainedModel):
+class GatedDeltaNetVisionModel(GatedDeltaNetVisionPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True, use_mask_token=False):
         super().__init__(config)
         self.config = config
         self.embeddings = ImageEmbeddings(config, use_mask_token=use_mask_token)
-        self.encoder = TransformerVisionEncoder(config)
+        self.encoder = GatedDeltaNetVisionEncoder(config)
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pooler = Pooler(config) if add_pooling_layer else None
         self.init_weights()
@@ -253,11 +276,11 @@ class TransformerVisionModel(TransformerVisionPreTrainedModel):
             attentions=encoder_outputs.attentions,
         )
 
-class TransformerForImageClassification(TransformerVisionPreTrainedModel):
+class GatedDeltaNetForImageClassification(GatedDeltaNetVisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_classes
-        self.backbone = TransformerVisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
+        self.backbone = GatedDeltaNetVisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
         self.classifier = nn.Linear(config.hidden_size, config.num_classes)
         self.init_weights()
 
@@ -303,10 +326,10 @@ class TransformerForImageClassification(TransformerVisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-class TransformerForMaskedImageModeling(TransformerVisionPreTrainedModel):
+class GatedDeltaNetForMaskedImageModeling(GatedDeltaNetVisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
-        self.backbone = TransformerVisionModel(config, add_pooling_layer=False, use_mask_token=True) 
+        self.backbone = GatedDeltaNetVisionModel(config, add_pooling_layer=False, use_mask_token=True) 
         self.decoder = nn.Sequential(
             nn.Conv2d(
                 in_channels=config.hidden_size,

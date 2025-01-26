@@ -1,4 +1,6 @@
-from .image_classification import (
+# -*- coding: utf-8 -*-
+
+from .vision.image_classification import (
     ABCVisionConfig, BitNetVisionConfig, DeltaNetVisionConfig, GatedDeltaNetVisionConfig,
     GLAVisionConfig, GSAVisionConfig, HGRNVisionConfig, HGRN2VisionConfig,
     LinearAttentionVisionConfig, RetNetVisionConfig, RWKV6VisionConfig, TransformerVisionConfig,

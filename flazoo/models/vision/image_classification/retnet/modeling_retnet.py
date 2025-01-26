@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import warnings
-from typing import List, Optional, Tuple, Union, Unpack, Dict
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -19,19 +19,20 @@ from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
 from fla.layers.attn import Attention
-from fla.layers.linear_attn import LinearAttention
-from .configuration_linear_attn import \
-    LinearAttentionVisionConfig
+from fla.layers.multiscale_retention import MultiScaleRetention
+from .configuration_retnet import RetNetVisionConfig
 from fla.models.utils import Cache
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
 from fla.modules.activations import swiglu_linear
-from flazoo.models.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
+from flazoo.models.vision.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
 from ..utils import ImageEmbeddings, Pooler
+if TYPE_CHECKING:
+    from transformers.processing_utils import Unpack
 
 logger = logging.get_logger(__name__)
 
-class LinearAttentionVisionMLP(nn.Module):
+class RetNetVisionMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -44,7 +45,7 @@ class LinearAttentionVisionMLP(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-class LinearAttentionVisionBlock(nn.Module):
+class RetNetVisionBlock(nn.Module):
     def __init__(self, config, layer_idx: int):
         super().__init__()
         
@@ -59,7 +60,7 @@ class LinearAttentionVisionBlock(nn.Module):
                 layer_idx=layer_idx
             )
         else:
-            self.attn = LinearAttention(
+            self.attn = MultiScaleRetention(
                 mode=config.attn_mode,
                 hidden_size=config.hidden_size,
                 expand_k=config.expand_k,
@@ -67,18 +68,17 @@ class LinearAttentionVisionBlock(nn.Module):
                 num_heads=config.num_heads,
                 num_kv_heads=config.num_kv_heads,
                 feature_map=config.feature_map,
-                tie_feature_map_qk=config.tie_feature_map_qk,
-                norm_q=config.norm_q,
-                norm_k=config.norm_k,
-                do_feature_map_norm=config.norm_feature_map,
+                use_output_gate=config.use_output_gate,
+                gate_fn=config.hidden_act,
                 elementwise_affine=config.elementwise_affine,
                 norm_eps=config.norm_eps,
+                fuse_norm=config.fuse_norm,
                 layer_idx=layer_idx
             )
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = LinearAttentionVisionMLP(config)
+        self.mlp = RetNetVisionMLP(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.scan_type = 'uni-scan'
@@ -130,8 +130,8 @@ class LinearAttentionVisionBlock(nn.Module):
 
         return outputs
 
-class LinearAttentionVisionPreTrainedModel(PreTrainedModel):
-    config_class = LinearAttentionVisionConfig
+class RetNetVisionPreTrainedModel(PreTrainedModel):
+    config_class = RetNetVisionConfig
     
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
@@ -151,12 +151,12 @@ class LinearAttentionVisionPreTrainedModel(PreTrainedModel):
             ).to(module.position_embeddings.dtype)
 
 
-class LinearAttentionVisionEncoder(nn.Module):
+class RetNetVisionEncoder(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
         self.config = config
         self.blocks = nn.ModuleList([
-            LinearAttentionVisionBlock(config, layer_idx) 
+            RetNetVisionBlock(config, layer_idx) 
             for layer_idx in range(config.num_hidden_layers)
         ])
         self.gradient_checkpointing = False
@@ -211,12 +211,12 @@ class LinearAttentionVisionEncoder(nn.Module):
             attentions=all_self_attentions,
         )
 
-class LinearAttentionVisionModel(LinearAttentionVisionPreTrainedModel):
+class RetNetVisionModel(RetNetVisionPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True, use_mask_token=False):
         super().__init__(config)
         self.config = config
         self.embeddings = ImageEmbeddings(config, use_mask_token=use_mask_token)
-        self.encoder = LinearAttentionVisionEncoder(config)
+        self.encoder = RetNetVisionEncoder(config)
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pooler = Pooler(config) if add_pooling_layer else None
         self.init_weights()
@@ -272,11 +272,11 @@ class LinearAttentionVisionModel(LinearAttentionVisionPreTrainedModel):
             attentions=encoder_outputs.attentions,
         )
 
-class LinearAttentionForImageClassification(LinearAttentionVisionPreTrainedModel):
+class RetNetForImageClassification(RetNetVisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_classes
-        self.backbone = LinearAttentionVisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
+        self.backbone = RetNetVisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
         self.classifier = nn.Linear(config.hidden_size, config.num_classes)
         self.init_weights()
 
@@ -322,10 +322,10 @@ class LinearAttentionForImageClassification(LinearAttentionVisionPreTrainedModel
             attentions=outputs.attentions,
         )
 
-class LinearAttentionForMaskedImageModeling(LinearAttentionVisionPreTrainedModel):
+class RetNetForMaskedImageModeling(RetNetVisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
-        self.backbone = LinearAttentionVisionModel(config, add_pooling_layer=False, use_mask_token=True) 
+        self.backbone = RetNetVisionModel(config, add_pooling_layer=False, use_mask_token=True) 
         self.decoder = nn.Sequential(
             nn.Conv2d(
                 in_channels=config.hidden_size,

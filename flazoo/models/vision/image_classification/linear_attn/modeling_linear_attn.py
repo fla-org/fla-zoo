@@ -17,19 +17,21 @@ from transformers.modeling_outputs import (ImageClassifierOutput,
                                            BaseModelOutputWithPooling)
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
-from fla.models.utils import Cache
-from fla.layers.abc import ABCAttention
+
 from fla.layers.attn import Attention
-from .configuration_abc import ABCVisionConfig
+from fla.layers.linear_attn import LinearAttention
+from .configuration_linear_attn import \
+    LinearAttentionVisionConfig
+from fla.models.utils import Cache
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
-from flazoo.models.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
+from fla.modules.activations import swiglu_linear
+from flazoo.models.vision.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
 from ..utils import ImageEmbeddings, Pooler
 
 logger = logging.get_logger(__name__)
 
-
-class ABCVisionMLP(nn.Module):
+class LinearAttentionVisionMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -42,7 +44,7 @@ class ABCVisionMLP(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-class ABCVisionBlock(nn.Module):
+class LinearAttentionVisionBlock(nn.Module):
     def __init__(self, config, layer_idx: int):
         super().__init__()
         
@@ -57,26 +59,26 @@ class ABCVisionBlock(nn.Module):
                 layer_idx=layer_idx
             )
         else:
-            self.attn = ABCAttention(
+            self.attn = LinearAttention(
+                mode=config.attn_mode,
                 hidden_size=config.hidden_size,
                 expand_k=config.expand_k,
                 expand_v=config.expand_v,
                 num_heads=config.num_heads,
-                num_slots=config.num_slots,
-                use_short_conv=config.use_short_conv,
-                conv_size=config.conv_size,
-                gate_fn=config.hidden_act,
+                num_kv_heads=config.num_kv_heads,
+                feature_map=config.feature_map,
+                tie_feature_map_qk=config.tie_feature_map_qk,
+                norm_q=config.norm_q,
+                norm_k=config.norm_k,
+                do_feature_map_norm=config.norm_feature_map,
                 elementwise_affine=config.elementwise_affine,
                 norm_eps=config.norm_eps,
-                clamp_min=config.clamp_min,
-                clamp_max=config.clamp_max,
-                fuse_norm=config.fuse_norm,
                 layer_idx=layer_idx
             )
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = ABCVisionMLP(config)
+        self.mlp = LinearAttentionVisionMLP(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.scan_type = 'uni-scan'
@@ -128,8 +130,8 @@ class ABCVisionBlock(nn.Module):
 
         return outputs
 
-class ABCVisionPreTrainedModel(PreTrainedModel):
-    config_class = ABCVisionConfig
+class LinearAttentionVisionPreTrainedModel(PreTrainedModel):
+    config_class = LinearAttentionVisionConfig
     
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
@@ -149,12 +151,12 @@ class ABCVisionPreTrainedModel(PreTrainedModel):
             ).to(module.position_embeddings.dtype)
 
 
-class ABCVisionEncoder(nn.Module):
+class LinearAttentionVisionEncoder(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
         self.config = config
         self.blocks = nn.ModuleList([
-            ABCVisionBlock(config, layer_idx) 
+            LinearAttentionVisionBlock(config, layer_idx) 
             for layer_idx in range(config.num_hidden_layers)
         ])
         self.gradient_checkpointing = False
@@ -209,12 +211,12 @@ class ABCVisionEncoder(nn.Module):
             attentions=all_self_attentions,
         )
 
-class ABCVisionModel(ABCVisionPreTrainedModel):
+class LinearAttentionVisionModel(LinearAttentionVisionPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True, use_mask_token=False):
         super().__init__(config)
         self.config = config
         self.embeddings = ImageEmbeddings(config, use_mask_token=use_mask_token)
-        self.encoder = ABCVisionEncoder(config)
+        self.encoder = LinearAttentionVisionEncoder(config)
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pooler = Pooler(config) if add_pooling_layer else None
         self.init_weights()
@@ -270,11 +272,11 @@ class ABCVisionModel(ABCVisionPreTrainedModel):
             attentions=encoder_outputs.attentions,
         )
 
-class ABCForImageClassification(ABCVisionPreTrainedModel):
+class LinearAttentionForImageClassification(LinearAttentionVisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_classes
-        self.backbone = ABCVisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
+        self.backbone = LinearAttentionVisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
         self.classifier = nn.Linear(config.hidden_size, config.num_classes)
         self.init_weights()
 
@@ -320,10 +322,10 @@ class ABCForImageClassification(ABCVisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-class ABCForMaskedImageModeling(ABCVisionPreTrainedModel):
+class LinearAttentionForMaskedImageModeling(LinearAttentionVisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
-        self.backbone = ABCVisionModel(config, add_pooling_layer=False, use_mask_token=True) 
+        self.backbone = LinearAttentionVisionModel(config, add_pooling_layer=False, use_mask_token=True) 
         self.decoder = nn.Sequential(
             nn.Conv2d(
                 in_channels=config.hidden_size,
