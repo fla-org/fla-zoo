@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from .models import (
     ABCVisionConfig, BitNetVisionConfig, DeltaNetVisionConfig, GatedDeltaNetVisionConfig,
     GLAVisionConfig, GSAVisionConfig, HGRNVisionConfig, HGRN2VisionConfig,
