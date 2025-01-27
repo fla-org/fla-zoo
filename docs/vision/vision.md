@@ -1,11 +1,12 @@
-# FLA for Image Classification
+# FLA for vision
 
 - last updated: 2025-01-26
+- `vision` here specifies only image. Also, only classification models are implemented to obtain general vision encoders.
 
 ## Overview
 This part implements image classification models based on FLA to simplify their application as general vision encoders and enable easier adoption and comparisons. The architecture is primarily based on Hugging Face's Vision Transformer (ViT) implementation with several customizations. 
 
-Models include `xxxForImageClassification` and `xxxForMaskedImageModeling`.
+Models include `xxxForImageClassification` and `xxxForMaskedImageModeling` and `xxxVisionModel`.
 
 ## Implementation
 
