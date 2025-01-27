@@ -27,7 +27,7 @@ This repository implements a collection of Flash-Linear-Attention models that ex
 
 ## Features
 
-- **`vision/Image Classification`:** `fla-zoo` currently supports image classification models. A simple documentation is in [here](docs/vision/image_classification/img_classification.md).
+- **`vision`:** `fla-zoo` currently supports vision models. A simple documentation is in [here](docs/vision/vision.md).
 
 ## Installation
 
@@ -39,5 +39,5 @@ As an actively developed repo, no released packages are provided.
 
 ## TODO
 
-- [x] Write documentation for image classification models.
+- [x] Write documentation for vision models.
 - [ ] Release training scripts for image classification models.
