@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import math
 import warnings
-from typing import TYPE_CHECKING, Dict, Optional, Tuple, Union, List, Unpack, Dict
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.utils.checkpoint
+from transformers.activations import ACT2FN
 from transformers.generation import GenerationMixin
 from transformers.modeling_outputs import (ImageClassifierOutput,
                                            MaskedImageModelingOutput,
@@ -18,20 +19,21 @@ from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
 from fla.layers.attn import Attention
-from fla.layers.rwkv6 import LerpLinear, RWKV6Attention
-from .configuration_rwkv6 import RWKV6VisionConfig
+from fla.layers.gla import GatedLinearAttention
+from .configuration_gla import GLAVisionConfig
 from fla.models.utils import Cache
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
-                         LayerNorm)
-from fla.modules.activations import ACT2FN
-from flazoo.models.vision.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
+                         RMSNorm)
+from fla.modules.activations import swiglu_linear
+from flazoo.models.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
 from ..utils import ImageEmbeddings, Pooler
 if TYPE_CHECKING:
     from transformers.processing_utils import Unpack
 
 logger = logging.get_logger(__name__)
 
-class RWKV6VisionMLP(nn.Module):
+
+class GLAVisionMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -44,7 +46,7 @@ class RWKV6VisionMLP(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-class RWKV6VisionBlock(nn.Module):
+class GLAVisionBlock(nn.Module):
     def __init__(self, config, layer_idx: int):
         super().__init__()
         
@@ -59,22 +61,28 @@ class RWKV6VisionBlock(nn.Module):
                 layer_idx=layer_idx
             )
         else:
-            self.attn = RWKV6Attention(
+            self.attn = GatedLinearAttention(
                 mode=config.attn_mode,
                 hidden_size=config.hidden_size,
                 expand_k=config.expand_k,
                 expand_v=config.expand_v,
                 num_heads=config.num_heads,
-                proj_low_rank_dim=config.proj_low_rank_dim,
-                gate_low_rank_dim=config.gate_low_rank_dim,
+                num_kv_heads=config.num_kv_heads,
+                feature_map=config.feature_map,
+                use_short_conv=config.use_short_conv,
+                conv_size=config.conv_size,
+                use_output_gate=config.use_output_gate,
+                gate_fn=config.hidden_act,
+                elementwise_affine=config.elementwise_affine,
                 norm_eps=config.norm_eps,
+                clamp_min=config.clamp_min,
                 fuse_norm=config.fuse_norm,
                 layer_idx=layer_idx
             )
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = RWKV6VisionMLP(config)
+        self.mlp = GLAVisionMLP(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.scan_type = 'uni-scan'
@@ -87,7 +95,7 @@ class RWKV6VisionBlock(nn.Module):
         past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
-        **kwargs
+        **kwargs: Unpack[Dict]
     ) -> Union[Tuple[torch.Tensor, Optional[torch.Tensor]], Tuple[torch.Tensor]]:
         residual = hidden_states
 
@@ -126,8 +134,8 @@ class RWKV6VisionBlock(nn.Module):
 
         return outputs
 
-class RWKV6VisionPreTrainedModel(PreTrainedModel):
-    config_class = RWKV6VisionConfig
+class GLAVisionPreTrainedModel(PreTrainedModel):
+    config_class = GLAVisionConfig
     
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
@@ -147,12 +155,12 @@ class RWKV6VisionPreTrainedModel(PreTrainedModel):
             ).to(module.position_embeddings.dtype)
 
 
-class RWKV6VisionEncoder(nn.Module):
+class GLAVisionEncoder(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
         self.config = config
         self.blocks = nn.ModuleList([
-            RWKV6VisionBlock(config, layer_idx) 
+            GLAVisionBlock(config, layer_idx) 
             for layer_idx in range(config.num_hidden_layers)
         ])
         self.gradient_checkpointing = False
@@ -207,12 +215,12 @@ class RWKV6VisionEncoder(nn.Module):
             attentions=all_self_attentions,
         )
 
-class RWKV6VisionModel(RWKV6VisionPreTrainedModel):
+class GLAVisionModel(GLAVisionPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True, use_mask_token=False):
         super().__init__(config)
         self.config = config
         self.embeddings = ImageEmbeddings(config, use_mask_token=use_mask_token)
-        self.encoder = RWKV6VisionEncoder(config)
+        self.encoder = GLAVisionEncoder(config)
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pooler = Pooler(config) if add_pooling_layer else None
         self.init_weights()
@@ -268,11 +276,11 @@ class RWKV6VisionModel(RWKV6VisionPreTrainedModel):
             attentions=encoder_outputs.attentions,
         )
 
-class RWKV6ForImageClassification(RWKV6VisionPreTrainedModel):
+class GLAForImageClassification(GLAVisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_classes
-        self.backbone = RWKV6VisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
+        self.backbone = GLAVisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
         self.classifier = nn.Linear(config.hidden_size, config.num_classes)
         self.init_weights()
 
@@ -318,10 +326,10 @@ class RWKV6ForImageClassification(RWKV6VisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-class RWKV6ForMaskedImageModeling(RWKV6VisionPreTrainedModel):
+class GLAForMaskedImageModeling(GLAVisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
-        self.backbone = RWKV6VisionModel(config, add_pooling_layer=False, use_mask_token=True) 
+        self.backbone = GLAVisionModel(config, add_pooling_layer=False, use_mask_token=True) 
         self.decoder = nn.Sequential(
             nn.Conv2d(
                 in_channels=config.hidden_size,

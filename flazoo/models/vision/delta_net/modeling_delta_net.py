@@ -19,21 +19,23 @@ from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
 from fla.layers.attn import Attention
-from fla.layers.hgrn2 import HGRN2Attention
-from .configuration_hgrn2 import HGRN2VisionConfig
+from fla.layers.delta_net import DeltaNet
+from .configuration_delta_net import DeltaNetVisionConfig
 from fla.models.utils import Cache
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
 from fla.modules.activations import swiglu_linear
-from flazoo.models.vision.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
+from fla.modules.layernorm import rms_norm_linear
+from flazoo.models.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
 from ..utils import ImageEmbeddings, Pooler
-if TYPE_CHECKING:
-    from transformers.processing_utils import Unpack
 
 logger = logging.get_logger(__name__)
 
+if TYPE_CHECKING:
+    from transformers.processing_utils import Unpack
 
-class HGRN2VisionMLP(nn.Module):
+
+class DeltaNetVisionMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -46,11 +48,12 @@ class HGRN2VisionMLP(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-class HGRN2VisionBlock(nn.Module):
+class DeltaNetVisionBlock(nn.Module):
     def __init__(self, config, layer_idx: int):
         super().__init__()
         
-        self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        if not config.norm_first:
+            self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.attn = Attention(
@@ -61,21 +64,28 @@ class HGRN2VisionBlock(nn.Module):
                 layer_idx=layer_idx
             )
         else:
-            self.attn = HGRN2Attention(
+            self.attn = DeltaNet(
                 mode=config.attn_mode,
                 hidden_size=config.hidden_size,
+                expand_k=config.expand_k,
+                expand_v=config.expand_v,
                 num_heads=config.num_heads,
-                expand_ratio=config.expand_ratio,
+                use_gate=config.use_gate,
+                use_beta=config.use_beta,
                 use_short_conv=config.use_short_conv,
+                use_output_norm=config.use_output_norm,
                 conv_size=config.conv_size,
-                elementwise_affine=config.elementwise_affine,
+                qk_norm=config.qk_norm,
+                qk_activation=config.qk_activation,
+                norm_first=config.norm_first,
                 norm_eps=config.norm_eps,
                 layer_idx=layer_idx
             )
             
-        self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        if not config.norm_first:
+            self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = HGRN2VisionMLP(config)
+        self.mlp = DeltaNetVisionMLP(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.scan_type = 'uni-scan'
@@ -92,11 +102,9 @@ class HGRN2VisionBlock(nn.Module):
     ) -> Union[Tuple[torch.Tensor, Optional[torch.Tensor]], Tuple[torch.Tensor]]:
         residual = hidden_states
 
-        # Pre-normalization if enabled
         if hasattr(self, 'ln_1'):
             hidden_states = self.ln_1(hidden_states)
 
-        # Apply attention
         
         hidden_states = prepare_hidden_states_for_cross_scan(hidden_states, self.scan_type)
         
@@ -110,25 +118,22 @@ class HGRN2VisionBlock(nn.Module):
         
         hidden_states = prepare_hidden_states_for_cross_merge(hidden_states, self.scan_type)
 
-        # First residual connection
         hidden_states = residual + hidden_states
         residual = hidden_states
 
-        # Pre-normalization for MLP if enabled 
         if hasattr(self, 'ln_2'):
             hidden_states = self.ln_2(hidden_states)
 
         hidden_states = self.mlp(hidden_states)
         
-        # Second residual connection
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states, attentions, past_key_values)
 
         return outputs
 
-class HGRN2VisionPreTrainedModel(PreTrainedModel):
-    config_class = HGRN2VisionConfig
+class DeltaNetVisionPreTrainedModel(PreTrainedModel):
+    config_class = DeltaNetVisionConfig
     
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
@@ -148,12 +153,12 @@ class HGRN2VisionPreTrainedModel(PreTrainedModel):
             ).to(module.position_embeddings.dtype)
 
 
-class HGRN2VisionEncoder(nn.Module):
+class DeltaNetVisionEncoder(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
         self.config = config
         self.blocks = nn.ModuleList([
-            HGRN2VisionBlock(config, layer_idx) 
+            DeltaNetVisionBlock(config, layer_idx) 
             for layer_idx in range(config.num_hidden_layers)
         ])
         self.gradient_checkpointing = False
@@ -208,12 +213,12 @@ class HGRN2VisionEncoder(nn.Module):
             attentions=all_self_attentions,
         )
 
-class HGRN2VisionModel(HGRN2VisionPreTrainedModel):
+class DeltaNetVisionModel(DeltaNetVisionPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True, use_mask_token=False):
         super().__init__(config)
         self.config = config
         self.embeddings = ImageEmbeddings(config, use_mask_token=use_mask_token)
-        self.encoder = HGRN2VisionEncoder(config)
+        self.encoder = DeltaNetVisionEncoder(config)
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pooler = Pooler(config) if add_pooling_layer else None
         self.init_weights()
@@ -269,11 +274,11 @@ class HGRN2VisionModel(HGRN2VisionPreTrainedModel):
             attentions=encoder_outputs.attentions,
         )
 
-class HGRN2ForImageClassification(HGRN2VisionPreTrainedModel):
+class DeltaNetForImageClassification(DeltaNetVisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_classes
-        self.backbone = HGRN2VisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
+        self.backbone = DeltaNetVisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
         self.classifier = nn.Linear(config.hidden_size, config.num_classes)
         self.init_weights()
 
@@ -297,7 +302,7 @@ class HGRN2ForImageClassification(HGRN2VisionPreTrainedModel):
         )
 
         pooled_output = outputs.pooler_output
-        logits = self.classifier(pooled_output) # only use mean pooling
+        logits = self.classifier(pooled_output)
 
         loss = None
         if labels is not None:
@@ -319,10 +324,10 @@ class HGRN2ForImageClassification(HGRN2VisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-class HGRN2ForMaskedImageModeling(HGRN2VisionPreTrainedModel):
+class DeltaNetForMaskedImageModeling(DeltaNetVisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
-        self.backbone = HGRN2VisionModel(config, add_pooling_layer=False, use_mask_token=True) 
+        self.backbone = DeltaNetVisionModel(config, add_pooling_layer=False, use_mask_token=True) 
         self.decoder = nn.Sequential(
             nn.Conv2d(
                 in_channels=config.hidden_size,

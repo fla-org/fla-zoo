@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import math
 import warnings
-from typing import List, Optional, Tuple, Union, Unpack, Dict
+from typing import TYPE_CHECKING, Dict, Optional, Tuple, Union, List, Unpack, Dict
 
 import torch
 import torch.nn as nn
 import torch.utils.checkpoint
-from transformers.activations import ACT2FN
 from transformers.generation import GenerationMixin
 from transformers.modeling_outputs import (ImageClassifierOutput,
                                            MaskedImageModelingOutput,
@@ -17,20 +16,22 @@ from transformers.modeling_outputs import (ImageClassifierOutput,
                                            BaseModelOutputWithPooling)
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
+
 from fla.layers.attn import Attention
-from fla.layers.bitattn import BitAttention
-from .configuration_bitnet import BitNetVisionConfig
+from fla.layers.rwkv6 import LerpLinear, RWKV6Attention
+from .configuration_rwkv6 import RWKV6VisionConfig
 from fla.models.utils import Cache
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
-                         RMSNorm)
-from fla.modules.activations import swiglu_bitlinear
-from fla.modules.fused_bitlinear import BitLinear, rms_norm_linear_quant
-from flazoo.models.vision.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
+                         LayerNorm)
+from fla.modules.activations import ACT2FN
+from flazoo.models.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
 from ..utils import ImageEmbeddings, Pooler
+if TYPE_CHECKING:
+    from transformers.processing_utils import Unpack
 
 logger = logging.get_logger(__name__)
 
-class BitNetVisionMLP(nn.Module):
+class RWKV6VisionMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -43,12 +44,11 @@ class BitNetVisionMLP(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-class BitNetVisionBlock(nn.Module):
+class RWKV6VisionBlock(nn.Module):
     def __init__(self, config, layer_idx: int):
         super().__init__()
         
-        if not config.norm_first:
-            self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.attn = Attention(
@@ -59,22 +59,22 @@ class BitNetVisionBlock(nn.Module):
                 layer_idx=layer_idx
             )
         else:
-            self.attn = BitAttention(
+            self.attn = RWKV6Attention(
+                mode=config.attn_mode,
                 hidden_size=config.hidden_size,
+                expand_k=config.expand_k,
+                expand_v=config.expand_v,
                 num_heads=config.num_heads,
-                num_kv_heads=config.num_kv_heads,
-                window_size=config.window_size,
-                rope_theta=config.rope_theta,
-                max_position_embeddings=config.max_position_embeddings,
-                norm_first=config.norm_first,
+                proj_low_rank_dim=config.proj_low_rank_dim,
+                gate_low_rank_dim=config.gate_low_rank_dim,
                 norm_eps=config.norm_eps,
+                fuse_norm=config.fuse_norm,
                 layer_idx=layer_idx
             )
             
-        if not config.norm_first:
-            self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = BitNetVisionMLP(config)
+        self.mlp = RWKV6VisionMLP(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.scan_type = 'uni-scan'
@@ -87,7 +87,7 @@ class BitNetVisionBlock(nn.Module):
         past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
-        **kwargs: Unpack[Dict]
+        **kwargs
     ) -> Union[Tuple[torch.Tensor, Optional[torch.Tensor]], Tuple[torch.Tensor]]:
         residual = hidden_states
 
@@ -126,8 +126,8 @@ class BitNetVisionBlock(nn.Module):
 
         return outputs
 
-class BitNetVisionPreTrainedModel(PreTrainedModel):
-    config_class = BitNetVisionConfig
+class RWKV6VisionPreTrainedModel(PreTrainedModel):
+    config_class = RWKV6VisionConfig
     
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
@@ -147,12 +147,12 @@ class BitNetVisionPreTrainedModel(PreTrainedModel):
             ).to(module.position_embeddings.dtype)
 
 
-class BitNetVisionEncoder(nn.Module):
+class RWKV6VisionEncoder(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
         self.config = config
         self.blocks = nn.ModuleList([
-            BitNetVisionBlock(config, layer_idx) 
+            RWKV6VisionBlock(config, layer_idx) 
             for layer_idx in range(config.num_hidden_layers)
         ])
         self.gradient_checkpointing = False
@@ -207,12 +207,12 @@ class BitNetVisionEncoder(nn.Module):
             attentions=all_self_attentions,
         )
 
-class BitNetVisionModel(BitNetVisionPreTrainedModel):
+class RWKV6VisionModel(RWKV6VisionPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True, use_mask_token=False):
         super().__init__(config)
         self.config = config
         self.embeddings = ImageEmbeddings(config, use_mask_token=use_mask_token)
-        self.encoder = BitNetVisionEncoder(config)
+        self.encoder = RWKV6VisionEncoder(config)
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pooler = Pooler(config) if add_pooling_layer else None
         self.init_weights()
@@ -268,11 +268,11 @@ class BitNetVisionModel(BitNetVisionPreTrainedModel):
             attentions=encoder_outputs.attentions,
         )
 
-class BitNetForImageClassification(BitNetVisionPreTrainedModel):
+class RWKV6ForImageClassification(RWKV6VisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_classes
-        self.backbone = BitNetVisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
+        self.backbone = RWKV6VisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
         self.classifier = nn.Linear(config.hidden_size, config.num_classes)
         self.init_weights()
 
@@ -318,10 +318,10 @@ class BitNetForImageClassification(BitNetVisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-class BitNetForMaskedImageModeling(BitNetVisionPreTrainedModel):
+class RWKV6ForMaskedImageModeling(RWKV6VisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
-        self.backbone = BitNetVisionModel(config, add_pooling_layer=False, use_mask_token=True) 
+        self.backbone = RWKV6VisionModel(config, add_pooling_layer=False, use_mask_token=True) 
         self.decoder = nn.Sequential(
             nn.Conv2d(
                 in_channels=config.hidden_size,
