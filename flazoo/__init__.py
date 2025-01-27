@@ -26,7 +26,7 @@ __all__ = [
     'GLAVisionConfig', 'GLAForImageClassification', 'GLAForMaskedImageModeling', 'GLAVisionModel',
     'GSAVisionConfig', 'GSAForImageClassification', 'GSAForMaskedImageModeling', 'GSAVisionModel',
     'HGRNVisionConfig', 'HGRNForImageClassification', 'HGRNForMaskedImageModeling', 'HGRNVisionModel',
-    'HGRN2VisionConfig', 'HGRN2ForImageClassification', 'HGRN2ForMaskedImageModelModeling', 'HGRN2VisionModel',
+    'HGRN2VisionConfig', 'HGRN2ForImageClassification', 'HGRN2ForMaskedImageModeling', 'HGRN2VisionModel',
     'LinearAttentionVisionConfig', 'LinearAttentionForImageClassification', 'LinearAttentionForMaskedImageModeling', 'LinearAttentionVisionModel',
     'RetNetVisionConfig', 'RetNetForImageClassification', 'RetNetForMaskedImageModeling', 'RetNetVisionModel',
     'RWKV6VisionConfig', 'RWKV6ForImageClassification', 'RWKV6ForMaskedImageModeling', 'RWKV6VisionModel',
