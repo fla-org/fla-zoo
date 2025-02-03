@@ -18,7 +18,7 @@ from transformers.modeling_outputs import (ImageClassifierOutput,
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
-from fla.layers.attn import Attention
+from flazoo.models.utils import VAttention
 from fla.layers.linear_attn import LinearAttention
 from .configuration_linear_attn import \
     LinearAttentionVisionConfig
@@ -51,11 +51,10 @@ class LinearAttentionVisionBlock(nn.Module):
         self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
         if config.attn is not None and layer_idx in config.attn['layers']:
-            self.attn = Attention(
+            self.attn = VAttention(
                 hidden_size=config.hidden_size,
                 num_heads=config.attn['num_heads'],
                 num_kv_heads=config.attn['num_kv_heads'],
-                window_size=config.attn['window_size'],
                 layer_idx=layer_idx
             )
         else:
