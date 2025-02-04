@@ -276,6 +276,14 @@ def prepare_hidden_states_for_cross_scan(hidden_states: torch.Tensor, scan_type:
     # hidden_states shape should be: (B, L, D)
     if scan_type == "uni-scan":
         return hidden_states
+    elif scan_type == "random-scan":
+        L = hidden_states.size(1)
+        random_idx = torch.randperm(L, device=hidden_states.device)
+        hidden_states = hidden_states[:, random_idx, :]
+        return hidden_states
+    elif scan_type == "flip-scan":
+        hidden_states = hidden_states.flip(-2)
+        return hidden_states
     elif scan_type == "bi-scan":
         flipped_hidden_states = hidden_states.flip(-2)
         hidden_states = torch.cat([hidden_states, flipped_hidden_states], dim=0)
@@ -291,7 +299,7 @@ def prepare_hidden_states_for_cross_scan(hidden_states: torch.Tensor, scan_type:
 
 def prepare_hidden_states_for_cross_merge(hidden_states: torch.Tensor, scan_type: str = "uni-scan"):
     # hidden_states shape should be: (BK, L, D), K=2 for bi-scan, K=1 for uni-scan, K=4 for cross-scan
-    if scan_type == "uni-scan":
+    if scan_type == "uni-scan" or scan_type == "random-scan" or scan_type == "flip-scan":
         return hidden_states
     elif scan_type == "bi-scan":
         B = hidden_states.shape[0] // 2
