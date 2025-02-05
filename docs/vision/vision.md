@@ -15,6 +15,7 @@ Models include `xxxForImageClassification` and `xxxForMaskedImageModeling` and `
 
 2. **Scanning Options**
    - Uni-scan: `[B, L, D] -> FLA -> [B, L, D]`
+   - Random-scan: `[B, L, D] -> random shuffle -> [B, L, D] -> FLA -> [B, L, D]`
    - Bi-scan: `[B, L, D] -> flip -> [2 * B, L, D] -> FLA -> [2 * B, L, D] -> combine -> [B, L, D]`
    - Cross-scan: `[B, L, D] -> cross-scan -> [4 * B, L, D] -> FLA -> [4 * B, L, D] -> cross-merge -> [B, L, D]`
 
