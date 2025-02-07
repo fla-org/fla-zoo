@@ -27,7 +27,8 @@ This repository implements a collection of Flash-Linear-Attention models that ex
 
 ## Features
 
-- **`vision`:** `fla-zoo` currently supports vision models. A simple documentation is in [here](docs/vision/vision.md).
+- **`vision`:** `fla-zoo` currently supports vision models. A simple documentation is in [here](docs/vision/vision.md). "Vision" here refers to image classification tasks.
+- **`video`:** `fla-zoo` currently supports certain video models. Documentation is in progress.
 
 ## Installation
 
@@ -35,9 +36,20 @@ Requirements:
 - All the dependencies shown [here](https://github.com/fla-org/flash-linear-attention?tab=readme-ov-file#installation)
 - [torchvision](https://github.com/pytorch/vision)
 
-As an actively developed repo, no released packages are provided.
+For example, you can install all the dependencies using the following command:
+```bash
+conda create -n flazoo python=3.12
+conda activate flazoo
+pip install torch torchvision accelerate
+pip install transformers datasets evaluate causal_conv1d einops sklearn wandb
+pip install flash-attn --no-build-isolation
+```
+Now we can start cooking! 🚀
+
+Note that as an actively developed repo, currently no released packages are provided.
 
 ## TODO
 
 - [x] Write documentation for vision models.
+- [ ] Write documentation for video models.
 - [ ] Release training scripts for vision models.
