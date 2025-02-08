@@ -27,7 +27,7 @@ This repository implements a collection of Flash-Linear-Attention models that ex
 
 ## Features
 
-- **`vision`:** `fla-zoo` currently supports vision models. A simple documentation is in [here](docs/vision/vision.md). "Vision" here refers to image classification tasks.
+- **`vision`:** `fla-zoo` currently supports vision models. A simple documentation is in [here](docs/vision/vision.md). TL;DR: use hybrid model and random-scan for better performance and efficiency. "Vision" here refers to image classification tasks.
 - **`video`:** `fla-zoo` currently supports certain video models. Documentation is in progress.
 
 ## Installation
@@ -46,7 +46,7 @@ pip install flash-attn --no-build-isolation
 ```
 Now we can start cooking! 🚀
 
-Note that as an actively developed repo, currently no released packages are provided.
+Note that as an actively developed repo, `fla-zoo` currently no released packages are provided.
 
 ## TODO
 
