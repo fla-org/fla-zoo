@@ -272,11 +272,13 @@ def cross_merge_fn(y: torch.Tensor, in_channel_first=True, out_channel_first=Tru
     with torch.cuda.device(y.device):
         return CMF.apply(y, in_channel_first, out_channel_first, one_by_one, scans)
     
-def prepare_hidden_states_for_cross_scan(hidden_states: torch.Tensor, scan_type: str = "uni-scan"):
+def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, scan_type: str = "uni-scan", training: bool = True):
     # hidden_states shape should be: (B, L, D)
     if scan_type == "uni-scan":
         return hidden_states
     elif scan_type == "random-scan":
+        if not training:
+            return hidden_states
         L = hidden_states.size(1)
         random_idx = torch.randperm(L, device=hidden_states.device)
         hidden_states = hidden_states[:, random_idx, :]
@@ -297,7 +299,7 @@ def prepare_hidden_states_for_cross_scan(hidden_states: torch.Tensor, scan_type:
     hidden_states = einops.rearrange(hidden_states, "b l k d -> (b k) l d")
     return hidden_states
 
-def prepare_hidden_states_for_cross_merge(hidden_states: torch.Tensor, scan_type: str = "uni-scan"):
+def prepare_hidden_states_for_merge(hidden_states: torch.Tensor, scan_type: str = "uni-scan"):
     # hidden_states shape should be: (BK, L, D), K=2 for bi-scan, K=1 for uni-scan, K=4 for cross-scan
     if scan_type == "uni-scan" or scan_type == "random-scan" or scan_type == "flip-scan":
         return hidden_states

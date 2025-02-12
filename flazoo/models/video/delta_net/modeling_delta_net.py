@@ -25,7 +25,7 @@ from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
 from fla.modules.activations import swiglu_linear
 from fla.modules.layernorm import rms_norm_linear
-from flazoo.models.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
+from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
 from ..utils import VideoEmbeddings, VideoDecoderOutput, VideoForPreTrainingOutput, get_sinusoid_encoding_table
 from copy import deepcopy
 
@@ -98,7 +98,7 @@ class DeltaNetVideoBlock(nn.Module):
         residual = hidden_states
         
         hidden_states = self.ln_1(hidden_states)
-        hidden_states = prepare_hidden_states_for_cross_scan(hidden_states, self.scan_type)
+        hidden_states = prepare_hidden_states_for_scan(hidden_states, self.scan_type)
 
         hidden_states, attentions, past_key_values = self.attn(
             hidden_states=hidden_states,
@@ -108,7 +108,7 @@ class DeltaNetVideoBlock(nn.Module):
             **kwargs
         )
 
-        hidden_states = prepare_hidden_states_for_cross_merge(hidden_states, self.scan_type)
+        hidden_states = prepare_hidden_states_for_merge(hidden_states, self.scan_type)
 
         hidden_states = residual + hidden_states
         residual = hidden_states

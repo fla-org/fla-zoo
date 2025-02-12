@@ -23,7 +23,7 @@ from flazoo.models.utils import VAttention
 from .configuration_abc import ABCVisionConfig
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
-from flazoo.models.utils import prepare_hidden_states_for_cross_scan, prepare_hidden_states_for_cross_merge
+from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
 from ..utils import ImageEmbeddings, Pooler
 
 logger = logging.get_logger(__name__)
@@ -97,8 +97,7 @@ class ABCVisionBlock(nn.Module):
             hidden_states = self.ln_1(hidden_states)
 
         # Apply attention
-        
-        hidden_states = prepare_hidden_states_for_cross_scan(hidden_states, self.scan_type)
+        hidden_states = prepare_hidden_states_for_scan(hidden_states, self.scan_type, training=self.training)
         
         hidden_states, attentions, past_key_values = self.attn(
             hidden_states=hidden_states,
@@ -108,7 +107,7 @@ class ABCVisionBlock(nn.Module):
             **kwargs
         )
         
-        hidden_states = prepare_hidden_states_for_cross_merge(hidden_states, self.scan_type)
+        hidden_states = prepare_hidden_states_for_merge(hidden_states, self.scan_type)
 
         # First residual connection
         hidden_states = residual + hidden_states
