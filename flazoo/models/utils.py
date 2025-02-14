@@ -277,8 +277,6 @@ def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, scan_type: str =
     if scan_type == "uni-scan":
         return hidden_states
     elif scan_type == "random-scan":
-        if not training:
-            return hidden_states
         L = hidden_states.size(1)
         random_idx = torch.randperm(L, device=hidden_states.device)
         hidden_states = hidden_states[:, random_idx, :]
