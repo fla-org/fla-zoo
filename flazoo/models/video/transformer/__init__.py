@@ -1,0 +1,13 @@
+# -*- coding: utf-8 -*-
+
+from transformers import AutoConfig, AutoModel, AutoModelForVideoClassification, AutoModelForPreTraining
+
+from .configuration_transformer import TransformerVideoConfig
+from .modeling_transformer import(TransformerVideoModel, TransformerForVideoClassification, TransformerForVideoPreTraining)
+
+AutoConfig.register(TransformerVideoConfig.model_type, TransformerVideoConfig)
+AutoModel.register(TransformerVideoConfig, TransformerVideoModel)
+AutoModelForVideoClassification.register(TransformerVideoConfig, TransformerForVideoClassification)
+AutoModelForPreTraining.register(TransformerVideoConfig, TransformerForVideoPreTraining)
+
+__all__ = ['TransformerVideoConfig', 'TransformerVideoModel', 'TransformerForVideoClassification', 'TransformerForVideoPreTraining']
