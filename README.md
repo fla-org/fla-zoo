@@ -23,6 +23,7 @@ This repository implements a collection of Flash-Linear-Attention models that ex
 
 ## News
 
+- **$\texttt{[2025-02-20]}$:** I'm currently conducting many experiments to comprehsnively evaluate the performance of FLA models on vision tasks and some critical design aspects. Stay tuned! I will write a simple paper for optimal linear-time vision models.
 - **$\texttt{[2025-01-25]}$:** This repo is created with vision models.
 
 ## Features
