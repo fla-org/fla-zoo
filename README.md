@@ -23,8 +23,11 @@ This repository implements a collection of FLA models that extend beyond languag
 
 ## News
 
+- **$\texttt{[2025-02-23]}$:** Add LightNet for classification. Also, SFT training script for vision models is added, check it out in [here](examples/vision/sft.py).
+
 - **$\texttt{[2025-02-20]}$:** I'm currently conducting many experiments to comprehsnively evaluate the performance of FLA models on vision tasks and some critical design aspects. Stay tuned!
-- **$\texttt{[2025-01-25]}$:** This repo is created with vision models.
+
+- **$\texttt{[2025-01-25]}$:** This repo is created with some vision models (I mean classification model).
 
 ## Features
 

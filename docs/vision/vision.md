@@ -1,6 +1,6 @@
 # FLA for vision
 
-- last updated: 2025-01-26
+- last updated: 2025-02-23
 - `vision` here specifies only image. Also, only classification models are implemented to obtain general vision encoders.
 
 ## Overview
@@ -16,6 +16,7 @@ Models include `xxxForImageClassification` and `xxxForMaskedImageModeling` and `
 2. **Scanning Options**
    - Uni-scan: `[B, L, D] -> FLA -> [B, L, D]`
    - Random-scan: `[B, L, D] -> random shuffle -> [B, L, D] -> FLA -> [B, L, D]`
+   - Flip-scan: `[B, L, D] -> flip -> [B, L, D] -> FLA -> [B, L, D]`
    - Bi-scan: `[B, L, D] -> flip -> [2 * B, L, D] -> FLA -> [2 * B, L, D] -> combine -> [B, L, D]`
    - Cross-scan: `[B, L, D] -> cross-scan -> [4 * B, L, D] -> FLA -> [4 * B, L, D] -> cross-merge -> [B, L, D]`
 
@@ -50,6 +51,7 @@ Test Results:
 | retnet         | ✅                                                 | ✅                                                 |
 | rwkv6          | chunk:❌<br>fused_recurrent:✅                     | chunk:❌<br>fused_recurrent:✅                     |
 | transformer    | ✅                                                 | ✅                                                 |
+| lightnet       | ✅                                                 | ✅                                                 |
 
 **Note: Errors primarily stem from respective attention implementations from FLA.**
 
