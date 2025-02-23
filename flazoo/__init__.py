@@ -2,7 +2,7 @@
 
 from .models import (
     ABCVisionConfig, BitNetVisionConfig, DeltaNetVisionConfig, GatedDeltaNetVisionConfig,
-    GLAVisionConfig, GSAVisionConfig, HGRNVisionConfig, HGRN2VisionConfig,
+    GLAVisionConfig, GSAVisionConfig, HGRNVisionConfig, HGRN2VisionConfig, LightNetVisionConfig,
     LinearAttentionVisionConfig, RetNetVisionConfig, RWKV6VisionConfig, TransformerVisionConfig,
     ABCVisionModel, ABCForImageClassification, ABCForMaskedImageModeling,
     BitNetVisionModel, BitNetForImageClassification, BitNetForMaskedImageModeling,
