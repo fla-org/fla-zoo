@@ -23,7 +23,6 @@ from .configuration_bitnet import BitNetVisionConfig
 from fla.models.utils import Cache
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
-from fla.modules.activations import swiglu_bitlinear
 from fla.modules.fused_bitlinear import BitLinear, rms_norm_linear_quant
 from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
 from ..utils import ImageEmbeddings, Pooler
