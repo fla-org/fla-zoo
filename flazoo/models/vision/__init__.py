@@ -25,6 +25,9 @@ from .hgrn import (
 from .hgrn2 import (
     HGRN2VisionConfig, HGRN2ForImageClassification, HGRN2ForMaskedImageModeling, HGRN2VisionModel
 )
+from .lightnet import (
+    LightNetVisionConfig, LightNetForImageClassification, LightNetForMaskedImageModeling, LightNetVisionModel
+)
 from .linear_attn import (
     LinearAttentionVisionConfig, LinearAttentionForImageClassification, LinearAttentionForMaskedImageModeling, LinearAttentionVisionModel
 )
