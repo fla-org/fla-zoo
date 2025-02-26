@@ -1,7 +1,7 @@
 # FLA for vision
 
-- last updated: 2025-02-23
-- `vision` here specifies only image. Also, only classification models are implemented to obtain general vision encoders.
+- last updated: 2025-02-26
+- `vision` here specifies only image. Also, only classification models are implemented to obtain general vision encoders. See training scripts at [sft](examples/vision/mim.py) and [mim](examples/vision/mim.pyy) for more details.
 
 ## Overview
 This part implements image classification models based on FLA to simplify their application as general vision encoders and enable easier adoption and comparisons. The architecture is primarily based on Hugging Face's Vision Transformer (ViT) implementation with several customizations. 
@@ -55,3 +55,10 @@ Test Results:
 
 **Note: Errors primarily stem from respective attention implementations from FLA.**
 
+## Train the model
+
+You can use the following sft script to train the model:
+
+```bash
+TODO
+```
