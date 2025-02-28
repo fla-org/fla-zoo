@@ -10,7 +10,7 @@ from transformers.utils import logging
 import warnings
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 try:
     from flash_attn import flash_attn_func, flash_attn_varlen_func
     from flash_attn.bert_padding import (index_first_axis, pad_input,
@@ -21,6 +21,16 @@ except ImportError:
         category=ImportWarning
     )
     flash_attn_func = None
+
+try:
+    from native_sparse_attention.ops.parallel import parallel_nsa, parallel_nsa_compression
+except ImportError:
+    warnings.warn(
+        "Native Sparse Attention is not installed. Please check the package installation.",
+        category=ImportWarning
+    )
+    parallel_nsa = None
+    parallel_nsa_compression = None
 
 logger = logging.get_logger(__name__)
 
@@ -381,3 +391,123 @@ class VAttention(nn.Module):
             attentions = None
 
         return o, attentions, None
+
+class NativeSparseAttention(nn.Module):
+    """
+    Native Sparse Attention layer that encapsulates sparse attention mechanism from parallel_nsa. This is a non-causal layer.
+    
+    reference: 
+    - paper: https://arxiv.org/abs/2502.11089
+    - Triton Implementation: https://github.com/fla-org/native-sparse-attention
+    """
+
+    def __init__(
+        self,
+        hidden_size: int = 2048,
+        num_heads: int = 32,
+        num_kv_heads: Optional[int] = None,
+        norm_first: bool = False,
+        norm_eps: float = 1e-5,
+        block_size: int = 64,
+        window_size: int = 64,
+        num_blocks: int = 16,
+        layer_idx: int = None
+    ):
+        super().__init__()
+
+        self.num_heads = num_heads
+        if num_kv_heads is None:
+            self.num_kv_heads = self.num_heads
+        else:
+            self.num_kv_heads = num_kv_heads
+        self.num_kv_groups = num_heads // self.num_kv_heads
+        self.hidden_size = hidden_size
+        self.head_dim = self.hidden_size // self.num_heads
+        self.kv_dim = self.num_kv_heads * self.head_dim
+        self.norm_first = norm_first
+        self.layer_idx = layer_idx
+        self.block_size = block_size
+        self.window_size = window_size
+        self.num_blocks = num_blocks
+        self.scale = self.head_dim ** -0.5
+
+        if norm_first:
+            self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
+        self.q_proj = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
+        self.k_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
+        self.v_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
+        self.o_proj = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
+        
+        # Gate projections for selective, window and compress attention
+        self.g_cmp_proj = nn.Linear(self.hidden_size, self.num_heads, bias=False)
+        self.g_slc_proj = nn.Linear(self.hidden_size, self.num_heads, bias=False)
+        self.g_swa_proj = nn.Linear(self.hidden_size, self.num_heads, bias=False) if window_size > 0 else None
+        
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        block_indices: Optional[torch.Tensor] = None,
+        block_counts: Optional[Union[torch.LongTensor, int]] = None,
+        output_attentions: bool = False,
+        **kwargs,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        """
+        Args:
+            hidden_states (torch.Tensor): Input tensor of shape [B, L, D]
+            block_indices (Optional[torch.Tensor]): Precomputed block indices for selective attention
+            block_counts (Optional[Union[torch.LongTensor, int]]): Number of selected blocks per token
+            output_attentions (bool): Whether to return attention weights
+        """
+        from native_sparse_attention.ops.parallel import parallel_nsa_with_compression
+
+        if parallel_nsa_with_compression is None:
+            raise ImportError("Native Sparse Attention is not installed. Please check the package installation.")
+
+        batch_size, seq_len, _ = hidden_states.size()
+
+        if self.norm_first:
+            hidden_states = self.norm(hidden_states)
+
+        # projection
+        q = self.q_proj(hidden_states)
+        k = self.k_proj(hidden_states)
+        v = self.v_proj(hidden_states)
+        
+        q = q.view(batch_size, seq_len, self.num_heads, self.head_dim)
+        k = k.view(batch_size, seq_len, self.num_kv_heads, self.head_dim)
+        v = v.view(batch_size, seq_len, self.num_kv_heads, self.head_dim)
+        
+        # Compute gate scores
+        g_cmp = torch.sigmoid(self.g_cmp_proj(hidden_states))
+        g_slc = torch.sigmoid(self.g_slc_proj(hidden_states))
+        g_swa = torch.sigmoid(self.g_swa_proj(hidden_states)) if self.window_size > 0 else torch.zeros_like(g_slc)
+        
+        # Use block_counts if provided, otherwise use default num_blocks
+        if block_counts is None:
+            block_counts = self.num_blocks
+            
+        # Apply native sparse attention with compression
+        attn_output, block_indices = parallel_nsa_with_compression(
+            q=q,
+            k=k,
+            v=v,
+            g_cmp=g_cmp,
+            g_slc=g_slc,
+            g_swa=g_swa,
+            block_counts=block_counts,
+            block_size=self.block_size,
+            window_size=self.window_size,
+            scale=self.scale,
+            head_first=False
+        )
+        
+        # Project output
+        attn_output = attn_output.reshape(batch_size, seq_len, self.hidden_size)
+        attn_output = self.o_proj(attn_output)
+
+        if output_attentions:
+            attentions = None  # TODO: Not implemented
+        else:
+            attentions = None
+
+        return attn_output, attentions, None
