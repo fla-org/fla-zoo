@@ -417,7 +417,7 @@ class NativeSparseAttention(nn.Module):
 
         self.num_heads = num_heads
         if num_kv_heads is None:
-            self.num_kv_heads = self.num_heads
+            self.num_kv_heads = (self.num_heads // 16)
         else:
             self.num_kv_heads = num_kv_heads
         self.num_kv_groups = num_heads // self.num_kv_heads
@@ -484,9 +484,12 @@ class NativeSparseAttention(nn.Module):
         
         # Use block_counts if provided, otherwise use default num_blocks
         if block_counts is None:
-            block_counts = self.num_blocks
+            assert seq_len % self.block_size == 0, f"Sequence length must be divisible by block size, got {seq_len} and {self.block_size}"
+            block_counts = seq_len // self.block_size
             
         # Apply native sparse attention with compression
+        assert q.shape[2] % (k.shape[2] * 16) == 0, "Group size must be a multiple of 16 in NSA"
+
         attn_output, block_indices = parallel_nsa_with_compression(
             q=q,
             k=k,

@@ -3,7 +3,7 @@
 from .vision import (
     ABCVisionConfig, BitNetVisionConfig, DeltaNetVisionConfig, GatedDeltaNetVisionConfig,
     GLAVisionConfig, GSAVisionConfig, HGRNVisionConfig, HGRN2VisionConfig, LightNetVisionConfig,
-    LinearAttentionVisionConfig, RetNetVisionConfig, RWKV6VisionConfig, TransformerVisionConfig,
+    LinearAttentionVisionConfig, RetNetVisionConfig, RWKV6VisionConfig, TransformerVisionConfig, NSAVisionConfig,
     ABCVisionModel, ABCForImageClassification, ABCForMaskedImageModeling,
     BitNetVisionModel, BitNetForImageClassification, BitNetForMaskedImageModeling,
     DeltaNetVisionModel, DeltaNetForImageClassification, DeltaNetForMaskedImageModeling,
@@ -17,6 +17,7 @@ from .vision import (
     RetNetVisionModel, RetNetForImageClassification, RetNetForMaskedImageModeling,
     RWKV6VisionModel, RWKV6ForImageClassification, RWKV6ForMaskedImageModeling,
     TransformerVisionModel, TransformerForImageClassification, TransformerForMaskedImageModeling,
+    NSAVisionModel, NSAForImageClassification, NSAForMaskedImageModeling
 )
 
 __all__ = [
@@ -32,5 +33,6 @@ __all__ = [
     'LinearAttentionVisionConfig', 'LinearAttentionForImageClassification', 'LinearAttentionForMaskedImageModeling', 'LinearAttentionVisionModel',
     'RetNetVisionConfig', 'RetNetForImageClassification', 'RetNetForMaskedImageModeling', 'RetNetVisionModel',
     'RWKV6VisionConfig', 'RWKV6ForImageClassification', 'RWKV6ForMaskedImageModeling', 'RWKV6VisionModel',
-    'TransformerVisionConfig', 'TransformerForImageClassification', 'TransformerForMaskedImageModeling', 'TransformerVisionModel'
+    'TransformerVisionConfig', 'TransformerForImageClassification', 'TransformerForMaskedImageModeling', 'TransformerVisionModel',
+    'NSAVisionConfig', 'NSAForImageClassification', 'NSAForMaskedImageModeling', 'NSAVisionModel'
 ]

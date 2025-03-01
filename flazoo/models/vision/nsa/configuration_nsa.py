@@ -13,9 +13,9 @@ class NSAVisionConfig(PretrainedConfig):
         # NSA core parameters
         hidden_size: int = 2048,
         num_hidden_layers: int = 24,
-        num_heads: int = 32,
+        num_heads: int = 64,
         num_kv_heads: int = None,
-        window_size: Optional[int] = None,
+        window_size: int = 32,
         rope_theta: Optional[float] = 10000.,
         max_position_embeddings: int = 2048,
         hidden_act: str = "swish",
@@ -27,12 +27,12 @@ class NSAVisionConfig(PretrainedConfig):
         attention_bias: bool = False,
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
-        block_size: int = 64,
+        block_size: int = 16,
         num_blocks: int = None,
 
         # Vision specific parameters
         image_size: int = 224,
-        patch_size: int = 16,
+        patch_size: int = 14,
         num_channels: int = 3,
         num_classes: int = 1000,
         qkv_bias: bool = True,
