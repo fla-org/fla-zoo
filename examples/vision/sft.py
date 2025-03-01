@@ -27,10 +27,12 @@ from flazoo import GLAVisionConfig, GLAForImageClassification
 from flazoo import GSAVisionConfig, GSAForImageClassification
 from flazoo import HGRNVisionConfig, HGRNForImageClassification
 from flazoo import HGRN2VisionConfig, HGRN2ForImageClassification
+from flazoo import LightNetVisionConfig, LightNetForImageClassification
 from flazoo import LinearAttentionVisionConfig, LinearAttentionForImageClassification
 from flazoo import RetNetVisionConfig, RetNetForImageClassification
 from flazoo import RWKV6VisionConfig, RWKV6ForImageClassification
 from flazoo import TransformerVisionConfig, TransformerForImageClassification
+from flazoo import NSAVisionConfig, NSAForImageClassification
 
 import evaluate
 accuracy = evaluate.load("accuracy")
@@ -266,10 +268,12 @@ def get_model(model_args, data_args, num_labels):
         'gsa': (GSAVisionConfig, GSAForImageClassification),
         'hgrn': (HGRNVisionConfig, HGRNForImageClassification),
         'hgrn2': (HGRN2VisionConfig, HGRN2ForImageClassification),
+        "lightnet": (LightNetVisionConfig, LightNetForImageClassification),
         'linear_attn': (LinearAttentionVisionConfig, LinearAttentionForImageClassification),
         'retnet': (RetNetVisionConfig, RetNetForImageClassification),
         'rwkv6': (RWKV6VisionConfig, RWKV6ForImageClassification),
-        'transformer': (TransformerVisionConfig, TransformerForImageClassification)
+        'transformer': (TransformerVisionConfig, TransformerForImageClassification),
+        'nsa': (NSAVisionConfig, NSAForImageClassification)
     }
 
     if model_args.model_type not in model_classes:
@@ -365,9 +369,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
