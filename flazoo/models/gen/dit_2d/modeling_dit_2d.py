@@ -9,6 +9,7 @@ from torch import nn
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.models.modeling_utils import ModelMixin
 from ...utils import logging
+from ..attentions import Attention, GatedSelfAttentionDense, FeedForward, _chunked_feed_forward
 from ..embeddings import PatchEmbed
 from ..modeling_outputs import Transformer2DModelOutput
 from diffusers.models.embeddings import SinusoidalPositionalEmbedding
