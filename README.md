@@ -37,9 +37,10 @@ For example, you can install all the dependencies using the following command:
 ```bash
 conda create -n flazoo python=3.12
 conda activate flazoo
-pip install torch torchvision accelerate diffusers
-pip install transformers datasets evaluate causal_conv1d einops sklearn wandb
+pip install torch torchvision accelerate diffusers timm
+pip install transformers datasets evaluate causal_conv1d einops scikit-learn wandb
 pip install flash-attn --no-build-isolation
+pip install -U "huggingface_hub[cli]"
 ```
 Now we can start cooking! 🚀
 
