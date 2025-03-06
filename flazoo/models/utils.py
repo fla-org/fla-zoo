@@ -282,7 +282,7 @@ def cross_merge_fn(y: torch.Tensor, in_channel_first=True, out_channel_first=Tru
     with torch.cuda.device(y.device):
         return CMF.apply(y, in_channel_first, out_channel_first, one_by_one, scans)
     
-def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, scan_type: str = "uni-scan", training: bool = True):
+def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, scan_type: str = "uni-scan", training: bool = True, layer_idx: int = None):
     # hidden_states shape should be: (B, L, D)
     if scan_type == "uni-scan":
         return hidden_states
@@ -293,6 +293,9 @@ def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, scan_type: str =
         return hidden_states
     elif scan_type == "flip-scan":
         hidden_states = hidden_states.flip(-2)
+        return hidden_states
+    elif scan_type == "switch-scan":
+        # post process instead of pre process
         return hidden_states
     elif scan_type == "bi-scan":
         flipped_hidden_states = hidden_states.flip(-2)
@@ -307,13 +310,26 @@ def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, scan_type: str =
     hidden_states = einops.rearrange(hidden_states, "b l k d -> (b k) l d")
     return hidden_states
 
-def prepare_hidden_states_for_merge(hidden_states: torch.Tensor, scan_type: str = "uni-scan"):
+def prepare_hidden_states_for_merge(hidden_states: torch.Tensor, scan_type: str = "uni-scan", layer_idx: int = None):
     # hidden_states shape should be: (BK, L, D), K=2 for bi-scan, K=1 for uni-scan, K=4 for cross-scan
     if scan_type == "uni-scan" or scan_type == "random-scan" or scan_type == "flip-scan":
         return hidden_states
     elif scan_type == "bi-scan":
         B = hidden_states.shape[0] // 2
         hidden_states = hidden_states[:B] + hidden_states[B:]
+        return hidden_states
+    elif scan_type == "switch-scan":
+        assert layer_idx is not None
+        # if layeridx % 2 == 0, then flip, if layeridx % 2 == 1, first shape into 2d, then transpose, then flatten back to 1d sequence
+        if layer_idx % 2 == 0:
+            hidden_states = hidden_states.flip(-2)
+        else:
+            B, L, D = hidden_states.shape
+            hw = int(math.sqrt(L))
+            hidden_states = einops.rearrange(hidden_states, "b (h w) d -> b h w d", h=hw, w=hw)
+            hidden_states = hidden_states.transpose(1, 2)
+            hidden_states = einops.rearrange(hidden_states, "b w h d -> b (w h) d")
+        
         return hidden_states
 
     B, L, D  = hidden_states.shape
