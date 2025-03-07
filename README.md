@@ -1,10 +1,10 @@
 <div align="center">
 
-# FLA-Zoo: Flash-Linear-Attention models beyond language
+# FLA-Zoo: FLA models beyond language
 
 </div>
 <div align="center">
-This repository implements a collection of FLA models that extend beyond language, supporting vision, video, and more. Meanwhile, popular sparse attention models like NSA will also be included.
+This repo implements a collection of FLA models that extend beyond language, supporting vision, video, and more. Under the hood are efficient kernels implemented in Triton (current), TileLang or ThunderKittens from fla-org. The aim of this repo is to make FLA models more accessible and spread their usage to various domains.
 </div>
 
 <div align="center">
@@ -23,8 +23,8 @@ This repository implements a collection of FLA models that extend beyond languag
 
 ## Features
 
-- **`vision`:** `fla-zoo` currently supports vision models. A simple documentation is in [here](docs/vision/vision.md). TL;DR: use hybrid model for better performance and efficiency. "Vision" here refers to image classification tasks.
-- **`video`:** `fla-zoo` currently supports certain video models. Documentation is in progress.
+- **`vision:`** `fla-zoo` currently supports vision encoders. A simple documentation is in [here](docs/vision/vision.md).
+- **`video:`** `fla-zoo` currently supports video understanding models. Documentation is in progress.
 
 ## Installation
 
@@ -44,21 +44,21 @@ pip install -U "huggingface_hub[cli]"
 ```
 Now we can start cooking! 🚀
 
-Note that as an actively developed repo, currently no released packages of `fla-zoo` are provided.
+Note that as an actively developed repo, currently no released packages of `fla-zoo` are provided. Use `pip install -e .` to install the package in development mode.
+
 
 ## News
 
-- **$\texttt{[2025-03-02]}$:** A pilot version of Native Sparse Attention (NSA) is added. More experiments will be conducted to test its performance.
+- **[2025-03-02]** A pilot version of Native Sparse Attention (NSA) is added. More experiments should be conducted to test its performance.
 
-- **$\texttt{[2025-02-23]}$:** Add LightNet for classification. Also, SFT training script for vision models is added, check it out in [here](examples/vision/sft.py).
+- **[2025-02-23]** Add LightNet for classification. Also, a pilot SFT training script for vision models is added, check it out in [here](examples/vision/sft.py).
 
-- **$\texttt{[2025-02-20]}$:** I'm currently conducting many experiments to comprehsnively evaluate the performance of FLA models on vision tasks and some critical design aspects. Stay tuned!
+- **[2025-02-20]** Experiments evaluating the performance of vision models are in progress. Stay tuned!
 
-- **$\texttt{[2025-01-25]}$:** This repo is created with some vision models (I mean classification model).
+- **[2025-01-25]** This repo is created with some vision encoders.
 
 ## TODO
 
-- [x] Write documentation for vision models.
 - [ ] Write documentation for video models.
 - [ ] Release training scripts for vision models.
 - [ ] Add diffusion models to support image/video generation.
