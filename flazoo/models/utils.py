@@ -11,6 +11,7 @@ import warnings
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import TYPE_CHECKING, Optional, Tuple, Union
+from scan import RandomScanWithReorder
 try:
     from flash_attn import flash_attn_func, flash_attn_varlen_func
     from flash_attn.bert_padding import (index_first_axis, pad_input,
@@ -282,15 +283,23 @@ def cross_merge_fn(y: torch.Tensor, in_channel_first=True, out_channel_first=Tru
     with torch.cuda.device(y.device):
         return CMF.apply(y, in_channel_first, out_channel_first, one_by_one, scans)
     
-def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, scan_type: str = "uni-scan", training: bool = True, layer_idx: int = None):
+def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, scan_type: str = "uni-scan", training: bool = True, layer_idx: int = None, random_reorder: bool = True, random_scan_module: Optional[RandomScanWithReorder] = None):
     # hidden_states shape should be: (B, L, D)
     if scan_type == "uni-scan":
         return hidden_states
     elif scan_type == "random-scan":
-        L = hidden_states.size(1)
-        random_idx = torch.randperm(L, device=hidden_states.device)
-        hidden_states = hidden_states[:, random_idx, :]
+        if not random_reorder:
+            L = hidden_states.size(1)
+            random_idx = torch.randperm(L, device=hidden_states.device)
+            hidden_states = hidden_states[:, random_idx, :]
+            return hidden_states
+
+        # random scan with reorder
+        assert random_scan_module is not None, "Random scan module is not provided"
+        assert random_scan_module.layer_idx == layer_idx, f"Layer index mismatch between random scan module and current layer, {random_scan_module.layer_idx} != {layer_idx}"
+        hidden_states = random_scan_module(hidden_states, training=training)
         return hidden_states
+
     elif scan_type == "flip-scan":
         hidden_states = hidden_states.flip(-2)
         return hidden_states
@@ -302,6 +311,7 @@ def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, scan_type: str =
         hidden_states = torch.cat([hidden_states, flipped_hidden_states], dim=0)
         return hidden_states
 
+    # cross-scan
     B, L, D  = hidden_states.shape
     hw = int(math.sqrt(L))
     assert (hw * hw == L) 
@@ -310,9 +320,15 @@ def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, scan_type: str =
     hidden_states = einops.rearrange(hidden_states, "b l k d -> (b k) l d")
     return hidden_states
 
-def prepare_hidden_states_for_merge(hidden_states: torch.Tensor, scan_type: str = "uni-scan", layer_idx: int = None):
+def prepare_hidden_states_for_merge(hidden_states: torch.Tensor, scan_type: str = "uni-scan", layer_idx: int = None, random_reorder: bool = True, random_scan_module: Optional[RandomScanWithReorder] = None):
     # hidden_states shape should be: (BK, L, D), K=2 for bi-scan, K=1 for uni-scan, K=4 for cross-scan
-    if scan_type == "uni-scan" or scan_type == "random-scan" or scan_type == "flip-scan":
+    if scan_type == "uni-scan" or (scan_type == "random-scan" and not random_reorder) or scan_type == "flip-scan":
+        return hidden_states
+    elif scan_type == "random-scan":
+        # random-scan with reorder
+        assert random_scan_module is not None, "Random scan module is not provided"
+        assert random_scan_module.layer_idx == layer_idx, f"Layer index mismatch between random scan module and current layer, {random_scan_module.layer_idx} != {layer_idx}"
+        hidden_states = random_scan_module.restore_order(hidden_states)
         return hidden_states
     elif scan_type == "bi-scan":
         B = hidden_states.shape[0] // 2
