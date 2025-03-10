@@ -49,7 +49,8 @@ class GSAVideoConfig(PretrainedConfig):
         interpolate_pos_encoding: bool = False,
         encoder_stride=16,
         mlp_dim: int = None,
-        scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
         norm_pix_loss: bool = True,
         num_frames: int = 16,
         tubelet_size: int = 2,
@@ -96,7 +97,12 @@ class GSAVideoConfig(PretrainedConfig):
         self.use_mask_token = use_mask_token
         self.layer_norm_eps = layer_norm_eps
         self.interpolate_pos_encoding = interpolate_pos_encoding
-        self.scan_type = scan_type
+        self.train_scan_type = train_scan_type
+        
+        if test_scan_type is None:
+            self.test_scan_type = train_scan_type
+        else:
+            self.test_scan_type = test_scan_type
         self.encoder_stride = encoder_stride
         self.norm_pix_loss = norm_pix_loss
         self.num_frames = num_frames
