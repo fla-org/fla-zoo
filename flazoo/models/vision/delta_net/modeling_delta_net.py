@@ -52,8 +52,7 @@ class DeltaNetVisionBlock(nn.Module):
     def __init__(self, config, layer_idx: int):
         super().__init__()
         
-        if not config.norm_first:
-            self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.attn = VAttention(
@@ -81,15 +80,16 @@ class DeltaNetVisionBlock(nn.Module):
                 layer_idx=layer_idx
             )
             
-        if not config.norm_first:
-            self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
         self.mlp = DeltaNetVisionMLP(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
-            self.scan_type = 'uni-scan'
+            self.train_scan_type = 'uni-scan'
+            self.test_scan_type = 'uni-scan'
         else:
-            self.scan_type = config.scan_type
+            self.train_scan_type = config.train_scan_type
+            self.test_scan_type = config.test_scan_type
 
     def forward(
         self,
@@ -101,11 +101,10 @@ class DeltaNetVisionBlock(nn.Module):
     ) -> Union[Tuple[torch.Tensor, Optional[torch.Tensor]], Tuple[torch.Tensor]]:
         residual = hidden_states
 
-        if hasattr(self, 'ln_1'):
-            hidden_states = self.ln_1(hidden_states)
+        hidden_states = self.ln_1(hidden_states)
 
         
-        hidden_states = prepare_hidden_states_for_scan(hidden_states, self.scan_type, training=self.training)
+        hidden_states = prepare_hidden_states_for_scan(hidden_states, self.train_scan_type, training=self.training)
         
         hidden_states, attentions, past_key_values = self.attn(
             hidden_states=hidden_states,
@@ -115,13 +114,12 @@ class DeltaNetVisionBlock(nn.Module):
             **kwargs
         )
         
-        hidden_states = prepare_hidden_states_for_merge(hidden_states, self.scan_type)
+        hidden_states = prepare_hidden_states_for_merge(hidden_states, self.train_scan_type)
 
         hidden_states = residual + hidden_states
         residual = hidden_states
 
-        if hasattr(self, 'ln_2'):
-            hidden_states = self.ln_2(hidden_states)
+        hidden_states = self.ln_2(hidden_states)
 
         hidden_states = self.mlp(hidden_states)
         

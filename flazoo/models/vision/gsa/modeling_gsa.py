@@ -88,9 +88,11 @@ class GSAVisionBlock(nn.Module):
         self.mlp = GSAVisionMLP(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
-            self.scan_type = 'uni-scan'
+            self.train_scan_type = 'uni-scan'
+            self.test_scan_type = 'uni-scan'
         else:
-            self.scan_type = config.scan_type
+            self.train_scan_type = config.train_scan_type
+            self.test_scan_type = config.test_scan_type
 
     def forward(
         self,
@@ -108,7 +110,7 @@ class GSAVisionBlock(nn.Module):
 
         # Apply attention
         
-        hidden_states = prepare_hidden_states_for_scan(hidden_states, self.scan_type, training=self.training)
+        hidden_states = prepare_hidden_states_for_scan(hidden_states, self.train_scan_type, training=self.training)
         
         hidden_states, attentions, past_key_values = self.attn(
             hidden_states=hidden_states,
@@ -118,7 +120,7 @@ class GSAVisionBlock(nn.Module):
             **kwargs
         )
         
-        hidden_states = prepare_hidden_states_for_merge(hidden_states, self.scan_type)
+        hidden_states = prepare_hidden_states_for_merge(hidden_states, self.train_scan_type)
 
         # First residual connection
         hidden_states = residual + hidden_states
