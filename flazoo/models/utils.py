@@ -11,7 +11,7 @@ import warnings
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import TYPE_CHECKING, Optional, Tuple, Union
-from scan import RandomScanWithReorder
+from .scan import RandomScanWithReorder
 try:
     from flash_attn import flash_attn_func, flash_attn_varlen_func
     from flash_attn.bert_padding import (index_first_axis, pad_input,
@@ -283,7 +283,7 @@ def cross_merge_fn(y: torch.Tensor, in_channel_first=True, out_channel_first=Tru
     with torch.cuda.device(y.device):
         return CMF.apply(y, in_channel_first, out_channel_first, one_by_one, scans)
     
-def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, scan_type: str = "uni-scan", training: bool = True, layer_idx: int = None, random_reorder: bool = True, random_scan_module: Optional[RandomScanWithReorder] = None):
+def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, scan_type: str = "uni-scan", training: bool = True, random_reorder: bool = True, random_scan_module: Optional[RandomScanWithReorder] = None):
     # hidden_states shape should be: (B, L, D)
     if scan_type == "uni-scan":
         return hidden_states
