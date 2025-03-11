@@ -296,7 +296,6 @@ def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, scan_type: str =
 
         # random scan with reorder
         assert random_scan_module is not None, "Random scan module is not provided"
-        assert random_scan_module.layer_idx == layer_idx, f"Layer index mismatch between random scan module and current layer, {random_scan_module.layer_idx} != {layer_idx}"
         hidden_states = random_scan_module(hidden_states, training=training)
         return hidden_states
 
