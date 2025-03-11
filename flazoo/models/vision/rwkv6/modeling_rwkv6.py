@@ -25,6 +25,7 @@ from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          LayerNorm)
 from fla.modules.activations import ACT2FN
 from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
+from ...scan import RandomScanWithReorder
 from ..utils import ImageEmbeddings, Pooler
 if TYPE_CHECKING:
     from transformers.processing_utils import Unpack

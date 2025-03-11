@@ -26,7 +26,7 @@ from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
 from fla.modules.fused_bitlinear import BitLinear, rms_norm_linear_quant
 from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
 from ..utils import ImageEmbeddings, Pooler
-
+from ...scan import RandomScanWithReorder
 logger = logging.get_logger(__name__)
 
 class BitNetVisionMLP(nn.Module):
@@ -78,6 +78,9 @@ class BitNetVisionBlock(nn.Module):
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
+
+        if self.train_scan_type == 'random-scan':
+            self.random_scan_module = RandomScanWithReorder(layer_idx=layer_idx)
 
     def forward(
         self,

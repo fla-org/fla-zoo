@@ -28,7 +28,7 @@ from fla.modules.activations import swiglu_linear
 from fla.modules.layernorm import rms_norm_linear
 from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
 from ..utils import ImageEmbeddings, Pooler
-
+from ...scan import RandomScanWithReorder
 logger = logging.get_logger(__name__)
 
 if TYPE_CHECKING:

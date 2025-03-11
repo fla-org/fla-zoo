@@ -21,6 +21,7 @@ from flazoo.models.utils import VAttention
 from fla.layers.hgrn import HGRNAttention
 from .configuration_hgrn import HGRNVideoConfig
 from fla.models.utils import Cache
+from ...scan import RandomScanWithReorder
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
 from fla.modules.activations import swiglu_linear

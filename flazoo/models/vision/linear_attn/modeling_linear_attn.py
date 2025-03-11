@@ -27,6 +27,7 @@ from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
 from fla.modules.activations import swiglu_linear
 from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
+from ...scan import RandomScanWithReorder
 from ..utils import ImageEmbeddings, Pooler
 
 logger = logging.get_logger(__name__)

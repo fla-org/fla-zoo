@@ -23,6 +23,7 @@ from .configuration_retnet import RetNetVideoConfig
 from fla.models.utils import Cache
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
+from ...scan import RandomScanWithReorder
 from fla.modules.activations import swiglu_linear
 from fla.modules.layernorm import rms_norm_linear
 from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge

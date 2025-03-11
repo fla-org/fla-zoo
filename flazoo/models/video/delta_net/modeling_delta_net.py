@@ -21,6 +21,7 @@ from flazoo.models.utils import VAttention
 from fla.layers.delta_net import DeltaNet
 from .configuration_delta_net import DeltaNetVideoConfig
 from fla.models.utils import Cache
+from ...scan import RandomScanWithReorder
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
 from fla.modules.activations import swiglu_linear

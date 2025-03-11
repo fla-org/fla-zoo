@@ -28,6 +28,7 @@ from fla.modules.layernorm import rms_norm_linear
 from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
 from ..utils import VideoEmbeddings, VideoDecoderOutput, VideoForPreTrainingOutput, get_sinusoid_encoding_table
 from copy import deepcopy
+from ...scan import RandomScanWithReorder
 
 logger = logging.get_logger(__name__)
 
