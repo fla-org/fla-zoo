@@ -84,6 +84,9 @@ class RWKV6VideoBlock(nn.Module):
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
+        
+        if self.train_scan_type == 'random-scan':
+            self.random_scan_module = RandomScanWithReorder(layer_idx=layer_idx)
 
     def forward(
         self,
