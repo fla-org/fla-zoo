@@ -38,19 +38,21 @@ class FLAAttentionWrapper(nn.Module):
     Before pass the input to the attention module, this class will prepare the hidden states by calling `prepare_hidden_states_for_scan`.
     After the attention module is applied, this class will prepare the hidden states by calling `prepare_hidden_states_for_merge`.
     """
-    def __init__(self, fla_type: str, scan_type: str, fla_config: dict, **kwargs):
+    def __init__(self, fla_type: str, train_scan_type: str, test_scan_type: str, fla_config: dict, **kwargs):
         super().__init__()
 
         assert fla_type in FLA_ATTN_MAPS, f"FLA type {fla_type} is not supported. Supported types are {list(FLA_ATTN_MAPS.keys())}"
 
         self.fla_config = fla_config
+        self.train_scan_type = train_scan_type
+        self.test_scan_type = test_scan_type
 
         self.attn = FLA_ATTN_MAPS[fla_type](**fla_config)
 
     def forward(self, hidden_states, output_attentions):
-        hidden_states = prepare_hidden_states_for_scan(hidden_states, self.fla_config)
+        hidden_states = prepare_hidden_states_for_scan(hidden_states, self.train_scan_type, training=self.training)
         hidden_states = self.attn(hidden_states, output_attentions=output_attentions)
-        hidden_states = prepare_hidden_states_for_merge(hidden_states, self.fla_config)
+        hidden_states = prepare_hidden_states_for_merge(hidden_states, self.train_scan_type)
 
         return hidden_states
 
