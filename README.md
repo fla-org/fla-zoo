@@ -2,9 +2,8 @@
 
 # FLA-Zoo: FLA models beyond language
 
-</div>
 <div align="center">
-This repo implements a collection of FLA models that extend beyond language, supporting vision, video, and more. Under the hood are efficient kernels implemented in Triton (current), TileLang or ThunderKittens from fla-org. The aim of this repo is to make FLA models more accessible and spread their usage to various domains.
+This repo implements a collection of FLA models that extend beyond language, supporting vision, video, and more. Under the hood are efficient kernels from <strong>fla-org</strong>. Plus, specific tools for implementing FLA models beyond language are also provided.
 </div>
 
 <div align="center">
