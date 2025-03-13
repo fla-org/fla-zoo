@@ -37,6 +37,9 @@ from .retnet import (
 from .rwkv6 import (
     RWKV6VisionConfig, RWKV6ForImageClassification, RWKV6ForMaskedImageModeling, RWKV6VisionModel
 )
+from .rwkv7 import (
+    RWKV7VisionConfig, RWKV7ForImageClassification, RWKV7ForMaskedImageModeling, RWKV7VisionModel
+)
 from .transformer import (
     TransformerVisionConfig, TransformerForImageClassification, TransformerForMaskedImageModeling, TransformerVisionModel
 )
@@ -57,6 +60,7 @@ __all__ = [
     'LinearAttentionVisionConfig', 'LinearAttentionForImageClassification', 'LinearAttentionForMaskedImageModeling', 'LinearAttentionVisionModel',
     'RetNetVisionConfig', 'RetNetForImageClassification', 'RetNetForMaskedImageModeling', 'RetNetVisionModel',
     'RWKV6VisionConfig', 'RWKV6ForImageClassification', 'RWKV6ForMaskedImageModeling', 'RWKV6VisionModel',
+    'RWKV7VisionConfig', 'RWKV7ForImageClassification', 'RWKV7ForMaskedImageModeling', 'RWKV7VisionModel',
     'TransformerVisionConfig', 'TransformerForImageClassification', 'TransformerForMaskedImageModeling', 'TransformerVisionModel',
     'NSAVisionConfig', 'NSAForImageClassification', 'NSAForMaskedImageModeling', 'NSAVisionModel'
 ]
