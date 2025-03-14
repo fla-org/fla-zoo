@@ -14,6 +14,7 @@ from fla.layers.rwkv7 import RWKV7Attention
 from fla.layers.simple_gla import SimpleGatedLinearAttention
 import torch.nn as nn
 from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
+from flazoo.models.scan import RandomScanWithReorder
 
 # A dictionary that maps the fla_type to the corresponding FLA attention module
 FLA_ATTN_MAPS = {
@@ -48,6 +49,11 @@ class FLAAttentionWrapper(nn.Module):
         self.test_scan_type = test_scan_type
 
         self.attn = FLA_ATTN_MAPS[fla_type](**fla_config)
+
+        if self.train_scan_type == 'random':
+            self.random_scan_module = RandomScanWithReorder()
+        else:
+            self.random_scan_module = None
 
     def forward(self, hidden_states, output_attentions):
         hidden_states = prepare_hidden_states_for_scan(hidden_states, self.train_scan_type, training=self.training)
