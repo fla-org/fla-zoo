@@ -2,6 +2,7 @@
 
 # FLA-Zoo: FLA models beyond language
 
+</div>
 <div align="center">
 This repo implements a collection of FLA models that extend beyond language, supporting vision, video, and more. Under the hood are efficient kernels from <strong>fla-org</strong>. Plus, specific tools for implementing FLA models beyond language are also provided.
 </div>
@@ -61,4 +62,3 @@ Note that as an actively developed repo, currently no released packages of `fla-
 - [ ] Write documentation for video models.
 - [ ] Release training scripts for vision models.
 - [ ] Add diffusion models to support image/video generation.
-
