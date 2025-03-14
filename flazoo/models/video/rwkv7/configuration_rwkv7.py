@@ -4,9 +4,9 @@ from typing import Dict, Optional, Union, List
 
 from transformers.configuration_utils import PretrainedConfig
 
-class RWKV7VisionConfig(PretrainedConfig):
+class RWKV7VideoConfig(PretrainedConfig):
 
-    model_type = 'rwkv7_vision'
+    model_type = 'rwkv7_video'
 
     def __init__(
         self,
@@ -29,20 +29,28 @@ class RWKV7VisionConfig(PretrainedConfig):
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
         value_dim: Optional[Union[int, List[int]]] = None,
-        # Vision specific parameters
+        # Video specific parameters
         image_size: int = 224,
         patch_size: int = 16,
         num_channels: int = 3,
         num_classes: int = 1000,
-        qkv_bias: bool = True,
         hidden_dropout_prob: float = 0.0,
         use_mask_token: bool = False,
         layer_norm_eps: float = 1e-6,
         interpolate_pos_encoding: bool = False,
-        mlp_dim: int = None,
         encoder_stride=16,
+        mlp_dim: int = None,
         train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
         test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        norm_pix_loss: bool = True,
+        num_frames: int = 16,
+        tubelet_size: int = 2,
+
+        # decoder specific parameters
+        decoder_num_heads: int = 6,
+        decoder_hidden_size: int = 256,
+        decoder_num_hidden_layers: int = 4,
+        decoder_mlp_dim: int = None,
         **kwargs
     ):
         # Initialize RWKV7 core parameters
@@ -64,14 +72,12 @@ class RWKV7VisionConfig(PretrainedConfig):
         self.fuse_norm = fuse_norm
         self.fuse_cross_entropy = fuse_cross_entropy
         self.value_dim = value_dim
-        
 
-        # Initialize vision specific parameters
+        # Initialize video specific parameters
         self.image_size = image_size
         self.patch_size = patch_size
         self.num_channels = num_channels
         self.num_classes = num_classes
-        self.qkv_bias = qkv_bias
         self.hidden_dropout_prob = hidden_dropout_prob
         self.use_mask_token = use_mask_token
         self.layer_norm_eps = layer_norm_eps
@@ -83,6 +89,15 @@ class RWKV7VisionConfig(PretrainedConfig):
         else:
             self.test_scan_type = test_scan_type
         self.encoder_stride = encoder_stride
+        self.norm_pix_loss = norm_pix_loss
+        self.num_frames = num_frames
+        self.tubelet_size = tubelet_size
+
+        # Initialize decoder specific parameters
+        self.decoder_num_heads = decoder_num_heads
+        self.decoder_hidden_size = decoder_hidden_size
+        self.decoder_num_hidden_layers = decoder_num_hidden_layers
+
 
         if attn is not None:
             if not isinstance(attn, Dict):
@@ -93,7 +108,7 @@ class RWKV7VisionConfig(PretrainedConfig):
                 raise ValueError("Number of heads must be provided to initialize hybrid attention layers")
             attn['num_kv_heads'] = attn.get('num_kv_heads', attn['num_heads'])
             attn['window_size'] = attn.get('window_size', None)
-
+        
         self.attn = attn
 
         if mlp_dim is None:
@@ -101,4 +116,9 @@ class RWKV7VisionConfig(PretrainedConfig):
         else:
             self.mlp_dim = mlp_dim
         
+        if decoder_mlp_dim is None:
+            self.decoder_mlp_dim = 4 * decoder_hidden_size
+        else:
+            self.decoder_mlp_dim = decoder_mlp_dim # default value set to 4 * decoder_hidden_size
+
         super().__init__(**kwargs)
