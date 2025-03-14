@@ -97,6 +97,9 @@ class GSAVisionBlock(nn.Module):
 
         if self.train_scan_type == 'random-scan':
             self.random_scan_module = RandomScanWithReorder(layer_idx=layer_idx)
+        else:
+            self.random_scan_module = None
+
 
     def forward(
         self,
