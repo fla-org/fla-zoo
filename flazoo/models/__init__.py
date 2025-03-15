@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from .vision import (
+from .und import (
     ABCVisionConfig, BitNetVisionConfig, DeltaNetVisionConfig, GatedDeltaNetVisionConfig,
     GLAVisionConfig, GSAVisionConfig, HGRNVisionConfig, HGRN2VisionConfig, LightNetVisionConfig,
     LinearAttentionVisionConfig, RetNetVisionConfig, RWKV6VisionConfig, RWKV7VisionConfig, TransformerVisionConfig, NSAVisionConfig,
