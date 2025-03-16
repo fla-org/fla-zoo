@@ -18,7 +18,8 @@ from transformers.modeling_outputs import (ImageClassifierOutput,
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
-from flazoo.models.utils import VisionAttention
+from flazoo.models.attentions import VisionAttention
+from flazoo.models.attentions import VisionNativeSparseAttention
 from fla.layers.linear_attn import LinearAttention
 from .configuration_linear_attn import \
     LinearAttentionVisionConfig

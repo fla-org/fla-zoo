@@ -17,7 +17,8 @@ from transformers.modeling_outputs import (ImageClassifierOutput,
                                            BaseModelOutputWithPooling)
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
-from flazoo.models.utils import VisionAttention
+from flazoo.models.attentions import VisionAttention
+from flazoo.models.attentions import VisionNativeSparseAttention
 from fla.layers.bitattn import BitAttention
 from .configuration_bitnet import BitNetVisionConfig
 from fla.models.utils import Cache

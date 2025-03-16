@@ -18,8 +18,8 @@ from transformers.modeling_outputs import (ImageClassifierOutput,
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
-from flazoo.models.utils import VisionAttention
-from flazoo.models.utils import VisionNativeSparseAttention
+from flazoo.models.attentions import VisionAttention
+from flazoo.models.attentions import VisionNativeSparseAttention
 from .configuration_nsa import NSAVisionConfig
 from fla.models.utils import Cache
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
