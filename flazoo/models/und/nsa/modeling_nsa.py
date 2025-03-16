@@ -55,35 +55,23 @@ class NSAVisionBlock(nn.Module):
         if not config.norm_first:
             self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
-        if config.attn is not None and layer_idx in config.attn['layers']:
-            self.attn = VisionAttention(
-                hidden_size=config.hidden_size,
-                num_heads=config.attn['num_heads'],
-                num_kv_heads=config.attn['num_kv_heads'],
-                layer_idx=layer_idx
-            )
-        else:
-            self.attn = VisionNativeSparseAttention(
-                hidden_size=config.hidden_size,
-                num_heads=config.num_heads,
-                num_kv_heads=config.num_kv_heads,
-                window_size=config.window_size,
-                block_size=config.block_size,
-                num_blocks=config.num_blocks,
-                layer_idx=layer_idx
-            )
+        self.attn = VisionNativeSparseAttention(
+            hidden_size=config.hidden_size,
+            num_heads=config.num_heads,
+            num_kv_heads=config.num_kv_heads,
+            window_size=config.window_size,
+            block_size=config.block_size,
+            num_blocks=config.num_blocks,
+            layer_idx=layer_idx
+        )
             
         if not config.norm_first:
             self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
         self.mlp = NSAVisionMLP(config)
 
-        if config.attn is not None and layer_idx in config.attn['layers']:
-            self.train_scan_type = 'uni-scan'
-            self.test_scan_type = 'uni-scan'
-        else:
-            self.train_scan_type = config.train_scan_type
-            self.test_scan_type = config.test_scan_type
+        self.train_scan_type = 'uni-scan'
+        self.test_scan_type = 'uni-scan'
 
     def forward(
         self,
