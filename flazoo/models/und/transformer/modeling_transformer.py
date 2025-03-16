@@ -17,7 +17,7 @@ from transformers.modeling_outputs import (ImageClassifierOutput,
                                            BaseModelOutputWithPooling)
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
-from flazoo.models.utils import VAttention
+from flazoo.models.utils import VisionAttention
 from .configuration_transformer import TransformerVisionConfig
 from fla.models.utils import Cache
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
@@ -56,7 +56,7 @@ class TransformerVisionBlock(nn.Module):
         if not config.norm_first:
             self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
-        self.attn = VAttention(
+        self.attn = VisionAttention(
             hidden_size=config.hidden_size,
             num_heads=config.num_heads,
             num_kv_heads=config.num_kv_heads,
@@ -399,7 +399,7 @@ class TransformerVideoBlock(nn.Module):
         
         self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
-        self.attn = VAttention(
+        self.attn = VisionAttention(
             hidden_size=config.hidden_size,
             num_heads=config.attn['num_heads'],
             num_kv_heads=config.attn['num_kv_heads'],

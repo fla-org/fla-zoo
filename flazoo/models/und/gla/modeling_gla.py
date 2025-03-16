@@ -18,7 +18,7 @@ from transformers.modeling_outputs import (ImageClassifierOutput,
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
-from flazoo.models.utils import VAttention
+from flazoo.models.utils import VisionAttention
 from fla.layers.gla import GatedLinearAttention
 from .configuration_gla import GLAVisionConfig
 from fla.models.utils import Cache
@@ -59,7 +59,7 @@ class GLAVisionBlock(nn.Module):
         self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
         if config.attn is not None and layer_idx in config.attn['layers']:
-            self.attn = VAttention(
+            self.attn = VisionAttention(
                 hidden_size=config.hidden_size,
                 num_heads=config.attn['num_heads'],
                 num_kv_heads=config.attn['num_kv_heads'],
@@ -434,7 +434,7 @@ class GLAVideoBlock(nn.Module):
         self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
         if config.attn is not None and layer_idx in config.attn['layers']:
-            self.attn = VAttention(
+            self.attn = VisionAttention(
                 hidden_size=config.hidden_size,
                 num_heads=config.attn['num_heads'],
                 num_kv_heads=config.attn['num_kv_heads'],
