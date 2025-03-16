@@ -27,8 +27,8 @@ class NSAVisionConfig(PretrainedConfig):
         attention_bias: bool = False,
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
-        block_size: int = 16,
-        block_counts: int = None,
+        block_size: int = 64,
+        block_counts: int = 16,
 
         # Vision specific parameters
         image_size: int = 224,
