@@ -39,6 +39,7 @@ class VisionAttention(nn.Module):
         hidden_size: int = 2048,
         num_heads: int = 32,
         num_kv_heads: Optional[int] = None,
+        head_dim: int = None,
         norm_first: bool = False,
         norm_eps: float = 1e-5,
         layer_idx: int = None
@@ -52,7 +53,10 @@ class VisionAttention(nn.Module):
             self.num_kv_heads = num_kv_heads
         self.num_kv_groups = num_heads // self.num_kv_heads
         self.hidden_size = hidden_size
-        self.head_dim = self.hidden_size // self.num_heads
+        if head_dim is None:
+            self.head_dim = self.hidden_size // self.num_heads
+        else:
+            self.head_dim = head_dim
         self.kv_dim = self.num_kv_heads * self.head_dim
         self.kv_dim = self.num_kv_heads * self.head_dim
         self.norm_first = norm_first
@@ -60,10 +64,10 @@ class VisionAttention(nn.Module):
 
         if norm_first:
             self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
-        self.q_proj = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
+        self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
         self.k_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
         self.v_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
-        self.o_proj = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
+        self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
 
 
     def forward(
@@ -105,7 +109,7 @@ class VisionNativeSparseAttention(nn.Module):
         hidden_size: int = 2048,
         num_heads: int = 64,
         num_kv_heads: Optional[int] = 4,
-        head_dim: int = 64,
+        head_dim: int = None,
         qkv_bias: bool = False,
         block_size: Optional[int] = 64,
         block_counts: Optional[Union[torch.LongTensor, int]] = 16,
@@ -121,7 +125,11 @@ class VisionNativeSparseAttention(nn.Module):
         else:
             self.num_kv_heads = num_kv_heads
         self.num_kv_groups = num_heads // self.num_kv_heads
-        self.head_dim = head_dim
+
+        if head_dim is None:
+            self.head_dim = self.hidden_size // self.num_heads
+        else:
+            self.head_dim = head_dim
         self.kv_dim = self.num_kv_heads * self.head_dim
         self.qkv_bias = qkv_bias
 
