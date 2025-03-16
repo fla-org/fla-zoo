@@ -15,11 +15,22 @@ This repo implements a collection of FLA models that extend beyond language, sup
 </div>
 <br/>
 
+* [News](#news)
 * [Features](#features)
 * [Installation](#installation)
-* [News](#news)
-* [TODO](#todo)
 <!-- * [Citation](#citation) -->
+
+## News
+
+- **[2025-03-16]** Native Sparse Attention (NSA) for vision is now added. See the triton implementation under the hood [here](https://github.com/fla-org/native-sparse-attention).
+
+- **[2025-03-02]** A pilot version of Native Sparse Attention (NSA) is added. More experiments should be conducted to test its performance.
+
+- **[2025-02-23]** Add LightNet for classification. Also, a pilot SFT training script for vision models is added, check it out in [here](examples/vision/sft.py).
+
+- **[2025-02-20]** Experiments evaluating the performance of vision models are in progress.
+
+- **[2025-01-25]** This repo is created with some vision encoders.
 
 ## Features
 
@@ -45,20 +56,3 @@ pip install -U "huggingface_hub[cli]"
 Now we can start cooking! 🚀
 
 Note that as an actively developed repo, currently no released packages of `fla-zoo` are provided. Use `pip install -e .` to install the package in development mode.
-
-
-## News
-
-- **[2025-03-02]** A pilot version of Native Sparse Attention (NSA) is added. More experiments should be conducted to test its performance.
-
-- **[2025-02-23]** Add LightNet for classification. Also, a pilot SFT training script for vision models is added, check it out in [here](examples/vision/sft.py).
-
-- **[2025-02-20]** Experiments evaluating the performance of vision models are in progress. Stay tuned!
-
-- **[2025-01-25]** This repo is created with some vision encoders.
-
-## TODO
-
-- [ ] Write documentation for video models.
-- [ ] Release training scripts for vision models.
-- [ ] Add diffusion models to support image/video generation.
