@@ -14,7 +14,7 @@ class NSAVisionConfig(PretrainedConfig):
         hidden_size: int = 2048,
         num_hidden_layers: int = 24,
         num_heads: int = 64,
-        num_kv_heads: int = None,
+        num_kv_heads: int = 4,
         window_size: int = 32,
         rope_theta: Optional[float] = 10000.,
         max_position_embeddings: int = 2048,
