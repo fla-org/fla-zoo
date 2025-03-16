@@ -28,7 +28,7 @@ class NSAVisionConfig(PretrainedConfig):
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
         block_size: int = 16,
-        num_blocks: int = None,
+        block_counts: int = None,
 
         # Vision specific parameters
         image_size: int = 224,
@@ -66,7 +66,7 @@ class NSAVisionConfig(PretrainedConfig):
         self.fuse_cross_entropy = fuse_cross_entropy
         self.fuse_norm = fuse_norm
         self.block_size = block_size
-        self.num_blocks = num_blocks
+        self.block_counts = block_counts
 
         # Initialize vision specific parameters
         self.image_size = image_size

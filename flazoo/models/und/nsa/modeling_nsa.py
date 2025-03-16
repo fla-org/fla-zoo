@@ -61,7 +61,7 @@ class NSAVisionBlock(nn.Module):
             num_kv_heads=config.num_kv_heads,
             window_size=config.window_size,
             block_size=config.block_size,
-            num_blocks=config.num_blocks,
+            block_counts=config.block_counts,
             layer_idx=layer_idx
         )
             
