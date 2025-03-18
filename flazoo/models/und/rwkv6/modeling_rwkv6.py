@@ -26,7 +26,6 @@ from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          LayerNorm)
 from fla.modules.activations import ACT2FN
 from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
-from ...scan import RandomScanWithReorder
 from ..utils import ImageEmbeddings, Pooler
 if TYPE_CHECKING:
     from transformers.processing_utils import Unpack
@@ -88,11 +87,6 @@ class RWKV6VisionBlock(nn.Module):
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
-        
-        if self.train_scan_type == 'random-scan':
-            self.random_scan_module = RandomScanWithReorder(layer_idx=layer_idx)
-        else:
-            self.random_scan_module = None
 
     def forward(
         self,
@@ -456,9 +450,6 @@ class RWKV6VideoBlock(nn.Module):
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
-        
-        if self.train_scan_type == 'random-scan':
-            self.random_scan_module = RandomScanWithReorder(layer_idx=layer_idx)
 
     def forward(
         self,

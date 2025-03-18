@@ -29,7 +29,6 @@ from fla.modules.activations import swiglu_linear
 from fla.modules.layernorm import rms_norm_linear
 from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
 from ..utils import ImageEmbeddings, Pooler
-from ...scan import RandomScanWithReorder
 from transformers.utils.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from ..utils import VideoEmbeddings, VideoDecoderOutput, VideoForPreTrainingOutput, get_sinusoid_encoding_table
 from copy import deepcopy
@@ -95,11 +94,6 @@ class DeltaNetVisionBlock(nn.Module):
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
-
-        if self.train_scan_type == 'random-scan':
-            self.random_scan_module = RandomScanWithReorder(layer_idx=layer_idx)
-        else:
-            self.random_scan_module = None
 
 
     def forward(
@@ -461,9 +455,6 @@ class DeltaNetVideoBlock(nn.Module):
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
-        
-        if self.train_scan_type == 'random-scan':
-            self.random_scan_module = RandomScanWithReorder(layer_idx=layer_idx)
 
     def forward(
         self,

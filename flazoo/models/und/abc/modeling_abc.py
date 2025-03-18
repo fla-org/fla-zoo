@@ -26,7 +26,6 @@ from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
 from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
 from ..utils import ImageEmbeddings, Pooler
-from ...scan import RandomScanWithReorder
 from .configuration_abc import ABCVideoConfig
 from transformers.utils.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from ..utils import VideoEmbeddings, VideoDecoderOutput, VideoForPreTrainingOutput, get_sinusoid_encoding_table
@@ -89,11 +88,7 @@ class ABCVisionBlock(nn.Module):
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
-        
-        if self.train_scan_type == 'random-scan':
-            self.random_scan_module = RandomScanWithReorder(layer_idx=layer_idx)
-        else:
-            self.random_scan_module = None
+
 
 
     def forward(
@@ -460,9 +455,6 @@ class ABCVideoBlock(nn.Module):
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
-
-        if self.train_scan_type == 'random-scan':
-            self.random_scan_module = RandomScanWithReorder(layer_idx=layer_idx)
 
     def forward(
         self,
