@@ -413,7 +413,7 @@ class BitNetVideoBlock(nn.Module):
         super().__init__()
 
         self.layer_idx = layer_idx
-        
+
         self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
         if config.attn is not None and layer_idx in config.attn['layers']:
@@ -468,7 +468,7 @@ class BitNetVideoBlock(nn.Module):
             **kwargs
         )
 
-        hidden_states = prepare_hidden_states_for_merge(hidden_states, self.train_scan_type, self.test_scan_type, training=self.training)
+        hidden_states = prepare_hidden_states_for_merge(hidden_states, self.train_scan_type, self.test_scan_type, training=self.training, layer_idx=self.layer_idx)
 
         hidden_states = residual + hidden_states
         residual = hidden_states
