@@ -417,6 +417,8 @@ class RWKV6VideoMLP(nn.Module):
 class RWKV6VideoBlock(nn.Module):
     def __init__(self, config, layer_idx: int):
         super().__init__()
+
+        self.layer_idx = layer_idx
         
         self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
