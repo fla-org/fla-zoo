@@ -11,17 +11,27 @@ from .scan import cross_scan_fn, cross_merge_fn
 
 logger = logging.get_logger(__name__)
     
-def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, train_scan_type: str = "uni-scan", test_scan_type : str = "uni-scan", training: bool = True):
+def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, train_scan_type: str = "uni-scan", test_scan_type : str = "uni-scan", training: bool = True, random_level: str = "sample"):
+    # radnom level should be "sample" or "batch"
+    assert random_level in ["sample", "batch"], "random_level should be 'sample' or 'batch'"
     scan_type = train_scan_type if training else test_scan_type
     # hidden_states shape should be: (B, L, D)
     if scan_type == "uni-scan":
         return hidden_states
     elif scan_type == "random-scan":
-        L = hidden_states.size(1)
-        random_idx = torch.randperm(L, device=hidden_states.device)
-        hidden_states = hidden_states[:, random_idx, :]
+        if random_level == "batch":
+            L = hidden_states.size(1)
+            random_idx = torch.randperm(L, device=hidden_states.device)
+            hidden_states = hidden_states[:, random_idx, :]
+        else:
+            # random shuffle for each sample
+            B, L, D = hidden_states.shape
+            device = hidden_states.device
+            random_indices = torch.argsort(torch.rand(B, L, device=device), dim=1)
+            batch_indices = torch.arange(B, device=device).view(B, 1).expand(B, L)
+            hidden_states = hidden_states[batch_indices, random_indices]
         return hidden_states
-
+    
     elif scan_type == "flip-scan":
         hidden_states = hidden_states.flip(-2)
         return hidden_states
