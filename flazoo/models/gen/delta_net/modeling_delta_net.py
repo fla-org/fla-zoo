@@ -112,64 +112,66 @@ class Gen2DPatchEmbed(nn.Module):
         return x
 
 class DeltaNetGen2DMLP(nn.Module):
-    def __init__(self, hidden_size, mlp_dim):
+    def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(hidden_size, mlp_dim),
+            nn.Linear(config.hidden_size, config.mlp_dim),
             nn.GELU(approximate="tanh"),
-            nn.Linear(mlp_dim, hidden_size),
+            nn.Linear(config.mlp_dim, config.hidden_size),
         )
 
     def forward(self, x):
         return self.net(x)
 
 class DeltaNetGen2DProjectorMLP(nn.Module):
-    def __init__(self, hidden_size, projector_dim, z_dim):
+    def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(hidden_size, projector_dim),
+            nn.Linear(config.hidden_size, config.projector_dim),
             nn.SiLU(),
-            nn.Linear(projector_dim, projector_dim),
+            nn.Linear(config.projector_dim, config.z_dim),
             nn.SiLU(),
-            nn.Linear(projector_dim, z_dim),
+            nn.Linear(config.z_dim, config.hidden_size),
         )
     
     def forward(self, x):
         return self.net(x)
 
-class Gen2DAttention(nn.Module):
-    def __init__(self, hidden_size, num_heads):
-        super().__init__()
-        self.num_heads = num_heads
-        head_dim = hidden_size // num_heads
-        self.scale = head_dim ** -0.5
-        
-        self.qkv = nn.Linear(hidden_size, hidden_size * 3, bias=True)
-        self.proj = nn.Linear(hidden_size, hidden_size)
-        
-    def forward(self, x):
-        B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]
-        
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
-        return x
-
 class DeltaNetGen2DBlock(nn.Module):
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, qk_norm=False):
+    def __init__(self, config, layer_idx: int):
         super().__init__()
-        self.norm1 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
-        self.attn = Gen2DAttention(hidden_size, num_heads)
-        self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
-        mlp_dim = int(hidden_size * mlp_ratio)
-        self.mlp = DeltaNetGen2DMLP(hidden_size, mlp_dim)
+        self.norm1 = nn.LayerNorm(config.hidden_size, elementwise_affine=False, eps=config.layer_norm_eps)
+        if config.attn is not None and layer_idx in config.attn['layers']:
+            self.attn = VisionAttention(
+                hidden_size=config.hidden_size,
+                num_heads=config.attn['num_heads'],
+                num_kv_heads=config.attn['num_kv_heads'],
+                layer_idx=layer_idx
+            )
+        else:
+            self.attn = DeltaNet(
+                mode=config.attn_mode,
+                hidden_size=config.hidden_size,
+                expand_k=config.expand_k,
+                expand_v=config.expand_v,
+                num_heads=config.num_heads,
+                use_gate=config.use_gate,
+                use_beta=config.use_beta,
+                use_short_conv=config.use_short_conv,
+                use_output_norm=config.use_output_norm,
+                conv_size=config.conv_size,
+                qk_norm=config.qk_norm,
+                qk_activation=config.qk_activation,
+                norm_first=config.norm_first,
+                norm_eps=config.norm_eps,
+                layer_idx=layer_idx
+            )
+
+        self.norm2 = nn.LayerNorm(config.hidden_size, elementwise_affine=False, eps=config.layer_norm_eps)
+        self.mlp = DeltaNetGen2DMLP(config)
         self.adaLN_modulation = nn.Sequential(
             nn.SiLU(),
-            nn.Linear(hidden_size, 6 * hidden_size, bias=True)
+            nn.Linear(config.hidden_size, 6 * config.hidden_size, bias=True)
         )
 
     def forward(self, x, c):
