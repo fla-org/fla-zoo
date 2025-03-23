@@ -41,7 +41,7 @@ class ABCVisionConfig(PretrainedConfig):
         use_mask_token: bool = False,
         layer_norm_eps: float = 1e-6,
         interpolate_pos_encoding: bool = False,
-        mlp_dim: int = None,
+        channel_mixer_dim: int = None,
         encoder_stride=16,
         train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
         test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
@@ -98,10 +98,10 @@ class ABCVisionConfig(PretrainedConfig):
             attn['window_size'] = attn.get('window_size', None)
 
         self.attn = attn
-        if mlp_dim is None:
-            self.mlp_dim = 4 * hidden_size # default value set to 4 * hidden_size
+        if channel_mixer_dim is None:
+            self.channel_mixer_dim = 4 * hidden_size # default value set to 4 * hidden_size
         else:
-            self.mlp_dim = mlp_dim
+            self.channel_mixer_dim = channel_mixer_dim
         
         super().__init__(**kwargs)
     
@@ -143,7 +143,7 @@ class ABCVideoConfig(PretrainedConfig):
         layer_norm_eps: float = 1e-6,
         interpolate_pos_encoding: bool = False,
         encoder_stride=16,
-        mlp_dim: int = None,
+        channel_mixer_dim: int = None,
         train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
         test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
         norm_pix_loss: bool = True,
@@ -154,7 +154,7 @@ class ABCVideoConfig(PretrainedConfig):
         decoder_num_heads: int = 6,
         decoder_hidden_size: int = 256,
         decoder_num_hidden_layers: int = 4,
-        decoder_mlp_dim: int = None,
+        decoder_channel_mixer_dim: int = None,
         **kwargs
     ):
         # Initialize ABC core parameters
@@ -216,14 +216,14 @@ class ABCVideoConfig(PretrainedConfig):
         
         self.attn = attn
 
-        if mlp_dim is None:
-            self.mlp_dim = 4 * hidden_size # default value set to 4 * hidden_size
+        if channel_mixer_dim is None:
+            self.channel_mixer_dim = 4 * hidden_size # default value set to 4 * hidden_size
         else:
-            self.mlp_dim = mlp_dim
+            self.channel_mixer_dim = channel_mixer_dim
         
-        if decoder_mlp_dim is None:
-            self.decoder_mlp_dim = 4 * decoder_hidden_size
+        if decoder_channel_mixer_dim is None:
+            self.decoder_channel_mixer_dim = 4 * decoder_hidden_size
         else:
-            self.decoder_mlp_dim = decoder_mlp_dim # default value set to 4 * decoder_hidden_size
+            self.decoder_channel_mixer_dim = decoder_channel_mixer_dim # default value set to 4 * decoder_hidden_size
 
         super().__init__(**kwargs)

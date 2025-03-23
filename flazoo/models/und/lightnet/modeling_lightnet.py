@@ -40,9 +40,9 @@ class LightNetVisionChannelMixer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(config.hidden_size, config.mlp_dim),
+            nn.Linear(config.hidden_size, config.channel_mixer_dim),
             nn.GELU(),
-            nn.Linear(config.mlp_dim, config.hidden_size),
+            nn.Linear(config.channel_mixer_dim, config.hidden_size),
             nn.Dropout(config.hidden_dropout_prob)
         )
 
@@ -80,7 +80,7 @@ class LightNetVisionBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = LightNetVisionChannelMixer(config)
+        self.channel_mixer = LightNetVisionChannelMixer(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
@@ -119,7 +119,7 @@ class LightNetVisionBlock(nn.Module):
 
         hidden_states = self.ln_2(hidden_states)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.channel_mixer(hidden_states)
         
         hidden_states = residual + hidden_states
 

@@ -41,9 +41,9 @@ class LinearAttentionVisionChannelMixer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(config.hidden_size, config.mlp_dim),
+            nn.Linear(config.hidden_size, config.channel_mixer_dim),
             nn.GELU(),
-            nn.Linear(config.mlp_dim, config.hidden_size),
+            nn.Linear(config.channel_mixer_dim, config.hidden_size),
             nn.Dropout(config.hidden_dropout_prob)
         )
 
@@ -83,7 +83,7 @@ class LinearAttentionVisionBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = LinearAttentionVisionChannelMixer(config)
+        self.channel_mixer = LinearAttentionVisionChannelMixer(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
@@ -129,7 +129,7 @@ class LinearAttentionVisionBlock(nn.Module):
         if hasattr(self, 'ln_2'):
             hidden_states = self.ln_2(hidden_states)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.channel_mixer(hidden_states)
         
         # Second residual connection
         hidden_states = residual + hidden_states
@@ -409,9 +409,9 @@ class LinearAttentionVideoChannelMixer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(config.hidden_size, config.mlp_dim),
+            nn.Linear(config.hidden_size, config.channel_mixer_dim),
             nn.GELU(),
-            nn.Linear(config.mlp_dim, config.hidden_size),
+            nn.Linear(config.channel_mixer_dim, config.hidden_size),
             nn.Dropout(config.hidden_dropout_prob)
         )
 
@@ -453,7 +453,7 @@ class LinearAttentionVideoBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = LinearAttentionVideoChannelMixer(config)
+        self.channel_mixer = LinearAttentionVideoChannelMixer(config)
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
             self.test_scan_type = 'uni-scan'
@@ -491,7 +491,7 @@ class LinearAttentionVideoBlock(nn.Module):
 
         hidden_states = self.ln_2(hidden_states)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.channel_mixer(hidden_states)
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states,)
@@ -637,7 +637,7 @@ class LinearAttentionVideoDecoder(nn.Module):
         decoder_config.hidden_size = config.decoder_hidden_size
         decoder_config.num_hidden_layers = config.decoder_num_hidden_layers
         decoder_config.num_heads = config.decoder_num_heads
-        decoder_config.mlp_dim = config.decoder_mlp_dim
+        decoder_config.channel_mixer_dim = config.decoder_channel_mixer_dim
 
         self.decoder_blocks = nn.ModuleList(
             [LinearAttentionVideoBlock(decoder_config, layer_idx) for layer_idx in range(decoder_config.num_hidden_layers)]

@@ -40,7 +40,7 @@ class NSAVisionConfig(PretrainedConfig):
         use_mask_token: bool = False,
         layer_norm_eps: float = 1e-6,
         interpolate_pos_encoding: bool = False,
-        mlp_dim: int = None,
+        channel_mixer_dim: int = None,
         encoder_stride=16,
         train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
         test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
@@ -86,9 +86,9 @@ class NSAVisionConfig(PretrainedConfig):
             self.test_scan_type = test_scan_type
         self.encoder_stride = encoder_stride
 
-        if mlp_dim is None:
-            self.mlp_dim = 4 * hidden_size # default value set to 4 * hidden_size
+        if channel_mixer_dim is None:
+            self.channel_mixer_dim = 4 * hidden_size # default value set to 4 * hidden_size
         else:
-            self.mlp_dim = mlp_dim
+            self.channel_mixer_dim = channel_mixer_dim
         
         super().__init__(**kwargs)
