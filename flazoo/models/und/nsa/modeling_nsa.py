@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from transformers.processing_utils import Unpack
 
 
-class NSAVisionMLP(nn.Module):
+class NSAVisionChannelMixer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -68,7 +68,7 @@ class NSAVisionBlock(nn.Module):
         if not config.norm_first:
             self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = NSAVisionMLP(config)
+        self.mlp = NSAVisionChannelMixer(config)
 
         self.train_scan_type = 'uni-scan'
         self.test_scan_type = 'uni-scan'

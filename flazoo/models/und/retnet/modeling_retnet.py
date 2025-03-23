@@ -38,7 +38,7 @@ from copy import deepcopy
 
 logger = logging.get_logger(__name__)
 
-class RetNetVisionMLP(nn.Module):
+class RetNetVisionChannelMixer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -83,7 +83,7 @@ class RetNetVisionBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = RetNetVisionMLP(config)
+        self.mlp = RetNetVisionChannelMixer(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
@@ -404,7 +404,7 @@ class RetNetForMaskedImageModeling(RetNetVisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-class RetNetVideoMLP(nn.Module):
+class RetNetVideoChannelMixer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -451,7 +451,7 @@ class RetNetVideoBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = RetNetVideoMLP(config)
+        self.mlp = RetNetVideoChannelMixer(config)
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
             self.test_scan_type = 'uni-scan'

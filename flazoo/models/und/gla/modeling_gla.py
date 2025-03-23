@@ -39,7 +39,7 @@ from copy import deepcopy
 logger = logging.get_logger(__name__)
 
 
-class GLAVisionMLP(nn.Module):
+class GLAVisionChannelMixer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -87,7 +87,7 @@ class GLAVisionBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = GLAVisionMLP(config)
+        self.mlp = GLAVisionChannelMixer(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
@@ -409,7 +409,7 @@ class GLAForMaskedImageModeling(GLAVisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-class GLAVideoMLP(nn.Module):
+class GLAVideoChannelMixer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -459,7 +459,7 @@ class GLAVideoBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = GLAVideoMLP(config)
+        self.mlp = GLAVideoChannelMixer(config)
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
             self.test_scan_type = 'uni-scan'

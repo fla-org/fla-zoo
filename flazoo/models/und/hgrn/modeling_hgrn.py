@@ -38,7 +38,7 @@ from copy import deepcopy
 
 logger = logging.get_logger(__name__)
 
-class HGRNVisionMLP(nn.Module):
+class HGRNVisionChannelMixer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -78,7 +78,7 @@ class HGRNVisionBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = HGRNVisionMLP(config)
+        self.mlp = HGRNVisionChannelMixer(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
@@ -400,7 +400,7 @@ class HGRNForMaskedImageModeling(HGRNVisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-class HGRNVideoMLP(nn.Module):
+class HGRNVideoChannelMixer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -442,7 +442,7 @@ class HGRNVideoBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = HGRNVideoMLP(config)
+        self.mlp = HGRNVideoChannelMixer(config)
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
             self.test_scan_type = 'uni-scan'

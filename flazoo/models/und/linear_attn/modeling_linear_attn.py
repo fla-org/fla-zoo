@@ -37,7 +37,7 @@ from copy import deepcopy
 
 logger = logging.get_logger(__name__)
 
-class LinearAttentionVisionMLP(nn.Module):
+class LinearAttentionVisionChannelMixer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -83,7 +83,7 @@ class LinearAttentionVisionBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = LinearAttentionVisionMLP(config)
+        self.mlp = LinearAttentionVisionChannelMixer(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
@@ -405,7 +405,7 @@ class LinearAttentionForMaskedImageModeling(LinearAttentionVisionPreTrainedModel
             attentions=outputs.attentions,
         )
 
-class LinearAttentionVideoMLP(nn.Module):
+class LinearAttentionVideoChannelMixer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -453,7 +453,7 @@ class LinearAttentionVideoBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = LinearAttentionVideoMLP(config)
+        self.mlp = LinearAttentionVideoChannelMixer(config)
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
             self.test_scan_type = 'uni-scan'

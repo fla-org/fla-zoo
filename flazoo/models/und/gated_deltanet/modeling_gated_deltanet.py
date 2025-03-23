@@ -41,7 +41,7 @@ from copy import deepcopy
 logger = logging.get_logger(__name__)
 
 
-class GatedDeltaNetVisionMLP(nn.Module):
+class GatedDeltaNetVisionChannelMixer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -86,7 +86,7 @@ class GatedDeltaNetVisionBlock(nn.Module):
         if not config.norm_first:
             self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = GatedDeltaNetVisionMLP(config)
+        self.mlp = GatedDeltaNetVisionChannelMixer(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
@@ -408,7 +408,7 @@ class GatedDeltaNetForMaskedImageModeling(GatedDeltaNetVisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-class GatedDeltaNetVideoMLP(nn.Module):
+class GatedDeltaNetVideoChannelMixer(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -453,7 +453,7 @@ class GatedDeltaNetVideoBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.mlp = GatedDeltaNetVideoMLP(config)
+        self.mlp = GatedDeltaNetVideoChannelMixer(config)
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
             self.test_scan_type = 'uni-scan'
