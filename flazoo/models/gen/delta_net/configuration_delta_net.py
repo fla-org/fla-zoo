@@ -37,12 +37,11 @@ class DeltaNetGen2DConfig(PretrainedConfig):
         decoder_hidden_size=768,
         encoder_depth=8,
         depth=12,
-        mlp_ratio=4.0,
         class_dropout_prob=0.1,
         num_classes=1000,
         use_cfg=False,
         z_dims=[768],
-        mlp_dim=2048,
+        channel_mixer_dim=2048,
         projection_dim=2048,
         train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
         test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
@@ -78,12 +77,11 @@ class DeltaNetGen2DConfig(PretrainedConfig):
         self.decoder_hidden_size = decoder_hidden_size
         self.encoder_depth = encoder_depth
         self.depth = depth
-        self.mlp_ratio = mlp_ratio
         self.class_dropout_prob = class_dropout_prob
         self.num_classes = num_classes
         self.use_cfg = use_cfg
         self.z_dims = z_dims
-        self.mlp_dim = mlp_dim
+        self.channel_mixer_dim = channel_mixer_dim
         self.projection_dim = projection_dim
 
         self.train_scan_type = train_scan_type
