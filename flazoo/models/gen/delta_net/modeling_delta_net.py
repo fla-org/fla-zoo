@@ -11,8 +11,8 @@ from transformers.modeling_utils import PreTrainedModel
 from fla.layers.delta_net import DeltaNet
 from flazoo.models.attentions import VisionAttention
 from ..utils import get_2d_sincos_pos_embed, modulate
-from ..utils import Gen2DTimestepEmbedder
-from ..utils import Gen2DPatchEmbed, Gen2DLabelEmbedder
+from ..embeddings import Gen2DTimestepEmbedder
+from ..embeddings import Gen2DPatchEmbed, Gen2DLabelEmbedder
 from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
 
 class DeltaNetGen2DMLP(nn.Module):
