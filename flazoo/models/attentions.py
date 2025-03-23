@@ -7,7 +7,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from typing import TYPE_CHECKING, Optional, Tuple, Union
-from .scan import RandomScanWithReorder
 try:
     from flash_attn import flash_attn_func, flash_attn_varlen_func
     from flash_attn.bert_padding import (index_first_axis, pad_input,
