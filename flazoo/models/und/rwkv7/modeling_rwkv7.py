@@ -37,7 +37,7 @@ from copy import deepcopy
 
 logger = logging.get_logger(__name__)
 
-class RWKV7VisionChannelMixer(nn.Module):
+class RWKV7VisionMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -81,7 +81,7 @@ class RWKV7VisionBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.channel_mixer = RWKV7VisionChannelMixer(config)
+        self.channel_mixer = RWKV7VisionMLP(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
@@ -402,7 +402,7 @@ class RWKV7ForMaskedImageModeling(RWKV7VisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-class RWKV7VideoChannelMixer(nn.Module):
+class RWKV7VideoMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -448,7 +448,7 @@ class RWKV7VideoBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.channel_mixer = RWKV7VideoChannelMixer(config)
+        self.channel_mixer = RWKV7VideoMLP(config)
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
             self.test_scan_type = 'uni-scan'

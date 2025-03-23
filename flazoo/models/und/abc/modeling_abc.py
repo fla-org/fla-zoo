@@ -34,7 +34,7 @@ from copy import deepcopy
 logger = logging.get_logger(__name__)
 
 
-class ABCVisionChannelMixer(nn.Module):
+class ABCVisionMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -80,7 +80,7 @@ class ABCVisionBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.channel_mixer = ABCVisionChannelMixer(config)
+        self.channel_mixer = ABCVisionMLP(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
@@ -402,7 +402,7 @@ class ABCForMaskedImageModeling(ABCVisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-class ABCVideoChannelMixer(nn.Module):
+class ABCVideoMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -450,7 +450,7 @@ class ABCVideoBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.channel_mixer = ABCVideoChannelMixer(config)
+        self.channel_mixer = ABCVideoMLP(config)
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
             self.test_scan_type = 'uni-scan'

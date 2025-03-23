@@ -33,7 +33,7 @@ from transformers.utils.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT
 from .configuration_bitnet import BitNetVideoConfig
 logger = logging.get_logger(__name__)
 
-class BitNetVisionChannelMixer(nn.Module):
+class BitNetVisionMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -74,7 +74,7 @@ class BitNetVisionBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.channel_mixer = BitNetVisionChannelMixer(config)
+        self.channel_mixer = BitNetVisionMLP(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
@@ -395,7 +395,7 @@ class BitNetForMaskedImageModeling(BitNetVisionPreTrainedModel):
         )
 
 
-class BitNetVideoChannelMixer(nn.Module):
+class BitNetVideoMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -438,7 +438,7 @@ class BitNetVideoBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.channel_mixer = BitNetVideoChannelMixer(config)
+        self.channel_mixer = BitNetVideoMLP(config)
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
             self.test_scan_type = 'uni-scan'

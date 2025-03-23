@@ -39,7 +39,7 @@ from copy import deepcopy
 
 logger = logging.get_logger(__name__)
 
-class GSAVisionChannelMixer(nn.Module):
+class GSAVisionMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -91,7 +91,7 @@ class GSAVisionBlock(nn.Module):
         if not config.norm_first:
             self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.channel_mixer = GSAVisionChannelMixer(config)
+        self.channel_mixer = GSAVisionMLP(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
@@ -413,7 +413,7 @@ class GSAForMaskedImageModeling(GSAVisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-class GSAVideoChannelMixer(nn.Module):
+class GSAVideoMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -465,7 +465,7 @@ class GSAVideoBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.channel_mixer = GSAVideoChannelMixer(config)
+        self.channel_mixer = GSAVideoMLP(config)
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
             self.test_scan_type = 'uni-scan'

@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from transformers.processing_utils import Unpack
 
 
-class DeltaNetVisionChannelMixer(nn.Module):
+class DeltaNetVisionMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -86,7 +86,7 @@ class DeltaNetVisionBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.channel_mixer = DeltaNetVisionChannelMixer(config)
+        self.channel_mixer = DeltaNetVisionMLP(config)
 
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
@@ -401,7 +401,7 @@ class DeltaNetForMaskedImageModeling(DeltaNetVisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
-class DeltaNetVideoChannelMixer(nn.Module):
+class DeltaNetVideoMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.net = nn.Sequential(
@@ -450,7 +450,7 @@ class DeltaNetVideoBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.channel_mixer = DeltaNetVideoChannelMixer(config)
+        self.channel_mixer = DeltaNetVideoMLP(config)
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
             self.test_scan_type = 'uni-scan'
