@@ -192,7 +192,7 @@ class DeltaNetForGen2D(nn.Module):
         imgs: (N, C, H, W)
         """
         c = self.out_channels
-        p = self.x_embedder.patch_size if patch_size is None else patch_size
+        p = self.x_embedder.patch_size[0] if patch_size is None else patch_size
         h = w = int(x.shape[1] ** 0.5)
         assert h * w == x.shape[1]
 
@@ -202,19 +202,19 @@ class DeltaNetForGen2D(nn.Module):
         return imgs
     
     def forward(self, x, t, y, return_logvar=False):
-        x = self.x_embedder(x) + self.pos_embed 
+        x = self.x_embedder(x) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
         N, T, D = x.shape
 
-        t_embed = self.t_embedder(t)             # (N, D)
+        # timestep and class embedding
+        t_embed = self.t_embedder(t)                   # (N, D)
         y = self.y_embedder(y, self.training)    # (N, D)
-        c = t_embed + y                          # (N, D)
+        c = t_embed + y                                # (N, D)
 
         for i, block in enumerate(self.blocks):
             x = block(x, c)                      # (N, T, D)
             if (i + 1) == self.encoder_depth:
                 zs = [projector(x.reshape(-1, D)).reshape(N, T, -1) for projector in self.projectors]
-        
-        x = self.final_layer(x, c)               # (N, T, patch_size ** 2 * out_channels)
+        x = self.final_layer(x, c)                # (N, T, patch_size ** 2 * out_channels)
         x = self.unpatchify(x)                   # (N, out_channels, H, W)
 
         return x, zs
