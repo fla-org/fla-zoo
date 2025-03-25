@@ -6,7 +6,7 @@ from transformers.configuration_utils import PretrainedConfig
 
 class XAttentionVisionConfig(PretrainedConfig):
 
-    model_type = 'nsa_vision'
+    model_type = 'xattn_vision'
 
     def __init__(
         self,
