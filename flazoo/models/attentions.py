@@ -7,8 +7,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from typing import TYPE_CHECKING, Optional, Tuple, Union
-from xattention.src import Xattention_prefill
-from moba.moba_efficient import moba_attn_varlen
+try:
+    from xattention.src import Xattention_prefill
+except ImportError:
+    warnings.warn(
+        "XAttention is not installed. Please install it from https://github.com/mit-han-lab/x-attention",
+        category=ImportWarning
+    )
+    Xattention_prefill = None
+try:
+    from moba.moba_efficient import moba_attn_varlen
+except ImportError:
+    warnings.warn(
+        "MoBA is not installed. Please install it from https://github.com/MoonshotAI/MoBA",
+        category=ImportWarning
+    )
+    moba_attn_varlen = None
 try:
     from flash_attn import flash_attn_func, flash_attn_varlen_func
     from flash_attn.bert_padding import (index_first_axis, pad_input,
