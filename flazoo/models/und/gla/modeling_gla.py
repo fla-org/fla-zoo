@@ -117,7 +117,7 @@ class GLAVisionBlock(nn.Module):
             **kwargs
         )
         
-        hidden_states = prepare_hidden_states_for_merge(hidden_states, self.train_scan_type)
+        hidden_states = prepare_hidden_states_for_merge(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training, layer_idx=self.layer_idx)
 
         # First residual connection
         hidden_states = residual + hidden_states
@@ -477,7 +477,7 @@ class GLAVideoBlock(nn.Module):
             **kwargs
         )
 
-        hidden_states = prepare_hidden_states_for_merge(hidden_states, self.train_scan_type, self.test_scan_type, training=self.training,  layer_idx=self.layer_idx)
+        hidden_states = prepare_hidden_states_for_merge(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training, layer_idx=self.layer_idx)
 
         hidden_states = residual + hidden_states
         residual = hidden_states
