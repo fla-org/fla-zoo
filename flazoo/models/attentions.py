@@ -415,13 +415,48 @@ class VisionXAttention(nn.Module):
         return o, attentions, None
 
 
-ATTN_MAPPINGS = {
-    "full_attn": VisionAttention,
-    "nsa": VisionNativeSparseAttention,
-    "moba": VisionMoBA,
-    "xattn": VisionXAttention
-}
+ATTN_LISTS = ["full_attn", "moba", "nsa", "xattn"]
 
-def get_attn_module(attn_type: str):
-    assert attn_type in ATTN_MAPPINGS, f"Attention type {attn_type} not found in available mappings: {list(ATTN_MAPPINGS.keys())}"
-    return ATTN_MAPPINGS[attn_type]
+def get_attn(config, layer_idx):
+    attn_type = config.attn_type
+    assert attn_type in ATTN_LISTS, f"Attention type must be one of {ATTN_LISTS}"
+
+    if attn_type == "full_attn":
+        return VisionAttention(
+            hidden_size=config.hidden_size,
+            num_heads=config.attn['num_heads'],
+            num_kv_heads=config.attn['num_kv_heads'],
+            layer_idx=layer_idx
+        )
+    elif attn_type == "moba":
+        return VisionMoBA(
+            hidden_size=config.hidden_size,
+            num_heads=config.attn['num_heads'],
+            num_kv_heads=config.attn['num_kv_heads'],
+            block_size=config.block_size,
+            topk=config.topk,
+            layer_idx=layer_idx
+        )
+    elif attn_type == "nsa":
+        return VisionNativeSparseAttention(
+            hidden_size=config.hidden_size,
+            num_heads=config.attn['num_heads'],
+            num_kv_heads=config.attn['num_kv_heads'],
+            block_size=config.block_size,
+            block_counts=config.block_counts,
+            window_size=config.window_size,
+            layer_idx=layer_idx
+        )
+    elif attn_type == "xattn":
+        return VisionXAttention(
+            hidden_size=config.hidden_size,
+            num_heads=config.attn['num_heads'],
+            num_kv_heads=config.attn['num_kv_heads'],
+            stride=config.stride,
+            block_size=config.block_size,
+            chunk_size=config.chunk_size,
+            norm_eps=config.norm_eps,
+            layer_idx=layer_idx
+        )
+    else:
+        raise ValueError(f"Attention type {attn_type} is not supported")
