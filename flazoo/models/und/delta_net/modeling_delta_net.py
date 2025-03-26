@@ -18,8 +18,7 @@ from transformers.modeling_outputs import (ImageClassifierOutput,
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
-from flazoo.models.attentions import VisionAttention
-from flazoo.models.attentions import VisionNativeSparseAttention
+from attentions import get_attn
 from fla.layers.delta_net import DeltaNet
 from .configuration_delta_net import DeltaNetVisionConfig
 from fla.models.utils import Cache
@@ -59,12 +58,7 @@ class DeltaNetVisionBlock(nn.Module):
         self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
         if config.attn is not None and layer_idx in config.attn['layers']:
-            self.attn = VisionAttention(
-                hidden_size=config.hidden_size,
-                num_heads=config.attn['num_heads'],
-                num_kv_heads=config.attn['num_kv_heads'],
-                layer_idx=layer_idx
-            )
+            self.attn = get_attn(config, layer_idx)
         else:
             self.attn = DeltaNet(
                 mode=config.attn_mode,
@@ -423,12 +417,7 @@ class DeltaNetVideoBlock(nn.Module):
         self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
         if config.attn is not None and layer_idx in config.attn['layers']:
-            self.attn = VisionAttention(
-                hidden_size=config.hidden_size,
-                num_heads=config.attn['num_heads'],
-                num_kv_heads=config.attn['num_kv_heads'],
-                layer_idx=layer_idx
-            )
+            self.attn = get_attn(config, layer_idx)
         else:
             self.attn = DeltaNet(
                 mode=config.attn_mode,

@@ -19,8 +19,7 @@ from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 from fla.models.utils import Cache
 from fla.layers.abc import ABCAttention
-from flazoo.models.attentions import VisionAttention
-from flazoo.models.attentions import VisionNativeSparseAttention
+from attentions import get_attn
 from .configuration_abc import ABCVisionConfig
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
@@ -30,7 +29,6 @@ from .configuration_abc import ABCVideoConfig
 from transformers.utils.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from ..utils import VideoEmbeddings, VideoDecoderOutput, VideoForPreTrainingOutput, get_sinusoid_encoding_table
 from copy import deepcopy
-
 logger = logging.get_logger(__name__)
 
 
@@ -54,12 +52,7 @@ class ABCVisionBlock(nn.Module):
         self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
         if config.attn is not None and layer_idx in config.attn['layers']:
-            self.attn = VisionAttention(
-                hidden_size=config.hidden_size,
-                num_heads=config.attn['num_heads'],
-                num_kv_heads=config.attn['num_kv_heads'],
-                layer_idx=layer_idx
-            )
+            self.attn = get_attn(config, layer_idx)
         else:
             self.attn = ABCAttention(
                 hidden_size=config.hidden_size,
@@ -424,12 +417,7 @@ class ABCVideoBlock(nn.Module):
         self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
         if config.attn is not None and layer_idx in config.attn['layers']:
-            self.attn = VisionAttention(
-                hidden_size=config.hidden_size,
-                num_heads=config.attn['num_heads'],
-                num_kv_heads=config.attn['num_kv_heads'],
-                layer_idx=layer_idx
-            )
+            self.attn = get_attn(config, layer_idx)
         else:
             self.attn = ABCAttention(
                 hidden_size=config.hidden_size,
