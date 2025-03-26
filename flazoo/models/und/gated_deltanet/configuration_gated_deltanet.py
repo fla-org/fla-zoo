@@ -28,6 +28,7 @@ class GatedDeltaNetVisionConfig(PretrainedConfig):
         use_cache: bool = True,
         initializer_range: float = 0.02,
         fuse_cross_entropy: bool = True,
+        attn_type: str = "full_attn", # attention type, default to "full_attn"
         
         # Vision specific parameters
         image_size: int = 224,
@@ -62,6 +63,7 @@ class GatedDeltaNetVisionConfig(PretrainedConfig):
         self.fuse_cross_entropy = fuse_cross_entropy
         self.attn = attn
         self.max_position_embeddings = max_position_embeddings
+        self.attn_type = attn_type
 
         # Initialize vision specific parameters
         self.image_size = image_size

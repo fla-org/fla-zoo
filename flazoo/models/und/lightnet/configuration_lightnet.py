@@ -30,6 +30,7 @@ class LightNetVisionConfig(PretrainedConfig):
         fuse_norm: bool = True,
         fuse_swiglu: bool = True,
         fuse_cross_entropy: bool = True,
+        attn_type: str = "full_attn", # attention type, default to "full_attn"
 
         # Vision specific parameters
         image_size: int = 224,
@@ -65,6 +66,8 @@ class LightNetVisionConfig(PretrainedConfig):
         self.fuse_norm = fuse_norm
         self.fuse_swiglu = fuse_swiglu
         self.fuse_cross_entropy = fuse_cross_entropy
+
+        self.attn_type = attn_type
 
         # Initialize vision specific parameters
         self.image_size = image_size

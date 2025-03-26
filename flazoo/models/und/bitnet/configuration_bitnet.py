@@ -29,6 +29,7 @@ class BitNetVisionConfig(PretrainedConfig):
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
         attn: Optional[Dict] = None,
+        attn_type: str = "full_attn", # attention type, default to "full_attn"
          # Vision specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -64,6 +65,7 @@ class BitNetVisionConfig(PretrainedConfig):
         self.attention_bias = attention_bias
         self.fuse_cross_entropy = fuse_cross_entropy
         self.fuse_norm = fuse_norm
+        self.attn_type = attn_type
 
         # Initialize vision specific parameters
         self.image_size = image_size

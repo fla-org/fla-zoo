@@ -36,6 +36,7 @@ class GSAVisionConfig(PretrainedConfig):
         initializer_range: float = 0.02,
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
+        attn_type: str = "full_attn", # attention type, default to "full_attn"
         # Vision specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -76,6 +77,7 @@ class GSAVisionConfig(PretrainedConfig):
         self.initializer_range = initializer_range
         self.fuse_cross_entropy = fuse_cross_entropy
         self.fuse_norm = fuse_norm
+        self.attn_type = attn_type
 
         # Initialize vision specific parameters
         self.image_size = image_size
