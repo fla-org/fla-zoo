@@ -44,7 +44,6 @@ except ImportError:
     parallel_nsa = None
     parallel_nsa_compression = None
 
-
 """
 Vanilla Self-Attention
 Attention implementation used in hybrid model, adapted from https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/attn.py
@@ -414,3 +413,15 @@ class VisionXAttention(nn.Module):
         attentions = None
         
         return o, attentions, None
+
+
+ATTN_MAPPINGS = {
+    "full_attn": VisionAttention,
+    "nsa": VisionNativeSparseAttention,
+    "moba": VisionMoBA,
+    "xattn": VisionXAttention
+}
+
+def get_attn_module(attn_type: str):
+    assert attn_type in ATTN_MAPPINGS, f"Attention type {attn_type} not found in available mappings: {list(ATTN_MAPPINGS.keys())}"
+    return ATTN_MAPPINGS[attn_type]
