@@ -98,7 +98,7 @@ class RWKV6VisionBlock(nn.Module):
 
         # Apply attention
         
-        hidden_states = prepare_hidden_states_for_scan(hidden_states, self.train_scan_type)
+        hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training)
         
         hidden_states, attentions, past_key_values = self.attn(
             hidden_states=hidden_states,
@@ -453,7 +453,7 @@ class RWKV6VideoBlock(nn.Module):
         residual = hidden_states
         
         hidden_states = self.ln_1(hidden_states)
-        hidden_states = prepare_hidden_states_for_scan(hidden_states, self.train_scan_type, self.test_scan_type, training=self.training)
+        hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training)
 
         hidden_states, attentions, past_key_values = self.attn(
             hidden_states=hidden_states,
