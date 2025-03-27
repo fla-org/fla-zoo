@@ -433,8 +433,8 @@ def get_attn(config, layer_idx):
             hidden_size=config.hidden_size,
             num_heads=config.attn['num_heads'],
             num_kv_heads=config.attn['num_kv_heads'],
-            block_size=config.block_size,
-            topk=config.topk,
+            block_size=config.attn["block_size"],
+            topk=config.attn["topk"],
             layer_idx=layer_idx
         )
     elif attn_type == "nsa":
@@ -442,9 +442,9 @@ def get_attn(config, layer_idx):
             hidden_size=config.hidden_size,
             num_heads=config.attn['num_heads'],
             num_kv_heads=config.attn['num_kv_heads'],
-            block_size=config.block_size,
-            block_counts=config.block_counts,
-            window_size=config.window_size,
+            block_size=config.attn['block_size'],
+            block_counts=config.attn['block_counts'],
+            window_size=config.attn['window_size'],
             layer_idx=layer_idx
         )
     elif attn_type == "xattn":
@@ -452,10 +452,9 @@ def get_attn(config, layer_idx):
             hidden_size=config.hidden_size,
             num_heads=config.attn['num_heads'],
             num_kv_heads=config.attn['num_kv_heads'],
-            stride=config.stride,
-            block_size=config.block_size,
-            chunk_size=config.chunk_size,
-            norm_eps=config.norm_eps,
+            stride=config.attn['stride'],
+            block_size=config.attn['block_size'],
+            chunk_size=config.attn['chunk_size'],
             layer_idx=layer_idx
         )
     else:
