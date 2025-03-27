@@ -17,7 +17,7 @@ from transformers.modeling_outputs import (ImageClassifierOutput,
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
-from attentions import get_attn
+from flazoo.models.attentions import get_attn
 from fla.layers.rwkv7 import RWKV7Attention
 from .configuration_rwkv7 import RWKV7VisionConfig
 from fla.models.utils import Cache

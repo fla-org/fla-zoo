@@ -18,7 +18,7 @@ from transformers.modeling_outputs import (ImageClassifierOutput,
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
-from attentions import get_attn
+from flazoo.models.attentions import get_attn
 from fla.layers.hgrn import HGRNAttention
 from .configuration_hgrn import HGRNVisionConfig
 from fla.models.utils import Cache

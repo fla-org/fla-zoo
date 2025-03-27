@@ -19,7 +19,7 @@ from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 from fla.models.utils import Cache
 from fla.layers.abc import ABCAttention
-from attentions import get_attn
+from flazoo.models.attentions import get_attn
 from .configuration_abc import ABCVisionConfig
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
