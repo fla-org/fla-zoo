@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from einops import rearrange
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 try:
-    from xattention.src import Xattention_prefill
+    from xattn import Xattention_prefill
 except ImportError:
     warnings.warn(
         "XAttention is not installed. Please install it from https://github.com/mit-han-lab/x-attention",
@@ -388,9 +388,9 @@ class VisionXAttention(nn.Module):
         if self.norm_first:
             hidden_states = self.norm(hidden_states)
 
-        q = rearrange(self.q_proj(hidden_states), '... (h d) -> ... h d', h=self.num_heads)
-        k = rearrange(self.k_proj(hidden_states), '... (h d) -> ... h d', h=self.num_kv_heads)
-        v = rearrange(self.v_proj(hidden_states), '... (h d) -> ... h d', h=self.num_kv_heads)
+        q = rearrange(self.q_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_heads)
+        k = rearrange(self.k_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_kv_heads)
+        v = rearrange(self.v_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_kv_heads)
         
         # If grouped query attention is used, repeat k and v to match num_heads
         if self.num_kv_heads != self.num_heads:
