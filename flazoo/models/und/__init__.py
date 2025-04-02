@@ -47,6 +47,10 @@ from .nsa import (
     NSAVisionConfig, NSAForImageClassification, NSAForMaskedImageModeling, NSAVisionModel
 )
 
+from .moba import (
+    MoBAVisionConfig, MoBAForImageClassification, MoBAForMaskedImageModeling, MoBAVisionModel
+)
+
 __all__ = [
     'ABCVisionConfig', 'ABCForImageClassification', 'ABCForMaskedImageModeling', 'ABCVisionModel',
     'BitNetVisionConfig', 'BitNetForImageClassification', 'BitNetForMaskedImageModeling', 'BitNetVisionModel',
@@ -62,5 +66,6 @@ __all__ = [
     'RWKV6VisionConfig', 'RWKV6ForImageClassification', 'RWKV6ForMaskedImageModeling', 'RWKV6VisionModel',
     'RWKV7VisionConfig', 'RWKV7ForImageClassification', 'RWKV7ForMaskedImageModeling', 'RWKV7VisionModel',
     'TransformerVisionConfig', 'TransformerForImageClassification', 'TransformerForMaskedImageModeling', 'TransformerVisionModel',
-    'NSAVisionConfig', 'NSAForImageClassification', 'NSAForMaskedImageModeling', 'NSAVisionModel'
+    'NSAVisionConfig', 'NSAForImageClassification', 'NSAForMaskedImageModeling', 'NSAVisionModel',
+    'MoBAVisionConfig', 'MoBAForImageClassification', 'MoBAForMaskedImageModeling', 'MoBAVisionModel'
 ]

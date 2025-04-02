@@ -4,6 +4,7 @@ from .und import (
     ABCVisionConfig, BitNetVisionConfig, DeltaNetVisionConfig, GatedDeltaNetVisionConfig,
     GLAVisionConfig, GSAVisionConfig, HGRNVisionConfig, HGRN2VisionConfig, LightNetVisionConfig,
     LinearAttentionVisionConfig, RetNetVisionConfig, RWKV6VisionConfig, RWKV7VisionConfig, TransformerVisionConfig, NSAVisionConfig,
+    MoBAVisionConfig,
     ABCVisionModel, ABCForImageClassification, ABCForMaskedImageModeling,
     BitNetVisionModel, BitNetForImageClassification, BitNetForMaskedImageModeling,
     DeltaNetVisionModel, DeltaNetForImageClassification, DeltaNetForMaskedImageModeling,
@@ -18,7 +19,8 @@ from .und import (
     RWKV6VisionModel, RWKV6ForImageClassification, RWKV6ForMaskedImageModeling,
     RWKV7VisionModel, RWKV7ForImageClassification, RWKV7ForMaskedImageModeling,
     TransformerVisionModel, TransformerForImageClassification, TransformerForMaskedImageModeling,
-    NSAVisionModel, NSAForImageClassification, NSAForMaskedImageModeling
+    NSAVisionModel, NSAForImageClassification, NSAForMaskedImageModeling,
+    MoBAVisionModel, MoBAForImageClassification, MoBAForMaskedImageModeling
 )
 
 __all__ = [
@@ -36,5 +38,6 @@ __all__ = [
     'RWKV6VisionConfig', 'RWKV6ForImageClassification', 'RWKV6ForMaskedImageModeling', 'RWKV6VisionModel',
     'RWKV7VisionConfig', 'RWKV7ForImageClassification', 'RWKV7ForMaskedImageModeling', 'RWKV7VisionModel',
     'TransformerVisionConfig', 'TransformerForImageClassification', 'TransformerForMaskedImageModeling', 'TransformerVisionModel',
-    'NSAVisionConfig', 'NSAForImageClassification', 'NSAForMaskedImageModeling', 'NSAVisionModel'
+    'NSAVisionConfig', 'NSAForImageClassification', 'NSAForMaskedImageModeling', 'NSAVisionModel',
+    'MoBAVisionConfig', 'MoBAForImageClassification', 'MoBAForMaskedImageModeling', 'MoBAVisionModel'
 ]
