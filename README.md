@@ -22,6 +22,8 @@ This repo implements a collection of FLA models that extend beyond language, sup
 
 ## News
 
+- **[2025-04-03]** MoBA and X-Attention are included as part of the collection for sparse attention. You can use them in specific layers of FLA models or directly use their full-blown models.
+
 - **[2025-03-16]** Native Sparse Attention (NSA) for vision is now added. See the triton implementation under the hood [here](https://github.com/fla-org/native-sparse-attention) and its visual variant [here](https://github.com/fla-org/fla-zoo/blob/main/flazoo/models/attentions.py).
 
 - **[2025-03-02]** A pilot version of Native Sparse Attention (NSA) is added. More experiments should be conducted to test its performance.
