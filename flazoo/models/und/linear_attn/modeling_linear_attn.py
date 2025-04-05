@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import warnings
-from typing import List, Optional, Tuple, Union, Unpack, Dict
+from typing import List, Optional, Tuple, Union, Dict, TYPE_CHECKING
 
 import torch
 import torch.nn as nn
@@ -28,6 +28,9 @@ from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
 from fla.modules.activations import swiglu_linear
 from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
 from ..utils import ImageEmbeddings, Pooler
+
+if TYPE_CHECKING:
+    from transformers.processing_utils import Unpack
 
 from .configuration_linear_attn import LinearAttentionVideoConfig
 from transformers.utils.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD

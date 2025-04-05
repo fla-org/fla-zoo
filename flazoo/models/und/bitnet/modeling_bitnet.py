@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import warnings
-from typing import List, Optional, Tuple, Union, Unpack, Dict
+from typing import List, Optional, Tuple, Union, Dict, TYPE_CHECKING
 
 import torch
 import torch.nn as nn
@@ -31,6 +31,9 @@ from copy import deepcopy
 from transformers.utils.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .configuration_bitnet import BitNetVideoConfig
 logger = logging.get_logger(__name__)
+
+if TYPE_CHECKING:
+    from transformers.processing_utils import Unpack
 
 class BitNetVisionMLP(nn.Module):
     def __init__(self, config):

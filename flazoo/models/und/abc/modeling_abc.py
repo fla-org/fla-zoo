@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import warnings
-from typing import List, Optional, Tuple, Union, Unpack, Dict
+from typing import List, Optional, Tuple, Union, Dict, TYPE_CHECKING
 
 import torch
 import torch.nn as nn
@@ -31,6 +31,8 @@ from ..utils import VideoEmbeddings, VideoDecoderOutput, VideoForPreTrainingOutp
 from copy import deepcopy
 logger = logging.get_logger(__name__)
 
+if TYPE_CHECKING:
+    from transformers.processing_utils import Unpack
 
 class ABCVisionMLP(nn.Module):
     def __init__(self, config):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import warnings
-from typing import TYPE_CHECKING, Dict, Optional, Tuple, Union, List, Unpack, Dict
+from typing import TYPE_CHECKING, Dict, Optional, Tuple, Union, List, Dict
 
 import torch
 import torch.nn as nn
