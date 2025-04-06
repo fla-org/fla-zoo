@@ -34,6 +34,7 @@ class DeltaNetVisionConfig(PretrainedConfig):
         fuse_cross_entropy: bool = True,
         max_position_embeddings: int = 2048,
         attn_type: str = "full_attn", # attention type, default to "full_attn"
+        gradient_checkpointing: bool = False,
 
         # Vision specific parameters
         image_size: int = 224,
@@ -73,6 +74,7 @@ class DeltaNetVisionConfig(PretrainedConfig):
         self.fuse_cross_entropy = fuse_cross_entropy
         self.max_position_embeddings = max_position_embeddings
         self.attn_type = attn_type
+        self.gradient_checkpointing = gradient_checkpointing
 
         # Initialize vision specific parameters
         self.image_size = image_size
@@ -139,6 +141,8 @@ class DeltaNetVideoConfig(PretrainedConfig):
         initializer_range: float = 0.02,
         fuse_cross_entropy: bool = True,
         max_position_embeddings: int = 2048,
+        attn_type: str = "full_attn", # attention type, default to "full_attn"
+        gradient_checkpointing: bool = False,
 
         # Video specific parameters
         image_size: int = 224,
@@ -186,6 +190,8 @@ class DeltaNetVideoConfig(PretrainedConfig):
         self.initializer_range = initializer_range
         self.fuse_cross_entropy = fuse_cross_entropy
         self.max_position_embeddings = max_position_embeddings
+        self.attn_type = attn_type
+        self.gradient_checkpointing = gradient_checkpointing
 
         # Initialize video specific parameters
         self.image_size = image_size
