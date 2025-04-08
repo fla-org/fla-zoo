@@ -30,6 +30,7 @@ class XAttentionVisionConfig(PretrainedConfig):
         stride: int = 16,
         block_size: int = 128,
         chunk_size: int = 2048,
+        gradient_checkpointing: bool = False,
 
         # Vision specific parameters
         image_size: int = 224,
@@ -69,6 +70,7 @@ class XAttentionVisionConfig(PretrainedConfig):
         self.block_size = block_size
         self.chunk_size = chunk_size
         self.stride = stride
+        self.gradient_checkpointing = gradient_checkpointing
 
         # Initialize vision specific parameters
         self.image_size = image_size

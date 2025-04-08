@@ -27,6 +27,7 @@ class TransformerVisionConfig(PretrainedConfig):
         attention_bias: bool = False,
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
+        gradient_checkpointing: bool = False,
         # Vision specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -62,6 +63,7 @@ class TransformerVisionConfig(PretrainedConfig):
         self.attention_bias = attention_bias
         self.fuse_cross_entropy = fuse_cross_entropy
         self.fuse_norm = fuse_norm
+        self.gradient_checkpointing = gradient_checkpointing
 
         # Initialize vision specific parameters
         self.image_size = image_size
@@ -111,6 +113,7 @@ class TransformerVideoConfig(PretrainedConfig):
         attention_bias: bool = False,
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
+        gradient_checkpointing: bool = False,
 
         # Video specific parameters
         image_size: int = 224,
@@ -155,6 +158,7 @@ class TransformerVideoConfig(PretrainedConfig):
         self.attention_bias = attention_bias
         self.fuse_cross_entropy = fuse_cross_entropy
         self.fuse_norm = fuse_norm
+        self.gradient_checkpointing = gradient_checkpointing
 
         # Initialize video specific parameters
         self.image_size = image_size

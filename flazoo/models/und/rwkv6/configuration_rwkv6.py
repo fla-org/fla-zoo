@@ -30,6 +30,7 @@ class RWKV6VisionConfig(PretrainedConfig):
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
         attn_type: str = "full_attn", # attention type, default to "full_attn"
+        gradient_checkpointing: bool = False,
         # Vision specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -65,6 +66,7 @@ class RWKV6VisionConfig(PretrainedConfig):
         self.fuse_norm = fuse_norm
         self.fuse_cross_entropy = fuse_cross_entropy
         self.attn_type = attn_type
+        self.gradient_checkpointing = gradient_checkpointing
 
         # Initialize vision specific parameters
         self.image_size = image_size
@@ -128,6 +130,8 @@ class RWKV6VideoConfig(PretrainedConfig):
         initializer_range: float = 0.02,
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
+        attn_type: str = "full_attn", # attention type, default to "full_attn"
+        gradient_checkpointing: bool = False,
 
         # Video specific parameters
         image_size: int = 224,
@@ -171,6 +175,8 @@ class RWKV6VideoConfig(PretrainedConfig):
         self.initializer_range = initializer_range
         self.fuse_norm = fuse_norm
         self.fuse_cross_entropy = fuse_cross_entropy
+        self.attn_type = attn_type
+        self.gradient_checkpointing = gradient_checkpointing
 
         # Initialize video specific parameters
         self.image_size = image_size

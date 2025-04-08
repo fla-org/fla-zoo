@@ -29,6 +29,7 @@ class NSAVisionConfig(PretrainedConfig):
         fuse_cross_entropy: bool = True,
         block_size: int = 64,
         block_counts: int = 16,
+        gradient_checkpointing: bool = False,
 
         # Vision specific parameters
         image_size: int = 224,
@@ -67,6 +68,7 @@ class NSAVisionConfig(PretrainedConfig):
         self.fuse_norm = fuse_norm
         self.block_size = block_size
         self.block_counts = block_counts
+        self.gradient_checkpointing = gradient_checkpointing
 
         # Initialize vision specific parameters
         self.image_size = image_size

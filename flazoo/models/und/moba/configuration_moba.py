@@ -29,6 +29,7 @@ class MoBAVisionConfig(PretrainedConfig):
         fuse_cross_entropy: bool = True,
         block_size: int = 64,
         topk: int = 3,
+        gradient_checkpointing: bool = False,
 
         # Vision specific parameters
         image_size: int = 224,
@@ -67,6 +68,7 @@ class MoBAVisionConfig(PretrainedConfig):
         self.fuse_norm = fuse_norm
         self.block_size = block_size
         self.topk = topk
+        self.gradient_checkpointing = gradient_checkpointing
 
         # Initialize vision specific parameters
         self.image_size = image_size
