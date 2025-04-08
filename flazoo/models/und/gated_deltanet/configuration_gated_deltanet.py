@@ -29,6 +29,7 @@ class GatedDeltaNetVisionConfig(PretrainedConfig):
         initializer_range: float = 0.02,
         fuse_cross_entropy: bool = True,
         attn_type: str = "full_attn", # attention type, default to "full_attn"
+        gradient_checkpointing: bool = False,
         
         # Vision specific parameters
         image_size: int = 224,
@@ -64,6 +65,7 @@ class GatedDeltaNetVisionConfig(PretrainedConfig):
         self.attn = attn
         self.max_position_embeddings = max_position_embeddings
         self.attn_type = attn_type
+        self.gradient_checkpointing = gradient_checkpointing
 
         # Initialize vision specific parameters
         self.image_size = image_size
@@ -124,6 +126,8 @@ class GatedDeltaNetVideoConfig(PretrainedConfig):
         use_cache: bool = True,
         initializer_range: float = 0.02,
         fuse_cross_entropy: bool = True,
+        attn_type: str = "full_attn", # attention type, default to "full_attn"
+        gradient_checkpointing: bool = False,
         
         # Video specific parameters
         image_size: int = 224,
@@ -167,6 +171,8 @@ class GatedDeltaNetVideoConfig(PretrainedConfig):
         self.fuse_cross_entropy = fuse_cross_entropy
         self.attn = attn
         self.max_position_embeddings = max_position_embeddings
+        self.attn_type = attn_type
+        self.gradient_checkpointing = gradient_checkpointing
 
         # Initialize video specific parameters
         self.image_size = image_size
