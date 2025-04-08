@@ -1,27 +1,36 @@
 <div align="center">
 
-# FLA-Zoo: FLA models beyond language
+# 🦁 FLA-Zoo: FLA models beyond language
+
+[![GitHub stars](https://img.shields.io/github/stars/fla-org/fla-zoo?style=social)](https://github.com/fla-org/fla-zoo/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/fla-org/fla-zoo?style=social)](https://github.com/fla-org/fla-zoo/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/fla-org/fla-zoo?style=social)](https://github.com/fla-org/fla-zoo/issues)
+
+<p align="center">
+  <b>A collection of FLA models extending beyond language</b>
+</p>
+
+<p align="center">
+  Supporting vision, video, and more with efficient kernels mainly from <strong>fla-org</strong>
+</p>
 
 </div>
+
 <div align="center">
-This repo implements a collection of FLA models that extend beyond language, supporting vision, video, and more. Under the hood are efficient kernels from <strong>fla-org</strong>. Plus, specific tools for implementing FLA models beyond language are also provided.
+  <img width="500" alt="diagram" src="assets/flazoo.png">
+  <!-- <em>[ai generated image with modifications]</em> -->
 </div>
 
-<div align="center">
-  <br/>
-  <img width="400" alt="diagram" src="assets/flazoo.png">
-  <!-- <br/>
-  <em>[ai generated image with modifications]</em> -->
-</div>
-<br/>
+<p align="center">
+  <a href="#news">News 📰</a> •
+  <a href="#features">Features ✨</a> •
+  <a href="#installation">Installation 🔧</a> •
+  <a href="#getting-started">Getting Started 🚀</a>
+</p>
 
-* [News](#news)
-* [Features](#features)
-* [Installation](#installation)
 <!-- * [Citation](#citation) -->
 
 ## News
-
 - **[2025-04-03]** MoBA and X-Attention are included as part of the collection for sparse attention. You can use them in specific layers of FLA models or directly use their full-blown models. Use hidden size which is multiple of 32 for MoBA.
 
 - **[2025-03-16]** Native Sparse Attention (NSA) for vision is now added. See the triton implementation under the hood [here](https://github.com/fla-org/native-sparse-attention) and its visual variant [here](https://github.com/fla-org/fla-zoo/blob/main/flazoo/models/attentions.py).
@@ -36,25 +45,80 @@ This repo implements a collection of FLA models that extend beyond language, sup
 
 ## Features
 
-- **`vision:`** `fla-zoo` currently supports vision encoders. A simple documentation is in [here](docs/vision/vision.md).
-- **`video:`** `fla-zoo` currently supports video understanding models. Documentation is in progress.
+### Understanding Models
+
+| Domain | Status | Docs |
+|--------|--------|---------------|
+| **`vision`** | ✅ Available | [Doc](docs/vision/vision.md) |
+| **`video`** | ✅ Available | 🔜 Coming soon |
+| **`audio`** | 🔜 Coming soon | 🔜 Coming soon |
+
+### Generation Models
+
+| Domain | Status | Docs |
+|--------|--------|---------------|
+| **`c2i`** | 🔜 Coming soon | 🔜 Coming soon |
+| **`t2i`** | 🔜 Coming soon | 🔜 Coming soon |
+| **`t2v`** | 🔜 Coming soon | 🔜 Coming soon |
+
+### Multi-modal Models
+
+| Domain | Status | Docs |
+|--------|--------|---------------|
+| **`vlm`** | 🔜 Coming soon | 🔜 Coming soon |
 
 ## Installation
 
-Requirements:
-- All the dependencies shown [here](https://github.com/fla-org/flash-linear-attention?tab=readme-ov-file#installation)
+### Requirements
+
+- Python 3.10+
+- PyTorch 2.5+
+- All dependencies from [flash-linear-attention](https://github.com/fla-org/flash-linear-attention?tab=readme-ov-file#installation)
 - [torchvision](https://github.com/pytorch/vision)
 - [diffusers](https://github.com/huggingface/diffusers)
 
-For example, you can install all the dependencies using the following command:
+### Quick Install
+
 ```bash
+# Create and activate conda environment
 conda create -n flazoo python=3.12
 conda activate flazoo
-pip install torch torchvision accelerate diffusers timm
-pip install transformers datasets evaluate causal_conv1d einops scikit-learn wandb
-pip install flash-attn --no-build-isolation
-pip install -U "huggingface_hub[cli]"
-```
-Now we can start cooking! 🚀
 
-Note that as an actively developed repo, currently no released packages of `fla-zoo` are provided. Use `pip install -e .` to install the package in development mode.
+# Install PyTorch and related packages
+pip install torch torchvision accelerate diffusers timm
+
+# Install transformer-related packages
+pip install transformers datasets evaluate causal_conv1d einops scikit-learn wandb
+
+# Install flash-attention
+pip install flash-attn --no-build-isolation
+
+# Install Hugging Face Hub CLI
+pip install -U "huggingface_hub[cli]"
+
+# Install FLA-Zoo in development mode
+pip install -e .
+```
+
+> 💡 **Note:** As an actively developed repository, no released packages of `fla-zoo` are currently provided. Use `pip install -e .` to install the package in development mode.
+
+## Getting Started
+
+### Basic Usage
+
+```python
+from flazoo import DeltaNetVisionConfig, DeltaNetForImageClassification
+
+# Initialize a configuration
+config = DeltaNetVisionConfig()
+
+# Initialize a model
+model = DeltaNetForImageClassification(config)
+
+# use it for whatever you like
+
+```
+
+### Read the Documentation
+
+See the [documentation](docs/vision/vision.md) for more details on how to use the models and their configurations.
