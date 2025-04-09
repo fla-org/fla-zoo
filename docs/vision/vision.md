@@ -1,64 +1,81 @@
-# FLA for vision
+# FLA for Vision 🖼️
 
-- last updated: 2025-02-26
-- `vision` here specifies only image. Also, only classification models are implemented to obtain general vision encoders. See training scripts at [sft](examples/vision/mim.py) and [mim](examples/vision/mim.pyy) for more details.
+<div align="right">
+<em>Last updated: 2025-02-26</em>
+</div>
 
-## Overview
-This part implements image classification models based on FLA to simplify their application as general vision encoders and enable easier adoption and comparisons. The architecture is primarily based on Hugging Face's Vision Transformer (ViT) implementation with several customizations. 
+> **Note:** `vision` here refers specifically to image classification. Currently, only classification models are implemented to serve as general vision encoders. See training scripts at [SFT](examples/vision/mim.py) and [MIM](examples/vision/mim.pyy) for more details.
 
-Models include `xxxForImageClassification` and `xxxForMaskedImageModeling` and `xxxVisionModel`.
+## Overview 📋
 
-## Implementation
+This module implements image classification models based on FLA to:
+- Simplify their application as general vision encoders
+- Enable easier adoption and comparisons
+- Provide a foundation for vision understanding tasks
 
-1. **Code Structure**
-   - Maintains consistency with existing language models in FLA, see [FLA](https://github.com/fla-org/flash-linear-attention)
+The architecture is primarily based on Hugging Face's Vision Transformer (ViT) implementation with several FLA-specific customizations.
 
-2. **Scanning Options**
-   - Uni-scan: `[B, L, D] -> FLA -> [B, L, D]`
-   - Random-scan: `[B, L, D] -> random shuffle -> [B, L, D] -> FLA -> [B, L, D]`
-   - Flip-scan: `[B, L, D] -> flip -> [B, L, D] -> FLA -> [B, L, D]`
-   - Bi-scan: `[B, L, D] -> flip -> [2 * B, L, D] -> FLA -> [2 * B, L, D] -> combine -> [B, L, D]`
-   - Cross-scan: `[B, L, D] -> cross-scan -> [4 * B, L, D] -> FLA -> [4 * B, L, D] -> cross-merge -> [B, L, D]`
+### Available Model Types
 
-    The latter two are design choices adopted by some SSM-based vision models, **enabling them does not garantee better performance and will damage hardware efficiency.**
-   
-3. **Technical Details**
-   - Uses mean pooling only.
-   - Adapted common components (`Embedding`, `Pooler`) and initialization code for pretrained models from Hugging Face's ViT implementation.
+- `xxxForImageClassification` - For image classification tasks
+- `xxxForMaskedImageModeling` - For masked image modeling pre-training
+- `xxxVisionModel` - Base vision models for custom downstream tasks
 
-Note: Currently, Mamba, Mamba2, and Samba models will be implemented in future versions due to their structural differences.
+## Implementation 🛠️
 
-## Model Compatibility Tests
+### 1. Code Structure
 
-Test Configuration:
-- Total layers: 6
-- Hybrid setting: Attention layers at indices 1,3,5
-- Default attention mode: chunk (except for rwkv6)
+- Maintains consistency with existing language models in [FLA](https://github.com/fla-org/flash-linear-attention)
+- Follows similar patterns and conventions for easier understanding
 
-Test Results:
+### 2. Scanning Options
 
-| Model          | Pure FLA                                          | Hybrid                                            |
-| -------------- | ------------------------------------------------- | ------------------------------------------------- |
-| abc            | ❌ CompilationError                                | ❌ CompilationError                                |
-| bitnet         | ❌ AttributeError                                  | ❌ AttributeError                                  |
-| deltanet       | ✅                                                 | ✅                                                 |
-| gated_deltanet | RTX 4060:❌<br>A100: ✅                           | RTX 4060:❌<br>A100: ✅                           |
-| gla            | ❌ CompilationError                                | ❌ CompilationError                                |
-| gsa            | ✅                                                 | ✅                                                 |
-| hgrn           | ✅                                                 | ✅                                                 |
-| hgrn2          | ✅                                                 | ✅                                                 |
-| linear_attn    | ❌ Matmul Shape error                              | ❌ Matmul Shape error                              |
-| retnet         | ✅                                                 | ✅                                                 |
-| rwkv6          | chunk:❌<br>fused_recurrent:✅                     | chunk:❌<br>fused_recurrent:✅                     |
-| transformer    | ✅                                                 | ✅                                                 |
-| lightnet       | ✅                                                 | ✅                                                 |
+| Scan Type | Operation Flow |
+|-----------|---------------|
+| **Uni-scan** | `[B, L, D] → FLA → [B, L, D]` |
+| **Random-scan** | `[B, L, D] → random shuffle → [B, L, D] → FLA → [B, L, D]` |
+| **Flip-scan** | `[B, L, D] → flip → [B, L, D] → FLA → [B, L, D]` |
+| **Bi-scan** | `[B, L, D] → flip → [2*B, L, D] → FLA → [2*B, L, D] → combine → [B, L, D]` |
+| **Cross-scan** | `[B, L, D] → cross-scan → [4*B, L, D] → FLA → [4*B, L, D] → cross-merge → [B, L, D]` |
 
-**Note: Errors primarily stem from respective attention implementations from FLA.**
+> ⚠️ **Warning:** The latter two options (Bi-scan and Cross-scan) are design choices adopted by some SSM-based vision models. **Enabling them does not guarantee better performance and will reduce hardware efficiency.**
 
-## Train the model
+### 3. Technical Details
 
-You can use the following sft script to train the model:
+- Uses mean pooling exclusively for sequence aggregation
+- Adapts common components from Hugging Face's ViT implementation:
+  - `Embedding` - For patch and position embeddings
+  - `Pooler` - For sequence pooling
+  - Initialization code for pretrained models
 
-```bash
-TODO
-```
+> 🔜 **Coming Soon:** Mamba, Mamba2, and Samba models will be implemented in future versions due to their structural differences.
+
+## Model Compatibility Tests 🧪
+
+### Test Configuration
+
+| Parameter | Value |
+|-----------|-------|
+| **Total layers** | 6 |
+| **Hybrid setting** | Attention layers at indices 1,3,5 |
+| **Default attention mode** | chunk (except for rwkv6) |
+
+### Test Results
+
+| Model | Pure FLA | Hybrid |
+|-------|----------|--------|
+| **abc** | ❌ CompilationError | ❌ CompilationError |
+| **bitnet** | ❌ AttributeError | ❌ AttributeError |
+| **deltanet** | ✅ | ✅ |
+| **gated_deltanet** | RTX 4060: ❌<br>A100: ✅ | RTX 4060: ❌<br>A100: ✅ |
+| **gla** | ❌ CompilationError | ❌ CompilationError |
+| **gsa** | ✅ | ✅ |
+| **hgrn** | ✅ | ✅ |
+| **hgrn2** | ✅ | ✅ |
+| **linear_attn** | ❌ Matmul Shape error | ❌ Matmul Shape error |
+| **retnet** | ✅ | ✅ |
+| **rwkv6** | chunk: ❌<br>fused_recurrent: ✅ | chunk: ❌<br>fused_recurrent: ✅ |
+| **transformer** | ✅ | ✅ |
+| **lightnet** | ✅ | ✅ |
+
+> **Note:** Errors primarily stem from respective attention implementations from FLA.
