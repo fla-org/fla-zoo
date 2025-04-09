@@ -8,14 +8,6 @@ import torch.nn.functional as F
 from einops import rearrange
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 try:
-    from xattn import Xattention_prefill
-except ImportError:
-    warnings.warn(
-        "XAttention is not installed. Please install it from https://github.com/mit-han-lab/x-attention",
-        category=ImportWarning
-    )
-    Xattention_prefill = None
-try:
     from moba.moba_efficient import moba_attn_varlen
 except ImportError:
     warnings.warn(
@@ -310,112 +302,8 @@ class VisionMoBA(nn.Module):
         
         return o, attentions, None
 
-"""
-XAttention: Block Sparse Attention with Antidiagonal Scoring
-Simplified implementation for vision model, adapted from https://github.com/mit-han-lab/x-attention
-"""
 
-class VisionXAttention(nn.Module):
-    def __init__(
-        self,
-        hidden_size: int = 2048,
-        num_heads: int = 32,
-        num_kv_heads: Optional[int] = None,
-        head_dim: int = None,
-        stride: int = 16,
-        block_size: int = 128,
-        chunk_size: int = 2048,
-        use_triton: bool = True,
-        norm_first: bool = False,
-        norm_eps: float = 1e-5,
-        layer_idx: int = None
-    ):
-        super().__init__()
-
-        self.num_heads = num_heads
-        if num_kv_heads is None:
-            self.num_kv_heads = self.num_heads
-        else:
-            self.num_kv_heads = num_kv_heads
-        self.num_kv_groups = num_heads // self.num_kv_heads
-        self.hidden_size = hidden_size
-
-        if head_dim is None:
-            self.head_dim = self.hidden_size // self.num_heads
-        else:
-            self.head_dim = head_dim
-
-        self.kv_dim = self.num_kv_heads * self.head_dim
-        self.norm_first = norm_first
-        self.layer_idx = layer_idx
-        
-        # XAttention specific parameters
-        self.stride = stride
-        self.block_size = block_size
-        self.chunk_size = chunk_size
-        self.use_triton = use_triton
-
-        # Layernorm for normalization-first architecture
-        if norm_first:
-            self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
-            
-        # Projection layers
-        self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
-        self.k_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
-        self.v_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
-        self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        output_attentions: bool = False,
-        **kwargs,
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
-        """
-        Forward pass through VisionXAttention layer.
-        
-        Args:
-            hidden_states: Input tensor of shape [batch_size, seq_len, hidden_size]
-            output_attentions: Whether to output attention weights (not implemented for XAttention)
-            
-        Returns:
-            output: Output tensor after attention
-            attentions: None (not implemented for XAttention)
-            past_key_values: None (stateless implementation)
-        """
-        batch_size, seq_len, _ = hidden_states.size()
-
-        if self.norm_first:
-            hidden_states = self.norm(hidden_states)
-
-        q = rearrange(self.q_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_heads)
-        k = rearrange(self.k_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_kv_heads)
-        v = rearrange(self.v_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_kv_heads)
-        
-        # If grouped query attention is used, repeat k and v to match num_heads
-        if self.num_kv_heads != self.num_heads:
-            k = k.repeat_interleave(self.num_heads // self.num_kv_heads, dim=1)
-            v = v.repeat_interleave(self.num_heads // self.num_kv_heads, dim=1)
-                
-        o = Xattention_prefill(
-            query_states=q,
-            key_states=k,
-            value_states=v,
-            stride=self.stride,
-            block_size=self.block_size,
-            use_triton=self.use_triton,
-            chunk_size=self.chunk_size
-        )
-        
-        o = o.reshape(batch_size, seq_len, self.hidden_size)
-        o = self.o_proj(o)
-
-        attentions = None
-        
-        return o, attentions, None
-
-
-ATTN_LISTS = ["full_attn", "moba", "nsa", "xattn"]
+ATTN_LISTS = ["full_attn", "moba", "nsa"]
 
 def get_attn(config, layer_idx):
     attn_type = config.attn_type
@@ -445,16 +333,6 @@ def get_attn(config, layer_idx):
             block_size=config.attn['block_size'],
             block_counts=config.attn['block_counts'],
             window_size=config.attn['window_size'],
-            layer_idx=layer_idx
-        )
-    elif attn_type == "xattn":
-        return VisionXAttention(
-            hidden_size=config.hidden_size,
-            num_heads=config.attn['num_heads'],
-            num_kv_heads=config.attn['num_kv_heads'],
-            stride=config.attn['stride'],
-            block_size=config.attn['block_size'],
-            chunk_size=config.attn['chunk_size'],
             layer_idx=layer_idx
         )
     else:
