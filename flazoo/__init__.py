@@ -4,7 +4,7 @@ from .models import (
     ABCVisionConfig, BitNetVisionConfig, DeltaNetVisionConfig, GatedDeltaNetVisionConfig,
     GLAVisionConfig, GSAVisionConfig, HGRNVisionConfig, HGRN2VisionConfig, LightNetVisionConfig,
     LinearAttentionVisionConfig, RetNetVisionConfig, RWKV6VisionConfig, RWKV7VisionConfig, TransformerVisionConfig, NSAVisionConfig,
-    MoBAVisionConfig, XAttentionVisionConfig,
+    MoBAVisionConfig,
     ABCVisionModel, ABCForImageClassification, ABCForMaskedImageModeling,
     BitNetVisionModel, BitNetForImageClassification, BitNetForMaskedImageModeling,
     DeltaNetVisionModel, DeltaNetForImageClassification, DeltaNetForMaskedImageModeling,
@@ -20,7 +20,7 @@ from .models import (
     RWKV7VisionModel, RWKV7ForImageClassification, RWKV7ForMaskedImageModeling,
     TransformerVisionModel, TransformerForImageClassification, TransformerForMaskedImageModeling,
     NSAVisionModel, NSAForImageClassification, NSAForMaskedImageModeling,
-    MoBAVisionModel, MoBAForImageClassification, MoBAForMaskedImageModeling
+    MoBAVisionModel, MoBAForImageClassification, MoBAForMaskedImageModeling,
 )
 
 __all__ = [
@@ -40,5 +40,4 @@ __all__ = [
     'TransformerVisionConfig', 'TransformerForImageClassification', 'TransformerForMaskedImageModeling', 'TransformerVisionModel',
     'NSAVisionConfig', 'NSAForImageClassification', 'NSAForMaskedImageModeling', 'NSAVisionModel',
     'MoBAVisionConfig', 'MoBAForImageClassification', 'MoBAForMaskedImageModeling', 'MoBAVisionModel',
-    'XAttentionVisionConfig', 'XAttentionForImageClassification', 'XAttentionForMaskedImageModeling', 'XAttentionVisionModel'
 ]
