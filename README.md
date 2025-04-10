@@ -85,7 +85,7 @@ conda create -n flazoo python=3.12
 conda activate flazoo
 
 # Install PyTorch and related packages
-pip install torch torchvision accelerate diffusers timm
+pip install torch torchvision accelerate diffusers timm pytorchvideo
 
 # Install transformer-related packages
 pip install transformers datasets evaluate causal_conv1d einops scikit-learn wandb
