@@ -133,7 +133,7 @@ class DeltaNetForGen2D(nn.Module):
         
         self.blocks = nn.ModuleList([
             DeltaNetGen2DBlock(
-                config.hidden_size, 
+                config, 
                 layer_idx=i
             ) for i in range(config.num_hidden_layers)
         ])
