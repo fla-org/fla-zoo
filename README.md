@@ -79,6 +79,8 @@
 
 ### Quick Install
 
+For people who just want to train image classification models, basical dependencies below are enough.
+
 ```bash
 # Create and activate conda environment
 conda create -n flazoo python=3.12
@@ -100,7 +102,27 @@ pip install -U "huggingface_hub[cli]"
 pip install -e .
 ```
 
+Some repos are needed if you want to go deeper. Below is a basic example illustrating how to install MoBA.
+
+```bash
+# clone and install MoBA
+git clone https://github.com/MoonshotAI/MoBA
+cd MoBA
+pip install .
+```
+
+Below is a table of these repos and what they are used for in `fla-zoo`.
+
+| Repo | Link | Used for |
+|------|------|----------|
+| MoBA | [link](https://github.com/MoonshotAI/MoBA) | Sparse hybrid |
+| REPA | [link](https://github.com/sihyun-yu/REPA) | Gen2D training |
+
 > 💡 **Note:** As an actively developed repository, no released packages of `fla-zoo` are currently provided. Use `pip install -e .` to install the package in development mode.
+
+Now we can start cooking! 🚀
+
+How
 
 ## Getting Started
 
