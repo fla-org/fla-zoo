@@ -126,6 +126,7 @@ class VisionLocalAttention(nn.Module):
         hidden_size: int = 2048,
         num_heads: int = 32,
         num_kv_heads: Optional[int] = None,
+        block_size: int = 32,
         head_dim: int = None,
         norm_first: bool = False,
         norm_eps: float = 1e-5,
@@ -148,6 +149,7 @@ class VisionLocalAttention(nn.Module):
         self.kv_dim = self.num_kv_heads * self.head_dim
         self.norm_first = norm_first
         self.layer_idx = layer_idx
+        self.block_size = block_size
 
         if norm_first:
             self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
@@ -182,13 +184,15 @@ class VisionLocalAttention(nn.Module):
             device=hidden_states.device
         ) * q_len
 
+        cu_chunk = calc_chunks(cu_seqlens, self.block_size)
+
         if flash_attn_varlen_func is None:
             raise ImportError("Please install Flash Attention via `pip install flash-attn --no-build-isolation` first")
 
         o = flash_attn_varlen_func(
             q, k, v,
-            cu_seqlens_q=cu_seqlens,
-            cu_seqlens_k=cu_seqlens,
+            cu_seqlens_q=cu_chunk,
+            cu_seqlens_k=cu_chunk,
             max_seqlen_q=q_len,
             max_seqlen_k=q_len,
             causal=False, # use non-causal attention for vision
@@ -424,6 +428,14 @@ def get_attn(config, layer_idx):
             block_size=config.attn['block_size'],
             block_counts=config.attn['block_counts'],
             window_size=config.attn['window_size'],
+            layer_idx=layer_idx
+        )
+    elif attn_type == "local_attn":
+        return VisionLocalAttention(
+            hidden_size=config.hidden_size,
+            num_heads=config.attn['num_heads'],
+            num_kv_heads=config.attn['num_kv_heads'],
+            block_size=config.attn['block_size'],
             layer_idx=layer_idx
         )
     else:
