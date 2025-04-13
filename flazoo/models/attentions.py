@@ -36,6 +36,8 @@ except ImportError:
     parallel_nsa = None
     parallel_nsa_compression = None
 
+from .utils import calc_chunks
+
 """
 Vanilla Self-Attention
 Attention implementation used in hybrid model, adapted from https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/attn.py
@@ -100,6 +102,95 @@ class VisionAttention(nn.Module):
 
         o = flash_attn_func(
             q, k, v,
+            causal=False, # use non-causal attention for vision
+            window_size=(-1, -1)
+        )
+        o = o.reshape(batch_size, q_len, self.hidden_size)
+        o = self.o_proj(o)
+
+        if not output_attentions:
+            attentions = None
+
+        return o, attentions, None
+
+
+"""
+Local Attention
+Local attention implementation used in hybrid model
+"""
+
+class VisionLocalAttention(nn.Module):
+
+    def __init__(
+        self,
+        hidden_size: int = 2048,
+        num_heads: int = 32,
+        num_kv_heads: Optional[int] = None,
+        head_dim: int = None,
+        norm_first: bool = False,
+        norm_eps: float = 1e-5,
+        layer_idx: int = None
+    ):
+        super().__init__()
+
+        self.num_heads = num_heads
+        if num_kv_heads is None:
+            self.num_kv_heads = self.num_heads
+        else:
+            self.num_kv_heads = num_kv_heads
+        self.num_kv_groups = num_heads // self.num_kv_heads
+        self.hidden_size = hidden_size
+        if head_dim is None:
+            self.head_dim = self.hidden_size // self.num_heads
+        else:
+            self.head_dim = head_dim
+        self.kv_dim = self.num_kv_heads * self.head_dim
+        self.kv_dim = self.num_kv_heads * self.head_dim
+        self.norm_first = norm_first
+        self.layer_idx = layer_idx
+
+        if norm_first:
+            self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
+        self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
+        self.k_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
+        self.v_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
+        self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
+
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        output_attentions: bool = False,
+        **kwargs,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+
+        batch_size, q_len, _ = hidden_states.size()
+
+        if self.norm_first:
+            hidden_states = self.norm(hidden_states)
+
+        q = rearrange(self.q_proj(hidden_states), 'b s (h d) -> (b s) h d', h=self.num_heads)
+        k = rearrange(self.k_proj(hidden_states), 'b s (h d) -> (b s) h d', h=self.num_kv_heads)
+        v = rearrange(self.v_proj(hidden_states), 'b s (h d) -> (b s) h d', h=self.num_kv_heads)
+
+        # calculate cu_seqlens
+
+        cu_seqlens = torch.arange(
+            0, 
+            batch_size + 1, 
+            dtype=torch.int32, 
+            device=hidden_states.device
+        ) * q_len
+
+        if flash_attn_varlen_func is None:
+            raise ImportError("Please install Flash Attention via `pip install flash-attn --no-build-isolation` first")
+
+        o = flash_attn_varlen_func(
+            q, k, v,
+            cu_seqlens_q=cu_seqlens,
+            cu_seqlens_k=cu_seqlens,
+            max_seqlen_q=q_len,
+            max_seqlen_k=q_len,
             causal=False, # use non-causal attention for vision
             window_size=(-1, -1)
         )
@@ -303,7 +394,7 @@ class VisionMoBA(nn.Module):
         return o, attentions, None
 
 
-ATTN_LISTS = ["full_attn", "moba", "nsa"]
+ATTN_LISTS = ["full_attn", "moba", "nsa", "local_attn"]
 
 def get_attn(config, layer_idx):
     attn_type = config.attn_type
