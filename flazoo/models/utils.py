@@ -35,6 +35,10 @@ def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, train_scan_type:
     elif scan_type == "flip-scan":
         hidden_states = hidden_states.flip(-2)
         return hidden_states
+    elif scan_type == "1d-shift-scan":
+        return hidden_states
+    elif scan_type == "2d-shift-scan":
+        return hidden_states
     elif scan_type == "switch-scan":
         # post process instead of pre process
         return hidden_states
@@ -56,6 +60,20 @@ def prepare_hidden_states_for_merge(hidden_states: torch.Tensor, train_scan_type
     scan_type = train_scan_type if training else test_scan_type    
     # hidden_states shape should be: (BK, L, D), K=2 for bi-scan, K=1 for uni-scan, K=4 for cross-scan
     if scan_type == "uni-scan" or scan_type == "random-scan" or scan_type == "flip-scan":
+        return hidden_states
+    elif scan_type == "1d-shift-scan":
+        B, L, D = hidden_states.shape
+        shift = layer_idx
+        hidden_states = torch.roll(hidden_states, shifts=shift, dims=1)
+        return hidden_states
+    elif scan_type == "2d-shift-scan":
+        B, L, D = hidden_states.shape
+        # back to 2d
+        hw = int(math.sqrt(L))
+        hidden_states = einops.rearrange(hidden_states, "b (h w) d -> b h w d", h=hw, w=hw)
+        shift = math.sqrt(layer_idx)
+        hidden_states = torch.roll(hidden_states, shifts=shift, dims=(1, 2))
+        hidden_states = einops.rearrange(hidden_states, "b h w d -> b (h w) d")
         return hidden_states
     elif scan_type == "bi-scan":
         B = hidden_states.shape[0] // 2
