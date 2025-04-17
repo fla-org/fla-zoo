@@ -79,7 +79,7 @@
 
 ### Quick Install
 
-For people who just want to train image classification models, basical dependencies below are enough.
+For people who just want to use base linear or hybrid model, basical dependencies below are enough.
 
 ```bash
 # Create and activate conda environment
