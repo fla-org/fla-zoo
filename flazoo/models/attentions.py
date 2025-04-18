@@ -36,7 +36,7 @@ except ImportError:
     parallel_nsa = None
     parallel_nsa_compression = None
 
-from .utils import calc_chunks
+from .utils import _calc_chunks
 
 """
 Vanilla Self-Attention
@@ -184,7 +184,7 @@ class VisionLocalAttention(nn.Module):
             device=hidden_states.device
         ) * q_len
 
-        cu_chunk = calc_chunks(cu_seqlens, self.block_size)
+        cu_chunk = _calc_chunks(cu_seqlens, self.block_size)
 
         if flash_attn_varlen_func is None:
             raise ImportError("Please install Flash Attention via `pip install flash-attn --no-build-isolation` first")

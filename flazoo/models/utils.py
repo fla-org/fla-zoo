@@ -101,7 +101,12 @@ def prepare_hidden_states_for_merge(hidden_states: torch.Tensor, train_scan_type
     hidden_states = cross_merge_fn(hidden_states, in_channel_first=False, out_channel_first=False, one_by_one=False, scans=0)
     return hidden_states
 
-def calc_chunks(cu_seqlen, block_size):
+"""
+Copied from https://github.com/MoonshotAI/MoBA/blob/master/moba/moba_efficient.py
+Huge thanks to MoonshotAI for their great work!
+"""
+
+def _calc_chunks(cu_seqlen, block_size):
 
     # batch_sizes[batch_idx] = batch size ( seqlen ) of batch idx
     batch_sizes = cu_seqlen[1:] - cu_seqlen[:-1]
