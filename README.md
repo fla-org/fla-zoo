@@ -122,7 +122,6 @@ Below is a table of these repos and what they are used for in `fla-zoo`.
 
 Now we can start cooking! 🚀
 
-How
 
 ## Getting Started
 
