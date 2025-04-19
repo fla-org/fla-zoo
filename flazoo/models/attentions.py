@@ -7,8 +7,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
-if TYPE_CHECKING:
-    from transformers.processing_utils import Unpack
+
+
 try:
     from moba.moba_efficient import moba_attn_varlen
 except ImportError:
@@ -425,7 +425,7 @@ class CompressedAttentionWrapper(nn.Module):
         past_key_values,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
-        **kwargs: Unpack[Dict]
+        **kwargs
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         
         batch_size, seq_len, _ = hidden_states.size()
