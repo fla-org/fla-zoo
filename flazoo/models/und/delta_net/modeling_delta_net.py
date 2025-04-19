@@ -32,6 +32,8 @@ from transformers.utils.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT
 from ..utils import VideoEmbeddings, VideoDecoderOutput, VideoForPreTrainingOutput, get_sinusoid_encoding_table
 from copy import deepcopy
 from .configuration_delta_net import DeltaNetVideoConfig
+from flazoo.models.attentions import CompressedAttentionWrapper
+
 logger = logging.get_logger(__name__)
 
 if TYPE_CHECKING:
@@ -79,6 +81,10 @@ class DeltaNetVisionBlock(nn.Module):
                 norm_eps=config.norm_eps,
                 layer_idx=layer_idx
             )
+        
+        if (config.attn is None or layer_idx in config.attn['layers']) and config.compress_attention:
+            # only compress linear attention, not full attention or local attention
+            self.attn = CompressedAttentionWrapper(self.attn, block_size=config.block_size, layer_idx=layer_idx)
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
