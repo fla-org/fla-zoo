@@ -36,6 +36,7 @@ class DeltaNetVisionConfig(PretrainedConfig):
         attn_type: str = "full_attn", # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
         compress_attention: bool = False,
+        block_size: int = 256,
 
         # Vision specific parameters
         image_size: int = 224,
@@ -77,6 +78,7 @@ class DeltaNetVisionConfig(PretrainedConfig):
         self.attn_type = attn_type
         self.gradient_checkpointing = gradient_checkpointing
         self.compress_attention = compress_attention
+        self.block_size = block_size
 
         # Initialize vision specific parameters
         self.image_size = image_size
@@ -146,6 +148,7 @@ class DeltaNetVideoConfig(PretrainedConfig):
         attn_type: str = "full_attn", # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
         compress_attention: bool = False,
+        block_size: int = 128,
 
         # Video specific parameters
         image_size: int = 224,
@@ -196,6 +199,7 @@ class DeltaNetVideoConfig(PretrainedConfig):
         self.attn_type = attn_type
         self.gradient_checkpointing = gradient_checkpointing
         self.compress_attention = compress_attention
+        self.block_size = block_size
 
         # Initialize video specific parameters
         self.image_size = image_size
