@@ -446,8 +446,10 @@ class CompressedAttentionWrapper(nn.Module):
 
 
 ATTN_LISTS = ["full_attn", "moba", "nsa", "local_attn"]
-
 def get_attn(config, layer_idx):
+    """
+    This is for full/local/sparse attention, not linear attention
+    """
     attn_type = config.attn_type
     assert attn_type in ATTN_LISTS, f"Attention type must be one of {ATTN_LISTS}"
 
