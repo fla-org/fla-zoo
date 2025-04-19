@@ -150,3 +150,47 @@ def _calc_chunks(cu_seqlen, block_size):
     num_filtered_chunk = len(filtered_chunk_indices)
 
     return cu_chunk
+
+"""
+A simple mean pooling function, the mean is obtained within a chunk (or block) and the block is calculated by _calc_chunks
+This is used in compressed flash linear attention
+"""
+
+def compress_seq(seq: torch.Tensor, block_size: int) -> torch.Tensor:
+    """
+    Compress sequence by mean pooling within chunks, assuming L is divisible by block_size
+    Args:
+        seq: input sequence with shape [B, L, D]
+        block_size: size of each chunk/block
+    Returns:
+        compressed sequence with shape [B, L/block_size, D]
+    """
+    B, L, D = seq.shape
+    assert L % block_size == 0, f"Sequence length {L} must be divisible by block_size {block_size}"
+    
+    # Reshape to [B, num_blocks, block_size, D] and compute mean
+    num_blocks = L // block_size
+    return seq.view(B, num_blocks, block_size, D).mean(dim=2)
+
+def decompress_seq(compressed_seq: torch.Tensor, block_size: int) -> torch.Tensor:
+    """
+    Decompress sequence by repeating each compressed token block_size times
+    Args:
+        compressed_seq: input sequence with shape [B, L/block_size, D]
+        block_size: size of each chunk/block
+    Returns:
+        decompressed sequence with shape [B, L, D]
+    """
+    B, num_blocks, D = compressed_seq.shape
+    
+    # First unsqueeze to add the block dimension
+    # [B, num_blocks, 1, D]
+    expanded = compressed_seq.unsqueeze(2)
+    
+    # Repeat along the block dimension
+    # [B, num_blocks, block_size, D]
+    repeated = expanded.expand(-1, -1, block_size, -1)
+    
+    # Reshape back to original sequence shape
+    # [B, L, D]
+    return repeated.reshape(B, num_blocks * block_size, D)

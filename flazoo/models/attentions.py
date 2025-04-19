@@ -6,7 +6,9 @@ import warnings
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
+if TYPE_CHECKING:
+    from transformers.processing_utils import Unpack
 try:
     from moba.moba_efficient import moba_attn_varlen
 except ImportError:
@@ -36,7 +38,7 @@ except ImportError:
     parallel_nsa = None
     parallel_nsa_compression = None
 
-from .utils import _calc_chunks
+from .utils import _calc_chunks, compress_seq, decompress_seq
 
 """
 Vanilla Self-Attention
@@ -396,6 +398,51 @@ class VisionMoBA(nn.Module):
         attentions = None
         
         return o, attentions, None
+
+"""
+Compressed Attention Wrapper
+Use mean pooling to compress the sequence before attention and decompress after attention
+"""
+
+class CompressedAttentionWrapper(nn.Module):
+
+    def __init__(
+        self,
+        attn,
+        block_size: int = 128,
+        layer_idx: int = None
+    ):
+        super().__init__()
+
+        self.attn = attn
+        self.block_size = block_size
+        self.layer_idx = layer_idx
+
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        past_key_values,
+        use_cache: Optional[bool] = False,
+        output_attentions: Optional[bool] = False,
+        **kwargs: Unpack[Dict]
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        
+        batch_size, seq_len, _ = hidden_states.size()
+
+        compressed_hidden_states = compress_seq(hidden_states, self.block_size)
+
+        hidden_states, attentions, past_key_values = self.attn(
+            hidden_states=hidden_states,
+            past_key_values=past_key_values,
+            use_cache=use_cache,
+            output_attentions=output_attentions,
+            **kwargs
+        )
+
+        decompressed_hidden_states = decompress_seq(compressed_hidden_states, self.block_size)
+
+        return decompressed_hidden_states, attentions, past_key_values
 
 
 ATTN_LISTS = ["full_attn", "moba", "nsa", "local_attn"]
