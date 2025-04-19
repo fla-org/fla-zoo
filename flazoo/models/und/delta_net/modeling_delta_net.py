@@ -32,8 +32,7 @@ from transformers.utils.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT
 from ..utils import VideoEmbeddings, VideoDecoderOutput, VideoForPreTrainingOutput, get_sinusoid_encoding_table
 from copy import deepcopy
 from .configuration_delta_net import DeltaNetVideoConfig
-from flazoo.models.attentions import CompressedAttentionWrapper
-
+from flazoo.models.utils import compress_seq, decompress_seq
 logger = logging.get_logger(__name__)
 
 if TYPE_CHECKING:
@@ -82,9 +81,14 @@ class DeltaNetVisionBlock(nn.Module):
                 layer_idx=layer_idx
             )
         
-        if (config.attn is None or layer_idx in config.attn['layers']) and config.compress_attention:
+        if (config.attn is None or layer_idx not in config.attn['layers']) and config.compress_attention:
             # only compress linear attention, not full attention or local attention
-            self.attn = CompressedAttentionWrapper(self.attn, block_size=config.block_size, layer_idx=layer_idx)
+            # self.attn = CompressedAttentionWrapper(self.attn, block_size=config.block_size, layer_idx=layer_idx)
+            print(f"Compressing attention for layer {layer_idx}")
+            self.compress_attention = True
+            self.block_size = config.attn['block_size']
+        else:
+            self.compress_attention = False
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
@@ -110,6 +114,9 @@ class DeltaNetVisionBlock(nn.Module):
 
         hidden_states = self.ln_1(hidden_states)
 
+        if self.compress_attention:
+            hidden_states = compress_seq(hidden_states, self.block_size)
+
         
         hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training)
         
@@ -122,6 +129,9 @@ class DeltaNetVisionBlock(nn.Module):
         )
         
         hidden_states = prepare_hidden_states_for_merge(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training, layer_idx=self.layer_idx)
+
+        if self.compress_attention:
+            hidden_states = decompress_seq(hidden_states, self.block_size)
 
         hidden_states = residual + hidden_states
         residual = hidden_states

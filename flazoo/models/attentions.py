@@ -399,51 +399,6 @@ class VisionMoBA(nn.Module):
         
         return o, attentions, None
 
-"""
-Compressed Attention Wrapper
-Use mean pooling to compress the sequence before attention and decompress after attention
-"""
-
-class CompressedAttentionWrapper(nn.Module):
-
-    def __init__(
-        self,
-        attn,
-        block_size: int = 128,
-        layer_idx: int = None
-    ):
-        super().__init__()
-
-        self.attn = attn
-        self.block_size = block_size
-        self.layer_idx = layer_idx
-
-
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        past_key_values,
-        use_cache: Optional[bool] = False,
-        output_attentions: Optional[bool] = False,
-        **kwargs
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
-        
-        batch_size, seq_len, _ = hidden_states.size()
-
-        compressed_hidden_states = compress_seq(hidden_states, self.block_size)
-
-        hidden_states, attentions, past_key_values = self.attn(
-            hidden_states=hidden_states,
-            past_key_values=past_key_values,
-            use_cache=use_cache,
-            output_attentions=output_attentions,
-            **kwargs
-        )
-
-        decompressed_hidden_states = decompress_seq(compressed_hidden_states, self.block_size)
-
-        return decompressed_hidden_states, attentions, past_key_values
-
 
 ATTN_LISTS = ["full_attn", "moba", "nsa", "local_attn"]
 def get_attn(config, layer_idx):
