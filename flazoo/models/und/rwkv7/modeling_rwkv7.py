@@ -93,6 +93,7 @@ class RWKV7VisionBlock(nn.Module):
         past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
+        v_first: torch.Tensor = None,
         **kwargs
     ) -> Union[Tuple[torch.Tensor, Optional[torch.Tensor]], Tuple[torch.Tensor]]:
         residual = hidden_states
@@ -105,11 +106,12 @@ class RWKV7VisionBlock(nn.Module):
         
         hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training)
         
-        hidden_states, _, past_key_values, _ = self.attn(
+        hidden_states, attentions, past_key_values, v_first = self.attn(
             hidden_states=hidden_states,
             past_key_values=past_key_values,
             use_cache=use_cache,
             output_attentions=output_attentions,
+            v_first=v_first,
             **kwargs
         )
         
@@ -128,7 +130,7 @@ class RWKV7VisionBlock(nn.Module):
         # Second residual connection
         hidden_states = residual + hidden_states
 
-        outputs = (hidden_states, None, past_key_values)
+        outputs = (hidden_states, attentions, past_key_values, v_first)
 
         return outputs
 
@@ -176,25 +178,29 @@ class RWKV7VisionEncoder(nn.Module):
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
 
+        v_first = torch.zeros_like(hidden_states)
+
         for i, block in enumerate(self.blocks):
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
             if self.gradient_checkpointing and self.training:
-                hidden_states, attentions, past_key_values = self._gradient_checkpointing_func(
+                hidden_states, attentions, past_key_values, v_first = self._gradient_checkpointing_func(
                     block.__call__,
                     hidden_states,
                     past_key_values=past_key_values,
                     use_cache=use_cache,
                     output_attentions=output_attentions,
+                    v_first=v_first
                     **kwargs
                 )
             else:
-                hidden_states, attentions, past_key_values = block(
+                hidden_states, attentions, past_key_values, v_first = block(
                     hidden_states,
                     past_key_values=past_key_values,
                     use_cache=use_cache,
                     output_attentions=output_attentions,
+                    v_first=v_first
                     **kwargs
                 )
 
@@ -455,6 +461,7 @@ class RWKV7VideoBlock(nn.Module):
         past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
         use_cache: Optional[bool] = False,
         output_attentions: bool = False,
+        v_first: torch.Tensor = None,
         **kwargs
     ):
         residual = hidden_states
@@ -462,11 +469,12 @@ class RWKV7VideoBlock(nn.Module):
         hidden_states = self.ln_1(hidden_states)
         hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training)
 
-        hidden_states, _ , past_key_values, _ = self.attn(
+        hidden_states, attentions, past_key_values, v_first = self.attn(
             hidden_states=hidden_states,
             past_key_values=past_key_values,
             use_cache=use_cache,
             output_attentions=output_attentions,
+            v_first=v_first,
             **kwargs
         )
 
@@ -481,7 +489,7 @@ class RWKV7VideoBlock(nn.Module):
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states,)
-        outputs = (hidden_states, None, past_key_values)
+        outputs = (hidden_states, attentions, past_key_values, v_first)
 
         return outputs
 
@@ -507,26 +515,30 @@ class RWKV7VideoEncoder(nn.Module):
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
 
+        v_first = torch.zeros_like(hidden_states)
+
         for i, block in enumerate(self.blocks):
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
 
             if self.gradient_checkpointing and self.training:
-                hidden_states, attentions, _ = self._gradient_checkpointing_func(
+                hidden_states, attentions, _, v_first = self._gradient_checkpointing_func(
                     block.__call__,
                     hidden_states,
                     past_key_values=past_key_values,
                     use_cache=use_cache,
                     output_attentions=output_attentions,
+                    v_first=v_first,
                     **kwargs
                 )
             else:
-                hidden_states, attentions, _ = block(
+                hidden_states, attentions, _, v_first = block(
                     hidden_states,
                     past_key_values=past_key_values,
                     use_cache=use_cache,
                     output_attentions=output_attentions,
+                    v_first=v_first,
                     **kwargs
                 )
 
