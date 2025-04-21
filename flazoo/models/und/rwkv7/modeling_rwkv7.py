@@ -70,6 +70,7 @@ class RWKV7VisionBlock(nn.Module):
                 a_low_rank_dim=config.a_low_rank_dim,
                 v_low_rank_dim=config.v_low_rank_dim,
                 norm_eps=config.norm_eps,
+                num_hidden_layers=config.num_hidden_layers,
                 fuse_norm=config.fuse_norm,
                 layer_idx=layer_idx,
                 value_dim=config.value_dim[layer_idx]
@@ -104,7 +105,7 @@ class RWKV7VisionBlock(nn.Module):
         
         hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training)
         
-        hidden_states, attentions, past_key_values = self.attn(
+        hidden_states, _, past_key_values, _ = self.attn(
             hidden_states=hidden_states,
             past_key_values=past_key_values,
             use_cache=use_cache,
@@ -127,7 +128,7 @@ class RWKV7VisionBlock(nn.Module):
         # Second residual connection
         hidden_states = residual + hidden_states
 
-        outputs = (hidden_states, attentions, past_key_values)
+        outputs = (hidden_states, None, past_key_values)
 
         return outputs
 
@@ -432,6 +433,7 @@ class RWKV7VideoBlock(nn.Module):
                 a_low_rank_dim=config.a_low_rank_dim,
                 v_low_rank_dim=config.v_low_rank_dim,
                 norm_eps=config.norm_eps,
+                num_hidden_layers=config.num_hidden_layers,
                 fuse_norm=config.fuse_norm,
                 layer_idx=layer_idx,
                 value_dim=config.value_dim[layer_idx]
@@ -460,7 +462,7 @@ class RWKV7VideoBlock(nn.Module):
         hidden_states = self.ln_1(hidden_states)
         hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training)
 
-        hidden_states, attentions, past_key_values = self.attn(
+        hidden_states, _ , past_key_values, _ = self.attn(
             hidden_states=hidden_states,
             past_key_values=past_key_values,
             use_cache=use_cache,
@@ -479,7 +481,7 @@ class RWKV7VideoBlock(nn.Module):
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states,)
-        outputs = (hidden_states, attentions, past_key_values)
+        outputs = (hidden_states, None, past_key_values)
 
         return outputs
 
