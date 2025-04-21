@@ -61,7 +61,6 @@ class RWKV7VisionConfig(PretrainedConfig):
         self.norm_first = norm_first
         self.norm_bias = norm_bias
         self.norm_eps = norm_eps
-        self.value_dim = value_dim
         self.initializer_range = initializer_range
         self.fuse_norm = fuse_norm
         self.fuse_cross_entropy = fuse_cross_entropy
@@ -96,6 +95,20 @@ class RWKV7VisionConfig(PretrainedConfig):
                 raise ValueError("Number of heads must be provided to initialize hybrid attention layers")
             attn['num_kv_heads'] = attn.get('num_kv_heads', attn['num_heads'])
             attn['window_size'] = attn.get('window_size', None)
+
+        if value_dim is None:
+            value_dim = [hidden_size] * num_hidden_layers
+        elif isinstance(value_dim, int):
+            assert value_dim >= hidden_size, "value_dim must be greater than hidden_size"
+            assert value_dim % hidden_size == 0, "value_dim must be divisible by hidden_size"
+            value_dim = [value_dim] * num_hidden_layers
+        else:
+            assert len(value_dim) == num_hidden_layers, "value_dim must have the same length as num_hidden_layers"
+            for v in value_dim:
+                assert v >= hidden_size, "value_dim must be greater than hidden_size"
+                assert v % hidden_size == 0, "value_dim must be divisible by hidden_size"
+        
+        self.value_dim = value_dim
 
         self.attn = attn
 
@@ -171,7 +184,6 @@ class RWKV7VideoConfig(PretrainedConfig):
         self.norm_first = norm_first
         self.norm_bias = norm_bias
         self.norm_eps = norm_eps
-        self.value_dim = value_dim
         self.initializer_range = initializer_range
         self.fuse_norm = fuse_norm
         self.fuse_cross_entropy = fuse_cross_entropy
@@ -216,6 +228,21 @@ class RWKV7VideoConfig(PretrainedConfig):
             attn['window_size'] = attn.get('window_size', None)
         
         self.attn = attn
+
+
+        if value_dim is None:
+            value_dim = [hidden_size] * num_hidden_layers
+        elif isinstance(value_dim, int):
+            assert value_dim >= hidden_size, "value_dim must be greater than hidden_size"
+            assert value_dim % hidden_size == 0, "value_dim must be divisible by hidden_size"
+            value_dim = [value_dim] * num_hidden_layers
+        else:
+            assert len(value_dim) == num_hidden_layers, "value_dim must have the same length as num_hidden_layers"
+            for v in value_dim:
+                assert v >= hidden_size, "value_dim must be greater than hidden_size"
+                assert v % hidden_size == 0, "value_dim must be divisible by hidden_size"
+
+        self.value_dim = value_dim
 
         if channel_mixer_dim is None:
             self.channel_mixer_dim = 4 * hidden_size # default value set to 4 * hidden_size
