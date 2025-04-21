@@ -191,7 +191,7 @@ class RWKV7VisionEncoder(nn.Module):
                     past_key_values=past_key_values,
                     use_cache=use_cache,
                     output_attentions=output_attentions,
-                    v_first=v_first
+                    v_first=v_first,
                     **kwargs
                 )
             else:
@@ -200,7 +200,7 @@ class RWKV7VisionEncoder(nn.Module):
                     past_key_values=past_key_values,
                     use_cache=use_cache,
                     output_attentions=output_attentions,
-                    v_first=v_first
+                    v_first=v_first,
                     **kwargs
                 )
 
