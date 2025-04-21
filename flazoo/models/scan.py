@@ -260,3 +260,32 @@ def cross_merge_fn(y: torch.Tensor, in_channel_first=True, out_channel_first=Tru
     CMF = CrossMergeTritonF
     with torch.cuda.device(y.device):
         return CMF.apply(y, in_channel_first, out_channel_first, one_by_one, scans)
+    
+
+class LearnableScan(nn.Module):
+    def __init__(self, seq_len: int, temperature: float = 1.0, init_scale: float = 1.0):
+        super().__init__()
+        self.seq_len = seq_len
+        self.temperature = temperature
+        logits = torch.zeros(seq_len, seq_len)
+        logits.fill_(-init_scale) 
+        logits.fill_diagonal_(init_scale)
+        self.logits = nn.Parameter(logits) # make the logits learnable
+        
+    def forward(self, x: torch.Tensor):
+        """
+        Args:
+            x: Input tensor of shape (batch_size, seq_len, dim)
+        Returns:
+            Permuted tensor with the same shape as input
+        """            
+        perm_matrix = F.gumbel_softmax(
+            self.logits, 
+            tau=self.temperature, 
+            hard=True,
+            dim=-1
+        )  # (seq_len, seq_len)    
+        # TODO: this is very inefficient, and just serve for analysis    
+        x_permuted = torch.matmul(perm_matrix, x)  # (batch, seq_len, dim)
+            
+        return x_permuted
