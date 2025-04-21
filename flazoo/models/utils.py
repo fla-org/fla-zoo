@@ -11,7 +11,7 @@ from .scan import cross_scan_fn, cross_merge_fn
 
 logger = logging.get_logger(__name__)
     
-def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, train_scan_type: str = "uni-scan", test_scan_type : str = "uni-scan", training: bool = True, random_level: str = "sample"):
+def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, train_scan_type: str = "uni-scan", test_scan_type : str = "uni-scan", training: bool = True, random_level: str = "sample", scan_module: Optional[nn.Module] = None):
     # radnom level should be "sample" or "batch"
     assert random_level in ["sample", "batch"], "random_level should be 'sample' or 'batch'"
     scan_type = train_scan_type if training else test_scan_type
@@ -46,6 +46,10 @@ def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, train_scan_type:
         flipped_hidden_states = hidden_states.flip(-2)
         hidden_states = torch.cat([hidden_states, flipped_hidden_states], dim=0)
         return hidden_states
+    
+    elif scan_type == "learnable-scan":
+        assert scan_module is not None, "scan_module should be provided for learnable-scan"
+        return scan_module(hidden_states)
 
     # cross-scan
     B, L, D  = hidden_states.shape
@@ -59,7 +63,7 @@ def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, train_scan_type:
 def prepare_hidden_states_for_merge(hidden_states: torch.Tensor, train_scan_type: str = "uni-scan", test_scan_type : str = "uni-scan", training: bool = True, layer_idx: Optional[int] = None):
     scan_type = train_scan_type if training else test_scan_type    
     # hidden_states shape should be: (BK, L, D), K=2 for bi-scan, K=1 for uni-scan, K=4 for cross-scan
-    if scan_type == "uni-scan" or scan_type == "random-scan" or scan_type == "flip-scan":
+    if scan_type == "uni-scan" or scan_type == "random-scan" or scan_type == "flip-scan" or scan_type == "learnable-scan":
         return hidden_states
     elif scan_type == "1d-shift-scan":
         B, L, D = hidden_states.shape
