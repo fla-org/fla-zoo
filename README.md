@@ -31,6 +31,8 @@
 <!-- * [Citation](#citation) -->
 
 ## News
+- **[2025-04-21]** A dedicated part of this repo: `flazoo/helpers` is created to provide some common utils.
+
 - **[2025-04-03]** MoBA is included as part of the collection for sparse attention. You can use it in specific layers of FLA models or directly use its full-blown models. Use hidden size which is multiple of 32 for MoBA.
 
 - **[2025-03-16]** Native Sparse Attention (NSA) for vision is now added. See the triton implementation under the hood [here](https://github.com/fla-org/native-sparse-attention) and its visual variant [here](https://github.com/fla-org/fla-zoo/blob/main/flazoo/models/attentions.py).
