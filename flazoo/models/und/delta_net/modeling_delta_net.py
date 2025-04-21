@@ -32,6 +32,7 @@ from transformers.utils.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT
 from ..utils import VideoEmbeddings, VideoDecoderOutput, VideoForPreTrainingOutput, get_sinusoid_encoding_table
 from copy import deepcopy
 from .configuration_delta_net import DeltaNetVideoConfig
+from flazoo.models.scan import LearnableScan
 from flazoo.models.utils import compress_seq, decompress_seq
 logger = logging.get_logger(__name__)
 
@@ -101,6 +102,11 @@ class DeltaNetVisionBlock(nn.Module):
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
 
+        if self.train_scan_type == "learnable-scan":
+            # manually calculate seqlen
+            seq_len = (config.image_size // config.patch_size) ** 2
+            self.scanner = LearnableScan(seq_len=seq_len)
+
 
     def forward(
         self,
@@ -118,7 +124,7 @@ class DeltaNetVisionBlock(nn.Module):
             hidden_states = compress_seq(hidden_states, self.block_size)
 
         
-        hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training)
+        hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training, scan_module=self.scanner if self.train_scan_type == "learnable-scan" else None)
         
         hidden_states, attentions, past_key_values = self.attn(
             hidden_states=hidden_states,
