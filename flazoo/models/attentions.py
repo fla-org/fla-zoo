@@ -209,6 +209,82 @@ class VisionLocalAttention(nn.Module):
         return o, attentions, None
 
 """
+Sliding Window Attention
+Sliding window attention implementation used in hybrid model
+"""
+
+class VisionSlidingWindowAttention(nn.Module):
+    def __init__(
+        self,
+        hidden_size: int = 2048,
+        num_heads: int = 32,
+        num_kv_heads: Optional[int] = None,
+        window_size: int = 256,  # sliding window size
+        head_dim: int = None,
+        norm_first: bool = False,
+        norm_eps: float = 1e-5,
+        layer_idx: int = None
+    ):
+        super().__init__()
+
+        self.num_heads = num_heads
+        if num_kv_heads is None:
+            self.num_kv_heads = self.num_heads
+        else:
+            self.num_kv_heads = num_kv_heads
+        self.num_kv_groups = num_heads // self.num_kv_heads
+        self.hidden_size = hidden_size
+        if head_dim is None:
+            self.head_dim = self.hidden_size // self.num_heads
+        else:
+            self.head_dim = head_dim
+        self.kv_dim = self.num_kv_heads * self.head_dim
+        self.norm_first = norm_first
+        self.layer_idx = layer_idx
+        self.window_size = window_size
+
+        if norm_first:
+            self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
+        self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
+        self.k_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
+        self.v_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
+        self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        output_attentions: bool = False,
+        **kwargs,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        
+        batch_size, seq_len, _ = hidden_states.size()
+
+        if self.norm_first:
+            hidden_states = self.norm(hidden_states)
+
+        q = rearrange(self.q_proj(hidden_states), 'b s (h d) -> b s h d', h=self.num_heads)
+        k = rearrange(self.k_proj(hidden_states), 'b s (h d) -> b s h d', h=self.num_kv_heads)
+        v = rearrange(self.v_proj(hidden_states), 'b s (h d) -> b s h d', h=self.num_kv_heads)
+
+        if flash_attn_func is None:
+            raise ImportError("Please install Flash Attention via `pip install flash-attn --no-build-isolation` first")
+
+        # Use Flash Attention with window_size parameter for sliding window attention
+        o = flash_attn_func(
+            q, k, v,
+            causal=False,
+            window_size=(self.window_size // 2, self.window_size // 2)  # symmetric window for non-causal attention
+        )
+
+        o = o.reshape(batch_size, seq_len, self.hidden_size)
+        o = self.o_proj(o)
+
+        if not output_attentions:
+            attentions = None
+
+        return o, attentions, None
+
+"""
 Native Sparse Attention: Hardware-Aligned and Natively Trainable Sparse Attention
 NativeSparseAttention simplified implementation, adapted from https://github.com/fla-org/native-sparse-attention
 """
@@ -440,6 +516,14 @@ def get_attn(config, layer_idx):
             num_heads=config.attn['num_heads'],
             num_kv_heads=config.attn['num_kv_heads'],
             block_size=config.attn['block_size'],
+            layer_idx=layer_idx
+        )
+    elif attn_type == "sw_attn":
+        return VisionSlidingWindowAttention(
+            hidden_size=config.hidden_size,
+            num_heads=config.attn['num_heads'],
+            num_kv_heads=config.attn['num_kv_heads'],
+            window_size=config.attn['window_size'],
             layer_idx=layer_idx
         )
     else:
