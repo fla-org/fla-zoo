@@ -31,6 +31,8 @@
 <!-- * [Citation](#citation) -->
 
 ## News
+- **[2025-04-23]** **A dedicated part of this repo: `flazoo/linearized_models` is created to store the linearized versions of your favorite transformers.**
+
 - **[2025-04-21]** A dedicated part of this repo: `flazoo/helpers` is created to provide some common utils.
 
 - **[2025-04-03]** MoBA is included as part of the collection for sparse attention. You can use it in specific layers of FLA models or directly use its full-blown models. Use hidden size which is multiple of 32 for MoBA.
