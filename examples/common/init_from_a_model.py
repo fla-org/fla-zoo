@@ -42,8 +42,8 @@ def main():
     )
     # some random checking
     for i in range(12):
-        tensor1 = model_b.encoder.layer[0].attention.attention.key.weight 
-        tensor2 = model_a.encoder.blocks[0].attn.k_proj.weight  
+        tensor1 = model_b.encoder.layer[i].attention.attention.key.weight 
+        tensor2 = model_a.encoder.blocks[i].attn.k_proj.weight  
         # check whether the two tensors are equal
         assert torch.equal(tensor1, tensor2)
         print(f"Layer {i} initialized successfully!")
