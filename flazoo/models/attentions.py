@@ -476,7 +476,7 @@ class VisionMoBA(nn.Module):
         return o, attentions, None
 
 
-ATTN_LISTS = ["full_attn", "moba", "nsa", "local_attn"]
+ATTN_LISTS = ["full_attn", "moba", "nsa", "local_attn", "sw_attn"]
 def get_attn(config, layer_idx):
     """
     This is for full/local/sparse attention, not linear attention
