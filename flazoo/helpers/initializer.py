@@ -25,7 +25,7 @@ def initialize_from_pretrained(
         Initialized model_a
     """
     if backbone_attr is None:
-        backbone_attr = ['blocks', 'layers']
+        backbone_attr = ['blocks', 'layers', 'layer', 'block']
 
     # Find backbone in both models
     backbone_a = _find_backbone(model_a, backbone_attr)
@@ -70,12 +70,39 @@ def _find_backbone(model: nn.Module, backbone_attr: List[str]) -> Optional[nn.Mo
     if hasattr(model, 'encoder') and hasattr(model.encoder, 'blocks'):
         return model.encoder.blocks
 
-    # Then check direct attributes
-    for attr in backbone_attr:
-        if hasattr(model, attr):
-            return getattr(model, attr)
+    # Recursively search for backbone attributes
+    def search_backbone(module: nn.Module, depth: int = 0, max_depth: int = 5) -> Optional[nn.ModuleList]:
+        if depth > max_depth:
+            return None
+            
+        # Check direct attributes first
+        for attr in backbone_attr:
+            if hasattr(module, attr):
+                backbone = getattr(module, attr)
+                if isinstance(backbone, nn.ModuleList):
+                    return backbone
+
+        # Then recursively check all child modules
+        for name, child in module.named_children():
+            backbone = search_backbone(child, depth + 1, max_depth)
+            if backbone is not None:
+                return backbone
+                
+        return None
+
+    # Start recursive search
+    backbone = search_backbone(model)
+    if backbone is not None:
+        return backbone
 
     return None
+
+def _get_module_by_path(module: nn.Module, path: str) -> nn.Module:
+    """Get nested module using dot notation."""
+    current = module
+    for part in path.split('.'):
+        current = getattr(current, part)
+    return current
 
 def _initialize_parameter_in_a_layer(
     layer_a: nn.Module,
@@ -93,15 +120,19 @@ def _initialize_parameter_in_a_layer(
         param_b_name: Parameter name in layer_b
     """
     # Check if parameters exist
-    if not hasattr(layer_a, param_a_name):
-        raise ValueError(f"Parameter {param_a_name} not found in target layer")
 
-    if not hasattr(layer_b, param_b_name):
-        raise ValueError(f"Parameter {param_b_name} not found in source layer")
+    try:
+        param_a = _get_module_by_path(layer_a, param_a_name)
+    except AttributeError:
+        logger.warning(f"Parameter {param_a_name} not found in layer_a")
+        raise AttributeError(f"Parameter {param_a_name} not found in layer_a")
 
-    # Get parameters
-    param_a = getattr(layer_a, param_a_name)
-    param_b = getattr(layer_b, param_b_name)
+    try:
+        param_b = _get_module_by_path(layer_b, param_b_name)
+    except AttributeError:
+        logger.warning(f"Parameter {param_b_name} not found in layer_b")
+        raise AttributeError(f"Parameter {param_b_name} not found in layer_b")
+
 
     # Simplified for common module types like nn.Linear and nn.Conv2d
     if isinstance(param_a, nn.Module) and isinstance(param_b, nn.Module):
@@ -155,10 +186,14 @@ def _initialize_parameter_in_a_layer(
 def initialize_attention_params(
     model_a: nn.Module,
     model_b: nn.Module,
-    q_mapping: str = "q_proj",
-    k_mapping: str = "k_proj",
-    v_mapping: str = "v_proj",
-    o_mapping: str = "o_proj",
+    q_name_a: str,
+    k_name_a: str,
+    v_name_a: str,
+    o_name_a: str,
+    q_name_b: str,
+    k_name_b: str,
+    v_name_b: str,
+    o_name_b: str,
     backbone_attr: Optional[List[str]] = None
 ) -> nn.Module:
     """
@@ -167,10 +202,8 @@ def initialize_attention_params(
     Args:
         model_a: Target model to be initialized
         model_b: Source pretrained model
-        q_mapping: Name of query projection in both models
-        k_mapping: Name of key projection in both models
-        v_mapping: Name of value projection in both models
-        o_mapping: Name of output projection in both models
+        q_name_a, k_name_a, v_name_a, o_name_a: Names of attention parameters in model_a
+        q_name_b, k_name_b, v_name_b, o_name_b: Names of attention parameters in model_b
         backbone_attr: List of attribute names to look for backbone
 
     Returns:
@@ -178,10 +211,10 @@ def initialize_attention_params(
     """
     # Create mapping dictionary for attention parameters
     mapping = {
-        f"attn.{q_mapping}": f"attn.{q_mapping}",
-        f"attn.{k_mapping}": f"attn.{k_mapping}",
-        f"attn.{v_mapping}": f"attn.{v_mapping}",
-        f"attn.{o_mapping}": f"attn.{o_mapping}"
+        f"{q_name_a}": f"{q_name_b}",
+        f"{k_name_a}": f"{k_name_b}",
+        f"{v_name_a}": f"{v_name_b}",
+        f"{o_name_a}": f"{o_name_b}"
     }
 
     return initialize_from_pretrained(model_a, model_b, mapping, backbone_attr)
@@ -189,7 +222,10 @@ def initialize_attention_params(
 def initialize_mlp_params(
     model_a: nn.Module,
     model_b: nn.Module,
-    mlp_mapping: Dict[str, str],
+    fc1_name_a: str,
+    fc2_name_a: str,
+    fc1_name_b: str,
+    fc2_name_b: str,
     backbone_attr: Optional[List[str]] = None
 ) -> nn.Module:
     """
@@ -198,14 +234,18 @@ def initialize_mlp_params(
     Args:
         model_a: Target model to be initialized
         model_b: Source pretrained model
-        mlp_mapping: Dictionary mapping MLP parameter names from model_a to model_b
+        fc1_name_a, fc2_name_a: Names of MLP parameters in model_a
+        fc1_name_b, fc2_name_b: Names of MLP parameters in model_b
         backbone_attr: List of attribute names to look for backbone
 
     Returns:
         Initialized model_a
     """
     # Create mapping dictionary with mlp prefix
-    mapping = {f"mlp.{k}": f"mlp.{v}" for k, v in mlp_mapping.items()}
+    mapping = {
+        f"{fc1_name_a}": f"{fc1_name_b}",
+        f"{fc2_name_a}": f"{fc2_name_b}"
+    }
 
     return initialize_from_pretrained(model_a, model_b, mapping, backbone_attr)
 
@@ -228,3 +268,4 @@ def initialize_custom_mapping(
         Initialized model_a
     """
     return initialize_from_pretrained(model_a, model_b, param_mapping, backbone_attr)
+

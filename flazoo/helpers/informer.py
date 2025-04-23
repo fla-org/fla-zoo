@@ -19,7 +19,6 @@ def get_parameter_count(model: nn.Module) -> Dict[str, int]:
         "frozen": total_params - trainable_params
     }
 
-
 def print_parameter_count(model: nn.Module) -> None:
     counts = get_parameter_count(model)
 
