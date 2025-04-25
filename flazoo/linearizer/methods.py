@@ -45,6 +45,8 @@ def init_from_dino2_base(
         param_mapping=param_mapping
     )
 
+    # Optionally freeze MLP layers
+
     if not train_mlp:
         for n, p in fla_model.named_parameters():
             if "channel_mixer" in n:
