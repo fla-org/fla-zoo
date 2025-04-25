@@ -1071,7 +1071,9 @@ def main():
                     # Save best model - only on main process
                     if training_args.save_checkpoint:
                         save_path = os.path.join(training_args.output_dir, 'best_model.pth')
+                        # save hf model
                         unwrapped_model = accelerator.unwrap_model(model)
+                        unwrapped_model.save_pretrained(os.path.join(training_args.output_dir, 'best_model_hf'))
                         to_save = {
                             'model': unwrapped_model.state_dict(),
                             'model_ema': model_ema.ema.state_dict() if model_ema is not None else None,
