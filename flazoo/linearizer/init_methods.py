@@ -8,7 +8,7 @@ import torch
 一些预制函数
 """
 
-def init_from_dino2_base(
+def init_from_dino2_base_p14(
     fla_model,
     dino_model: str = 'facebook/dinov2-base',
     train_mlp: bool = False,
@@ -58,6 +58,7 @@ def init_from_siglip2_base_p16_224(
     fla_model,
     siglip_model: str = 'google/siglip2-base-patch16-224',
     train_mlp: bool = False,
+    init_embedding: bool = False,
 ):
     """
     Initialize a FLA model from a SigLIP2 model.
@@ -89,6 +90,31 @@ def init_from_siglip2_base_p16_224(
         model_b=siglip,
         param_mapping=param_mapping
     )
+
+    if init_embedding:
+        fla_model.backbone.embeddings.patch_embeddings.projection.weight.data.copy_(
+            siglip.embeddings.patch_embedding.weight.data
+        )
+        fla_model.backbone.embeddings.patch_embeddings.projection.bias.data.copy_(
+            siglip.embeddings.patch_embedding.bias.data
+        )
+        
+        fla_model.backbone.embeddings.position_embeddings.data.copy_(
+            siglip.embeddings.position_embedding.weight.data.unsqueeze(0)
+        )
+
+        assert torch.equal(
+            fla_model.backbone.embeddings.patch_embeddings.projection.weight,
+            siglip.embeddings.patch_embedding.weight
+        )
+        assert torch.equal(
+            fla_model.backbone.embeddings.patch_embeddings.projection.bias,
+            siglip.embeddings.patch_embedding.bias
+        )
+        assert torch.equal(
+            fla_model.backbone.embeddings.position_embeddings,
+            siglip.embeddings.position_embedding.weight.unsqueeze(0)
+        )
 
     # Optionally freeze MLP layers
     if not train_mlp:
