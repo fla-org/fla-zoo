@@ -142,3 +142,77 @@ def init_from_siglip2_base_p16_224(
                 p.requires_grad_(False)
 
     return fla_model
+
+def init_from_clip_base_p16_224(
+        fla_model,
+        clip_model: str = 'openai/clip-vit-base-patch16',
+        train_mlp: bool = False,
+        init_embedding: bool = True,
+):
+    """
+    Initialize a FLA model from a CLIP model.
+
+    Args:
+        fla_model: FLA models to be initialized
+        clip_model: Name or path of the clip model to load
+        train_mlp: Whether to train the MLP layers (default: False)
+        init_embedding: Whether to initialize the embedding layers (default: True)
+
+    Returns:
+        Initialized FLA model
+    """
+
+    clip = AutoModel.from_pretrained(clip_model).vision_model
+
+    param_mapping = {
+        "attn.q_proj": "self_attn.q_proj",
+        "attn.k_proj": "self_attn.k_proj",
+        "attn.v_proj": "self_attn.v_proj",
+        "attn.o_proj": "self_attn.out_proj",
+        "ln_1": "layer_norm1",
+        "ln_2": "layer_norm2",
+        "channel_mixer.net.0": "mlp.fc1",
+        "channel_mixer.net.2": "mlp.fc2"
+    }
+
+    initialize_custom_mapping(
+        model_a=fla_model,
+        model_b=clip,
+        param_mapping=param_mapping
+    )
+
+    if init_embedding:
+        # Copy patch embedding weights
+        fla_model.embeddings.patch_embeddings.projection.weight.data.copy_(
+            clip.embeddings.patch_embedding.weight.data
+        )
+        fla_model.embeddings.patch_embeddings.projection.bias.data.copy_(
+            clip.embeddings.patch_embedding.bias.data
+        )
+        
+        # Copy position embeddings, skipping the class token position (first token)
+        # CLIP shape: (197, 768) -> (196, 768) -> (1, 196, 768)
+        position_embeddings = clip.embeddings.position_embedding.weight.data[1:].unsqueeze(0)
+        fla_model.embeddings.position_embeddings.data.copy_(position_embeddings)
+
+        # Verify the copying was successful
+        assert torch.equal(
+            fla_model.embeddings.patch_embeddings.projection.weight,
+            clip.embeddings.patch_embedding.weight
+        )
+        assert torch.equal(
+            fla_model.embeddings.patch_embeddings.projection.bias,
+            clip.embeddings.patch_embedding.bias
+        )
+        assert torch.equal(
+            fla_model.embeddings.position_embeddings,
+            clip.embeddings.position_embedding.weight[1:].unsqueeze(0)
+        )
+
+    # Optionally freeze MLP layers
+    if not train_mlp:
+        for n, p in fla_model.named_parameters():
+            if "channel_mixer" in n:
+                p.requires_grad_(False)
+
+    return fla_model
