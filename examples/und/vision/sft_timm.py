@@ -41,10 +41,17 @@ from flazoo import HGRN2VisionConfig, HGRN2ForImageClassification
 from flazoo import LinearAttentionVisionConfig, LinearAttentionForImageClassification
 from flazoo import RetNetVisionConfig, RetNetForImageClassification
 from flazoo import RWKV6VisionConfig, RWKV6ForImageClassification
+from flazoo import RWKV7VisionConfig, RWKV7ForImageClassification
 from flazoo import TransformerVisionConfig, TransformerForImageClassification
 from flazoo import NSAVisionConfig, NSAForImageClassification
 from flazoo import LightNetVisionConfig, LightNetForImageClassification
 
+# for init from dino
+from flazoo.helpers.initializer import (
+    initialize_custom_mapping
+)
+
+from flazoo.helpers.linearizer import init_from_dino2_base_p14, init_from_siglip2_base_p16_224
 
 class CosineLRScheduler(Scheduler):
     """
@@ -238,6 +245,11 @@ class TrainingArguments:
     eval_freq: int = field(default=1, metadata={"help": "Evaluation frequency (epochs)"})
     save_checkpoint: bool = field(default=True, metadata={"help": "Whether to save checkpoints"})
     save_total_limit: int = field(default=3, metadata={"help": "Maximum number of checkpoints to keep"})
+
+    # init from pretrained
+    init_from_pretrained: bool = field(default=False, metadata={"help": "Whether to initialize from pretrained model"})
+    # which model
+    init_model: str = field(default="dino", metadata={"help": "Which model to initialize from"})
 
 def setup_logging(training_args):
     """Set up logging"""
@@ -438,6 +450,7 @@ def get_model(model_args, data_args, num_classes):
         'linear_attn': (LinearAttentionVisionConfig, LinearAttentionForImageClassification),
         'retnet': (RetNetVisionConfig, RetNetForImageClassification),
         'rwkv6': (RWKV6VisionConfig, RWKV6ForImageClassification),
+        'rwkv7': (RWKV7VisionConfig, RWKV7ForImageClassification),
         'transformer': (TransformerVisionConfig, TransformerForImageClassification),
         'nsa' : (NSAVisionConfig, NSAForImageClassification)
     }
@@ -740,6 +753,8 @@ def main():
         eval_freq=args.eval_freq,
         save_checkpoint=args.save_checkpoint,
         save_total_limit=args.save_total_limit if hasattr(args, 'save_total_limit') else 3,
+        init_from_pretrained=args.init_from_pretrained,
+        init_model=args.init_model
     )
     
     # Initialize accelerator
@@ -791,6 +806,22 @@ def main():
     
     # Create model
     model = get_model(model_args, data_args, num_classes)
+
+    # init if needed
+    if training_args.init_from_pretrained:
+        if training_args.init_model == "dino":
+            # nice format, some lines
+            logging.info("="*80)
+            logging.info("Initializing from DINO")
+            logging.info("="*80)
+            model.backbone = init_from_dino2_base_p14(model.backbone, train_mlp=True)
+        elif training_args.init_model == "siglip":
+            logging.info("="*80)
+            logging.info("Initializing from SigLIP")
+            logging.info("="*80)
+            model.backbone = init_from_siglip2_base_p16_224(model.backbone, train_mlp=True, init_embedding=True)
+        else:
+            raise ValueError(f"Unknown init model: {training_args.init_model}")
     
     # Print model info only on main process
     if accelerator.is_local_main_process:
@@ -834,15 +865,6 @@ def main():
     
     # Always use standard loss for validation
     validate_loss_fn = torch.nn.CrossEntropyLoss()
-    
-    # Setup optimizer
-    # optimizer = create_optimizer_v2(
-    #     model, 
-    #     opt=training_args.optimizer,
-    #     lr=training_args.learning_rate,
-    #     weight_decay=training_args.weight_decay,
-    #     momentum=training_args.momentum
-    # )
 
     optimizer = optim.AdamW(
         model.parameters(),
@@ -1124,18 +1146,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
