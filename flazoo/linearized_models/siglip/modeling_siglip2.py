@@ -15,7 +15,7 @@ from transformers.modeling_attn_mask_utils import _prepare_4d_attention_mask
 from transformers.modeling_layers import GradientCheckpointingLayer
 from transformers.modeling_outputs import BaseModelOutput, BaseModelOutputWithPooling, ImageClassifierOutput
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
-from ...utils import (
+from transformers.utils import (
     ModelOutput,
     add_start_docstrings,
     add_start_docstrings_to_model_forward,
@@ -344,7 +344,7 @@ class FLASiglip2EncoderLayer(GradientCheckpointingLayer):
         self.embed_dim = config.hidden_size
         self.layer_norm1 = nn.LayerNorm(self.embed_dim, eps=config.layer_norm_eps)
         if config.fla is not None and layer_idx in config.fla['layers']:
-            self.self_attn = GeneralizedFlashLinearAttention(config.fla)
+            self.self_attn = GeneralizedFlashLinearAttention(config.fla, layer_idx=layer_idx)
         else:
             self.self_attn = FLASiglip2Attention(config)
         
@@ -402,7 +402,7 @@ class FLASiglip2Encoder(nn.Module):
     def __init__(self, config: FLASiglip2Config):
         super().__init__()
         self.config = config
-        self.layers = nn.ModuleList([FLASiglip2EncoderLayer(config) for _ in range(config.num_hidden_layers)])
+        self.layers = nn.ModuleList([FLASiglip2EncoderLayer(config, i) for i in range(config.num_hidden_layers)])
         self.gradient_checkpointing = False
 
     # Ignore copy

@@ -1,3 +1,4 @@
+import logging
 from torch import nn
 
 from fla.layers import (
@@ -34,10 +35,15 @@ fla_attn_mapping = {
     "rwkv7" : RWKV7Attention
 }
 
+# import logging
+
+
 class GeneralizedFlashLinearAttention(nn.Module):
-    def __init__(self, fla_config):
+    def __init__(self, fla_config, layer_idx: int = None):
         super().__init__()
-        self.attn = fla_attn_mapping[fla_config.fla_type](**fla_config)
+        logging.info(f"Using {fla_config["fla_type"]} attention")
+        
+        self.attn = fla_attn_mapping[fla_config["fla_type"]](**fla_config)
     
     def forward(self, hidden_states, **kwargs):
         return self.attn(hidden_states, **kwargs)
