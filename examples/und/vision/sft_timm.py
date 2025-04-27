@@ -819,7 +819,7 @@ def main():
             logging.info("="*80)
             logging.info("Initializing from SigLIP")
             logging.info("="*80)
-            model.backbone = init_from_siglip2_base_p16_224(model.backbone, train_mlp=True, init_embedding=True)
+            model.backbone = init_from_siglip2_base_p16_224(model.backbone, train_mlp=False, init_embedding=True)
         else:
             raise ValueError(f"Unknown init model: {training_args.init_model}")
     
@@ -866,11 +866,22 @@ def main():
     # Always use standard loss for validation
     validate_loss_fn = torch.nn.CrossEntropyLoss()
 
-    optimizer = optim.AdamW(
-        model.parameters(),
-        lr=training_args.learning_rate,
-        weight_decay=training_args.weight_decay
-    )
+    if not training_args.init_from_pretrained:
+        optimizer = optim.AdamW(
+            model.parameters(),
+            lr=training_args.learning_rate,
+            weight_decay=training_args.weight_decay
+        )
+    else:
+        # separate head and other parameters
+        optimizer = optim.AdamW(
+            [
+                {'params': model.backbone.parameters(), 'lr': training_args.learning_rate * 0.1},
+                {'params': model.classifier.parameters(), 'lr': training_args.learning_rate}
+            ],
+            weight_decay=training_args.weight_decay
+        )
+
     
     # # Setup LR scheduler
     lr_scheduler, num_epochs = create_scheduler_v2(
