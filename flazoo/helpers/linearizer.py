@@ -24,6 +24,7 @@ def init_from_dino2_base_p14(
     dino_model: str = 'facebook/dinov2-base',
     train_mlp: bool = False,
     init_embedding: bool = True,
+    return_pretrained: bool = False,
 ):
     """
     Initialize a FLA model from a DINO model. \n
@@ -34,7 +35,8 @@ def init_from_dino2_base_p14(
         dino_model: Name or path of the DINO model to load
         train_mlp: Whether to train the MLP layers (default: False)
         init_embedding: Whether to initialize the embedding layers (default: True)
-
+        return_pretrained: Whether to return the pretrained model (default: False)
+        
     Returns:
         Initialized FLA model
     """
@@ -67,7 +69,10 @@ def init_from_dino2_base_p14(
             if "channel_mixer" in n:
                 p.requires_grad_(False)
 
-    return fla_model
+    if not return_pretrained:
+        return fla_model
+    else:
+        return fla_model, dino
 
 
 def init_from_dino2_small_p14(
@@ -75,6 +80,7 @@ def init_from_dino2_small_p14(
         dino_model: str = 'facebook/dinov2-small',
         train_mlp: bool = False,
         init_embedding: bool = True,
+        return_pretrained: bool = False,
 ):
     """
     Initialize a FLA model from a DINO model. \n
@@ -85,6 +91,7 @@ def init_from_dino2_small_p14(
         dino_model: Name or path of the DINO model to load
         train_mlp: Whether to train the MLP layers (default: False)
         init_embedding: Whether to initialize the embedding layers (default: True)
+        return_pretrained: Whether to return the pretrained model (default: False)
 
     Returns:
 
@@ -116,15 +123,18 @@ def init_from_dino2_small_p14(
         for n, p in fla_model.named_parameters():
             if "channel_mixer" in n:
                 p.requires_grad_(False)
-
-    return fla_model
-
+    
+    if not return_pretrained:
+        return fla_model
+    else:
+        return fla_model, dino
 
 def init_from_siglip2_base_p16_224(
     fla_model,
     siglip_model: str = 'google/siglip2-base-patch16-224',
     train_mlp: bool = False,
     init_embedding: bool = True,
+    return_pretrained: bool = False,
 ):
     """
     Initialize a FLA model from a SigLIP2 model.
@@ -134,6 +144,7 @@ def init_from_siglip2_base_p16_224(
         siglip_model: Name or path of the SigLIP2 model to load
         train_mlp: Whether to train the MLP layers (default: False)
         init_embedding: Whether to initialize the embedding layers (default: True)
+        return_pretrained: Whether to return the pretrained model (default: False)
 
     Returns:
         Initialized FLA model
@@ -192,13 +203,17 @@ def init_from_siglip2_base_p16_224(
             if "channel_mixer" in n:
                 p.requires_grad_(False)
 
-    return fla_model
+    if not return_pretrained:
+        return fla_model
+    else:
+        return fla_model, siglip
 
 def init_from_clip_base_p16_224(
         fla_model,
         clip_model: str = 'openai/clip-vit-base-patch16',
         train_mlp: bool = False,
         init_embedding: bool = True,
+        return_pretrained: bool = False,
 ):
     """
     Initialize a FLA model from a CLIP model.
@@ -208,6 +223,7 @@ def init_from_clip_base_p16_224(
         clip_model: Name or path of the clip model to load
         train_mlp: Whether to train the MLP layers (default: False)
         init_embedding: Whether to initialize the embedding layers (default: True)
+        return_pretrained: Whether to return the pretrained model (default: False)
 
     Returns:
         Initialized FLA model
@@ -266,4 +282,7 @@ def init_from_clip_base_p16_224(
             if "channel_mixer" in n:
                 p.requires_grad_(False)
 
-    return fla_model
+    if not return_pretrained:
+        return fla_model
+    else:
+        return fla_model, clip
