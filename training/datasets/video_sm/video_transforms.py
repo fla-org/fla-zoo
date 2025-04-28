@@ -14,8 +14,6 @@ import numbers
 import PIL
 import torchvision
 
-import functional as FF
-
 _pil_interpolation_to_str = {
     Image.NEAREST: "PIL.Image.NEAREST",
     Image.BILINEAR: "PIL.Image.BILINEAR",
@@ -24,7 +22,95 @@ _pil_interpolation_to_str = {
     Image.HAMMING: "PIL.Image.HAMMING",
     Image.BOX: "PIL.Image.BOX",
 }
+import numbers
+import cv2
+import numpy as np
+import PIL
+import torch
 
+
+def _is_tensor_clip(clip):
+    return torch.is_tensor(clip) and clip.ndimension() == 4
+
+
+def crop_clip(clip, min_h, min_w, h, w):
+    if isinstance(clip[0], np.ndarray):
+        cropped = [img[min_h:min_h + h, min_w:min_w + w, :] for img in clip]
+
+    elif isinstance(clip[0], PIL.Image.Image):
+        cropped = [
+            img.crop((min_w, min_h, min_w + w, min_h + h)) for img in clip
+        ]
+    else:
+        raise TypeError('Expected numpy.ndarray or PIL.Image' +
+                        'but got list of {0}'.format(type(clip[0])))
+    return cropped
+
+
+def resize_clip(clip, size, interpolation='bilinear'):
+    if isinstance(clip[0], np.ndarray):
+        if isinstance(size, numbers.Number):
+            im_h, im_w, im_c = clip[0].shape
+            # Min spatial dim already matches minimal size
+            if (im_w <= im_h and im_w == size) or (im_h <= im_w
+                                                   and im_h == size):
+                return clip
+            new_h, new_w = get_resize_sizes(im_h, im_w, size)
+            size = (new_w, new_h)
+        else:
+            size = size[0], size[1]
+        if interpolation == 'bilinear':
+            np_inter = cv2.INTER_LINEAR
+        else:
+            np_inter = cv2.INTER_NEAREST
+        scaled = [
+            cv2.resize(img, size, interpolation=np_inter) for img in clip
+        ]
+    elif isinstance(clip[0], PIL.Image.Image):
+        if isinstance(size, numbers.Number):
+            im_w, im_h = clip[0].size
+            # Min spatial dim already matches minimal size
+            if (im_w <= im_h and im_w == size) or (im_h <= im_w
+                                                   and im_h == size):
+                return clip
+            new_h, new_w = get_resize_sizes(im_h, im_w, size)
+            size = (new_w, new_h)
+        else:
+            size = size[1], size[0]
+        if interpolation == 'bilinear':
+            pil_inter = PIL.Image.BILINEAR
+        else:
+            pil_inter = PIL.Image.NEAREST
+        scaled = [img.resize(size, pil_inter) for img in clip]
+    else:
+        raise TypeError('Expected numpy.ndarray or PIL.Image' +
+                        'but got list of {0}'.format(type(clip[0])))
+    return scaled
+
+
+def get_resize_sizes(im_h, im_w, size):
+    if im_w < im_h:
+        ow = size
+        oh = int(size * im_h / im_w)
+    else:
+        oh = size
+        ow = int(size * im_w / im_h)
+    return oh, ow
+
+
+def normalize(clip, mean, std, inplace=False):
+    if not _is_tensor_clip(clip):
+        raise TypeError('tensor is not a torch clip.')
+
+    if not inplace:
+        clip = clip.clone()
+
+    dtype = clip.dtype
+    mean = torch.as_tensor(mean, dtype=dtype, device=clip.device)
+    std = torch.as_tensor(std, dtype=dtype, device=clip.device)
+    clip.sub_(mean[:, None, None, None]).div_(std[:, None, None, None])
+
+    return clip
 
 _RANDOM_INTERPOLATION = (Image.BILINEAR, Image.BICUBIC)
 
@@ -965,7 +1051,7 @@ class RandomResize(object):
         new_w = int(im_w * scaling_factor)
         new_h = int(im_h * scaling_factor)
         new_size = (new_w, new_h)
-        resized = FF.resize_clip(
+        resized = resize_clip(
             clip, new_size, interpolation=self.interpolation)
         return resized
 
@@ -985,7 +1071,7 @@ class Resize(object):
         self.interpolation = interpolation
 
     def __call__(self, clip):
-        resized = FF.resize_clip(
+        resized = resize_clip(
             clip, self.size, interpolation=self.interpolation)
         return resized
 
@@ -1029,7 +1115,7 @@ class RandomCrop(object):
 
         x1 = random.randint(0, im_w - w)
         y1 = random.randint(0, im_h - h)
-        cropped = FF.crop_clip(clip, y1, x1, h, w)
+        cropped = crop_clip(clip, y1, x1, h, w)
 
         return cropped
 
@@ -1064,7 +1150,7 @@ class ThreeCrop(object):
             raise TypeError('Expected numpy.ndarray or PIL.Image' +
                             'but got list of {0}'.format(type(clip[0])))
         if w != im_w and h != im_h:
-            clip = FF.resize_clip(clip, self.size, interpolation="bilinear")
+            clip = resize_clip(clip, self.size, interpolation="bilinear")
             im_h, im_w, im_c = clip[0].shape
 
         step = np.max((np.max((im_w, im_h)) - self.size[0]) // 2, 0)
@@ -1073,11 +1159,11 @@ class ThreeCrop(object):
             if (im_h > self.size[0]):
                 x1 = 0
                 y1 = i * step
-                cropped.extend(FF.crop_clip(clip, y1, x1, h, w))
+                cropped.extend(crop_clip(clip, y1, x1, h, w))
             else:
                 x1 = i * step
                 y1 = 0
-                cropped.extend(FF.crop_clip(clip, y1, x1, h, w))
+                cropped.extend(crop_clip(clip, y1, x1, h, w))
         return cropped
 
 
@@ -1163,7 +1249,7 @@ class CenterCrop(object):
 
         x1 = int(round((im_w - w) / 2.))
         y1 = int(round((im_h - h) / 2.))
-        cropped = FF.crop_clip(clip, y1, x1, h, w)
+        cropped = crop_clip(clip, y1, x1, h, w)
 
         return cropped
 
@@ -1274,7 +1360,7 @@ class Normalize(object):
         Returns:
             Tensor: Normalized Tensor clip.
         """
-        return FF.normalize(clip, self.mean, self.std)
+        return normalize(clip, self.mean, self.std)
 
     def __repr__(self):
         return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
