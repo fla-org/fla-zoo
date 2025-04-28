@@ -605,10 +605,10 @@ def main():
 
     # model.backbone = init_from_siglip2_base_p16_224(model.backbone, train_mlp=True, init_embedding=False)
     # log about init using a nice format
-    logging.info("="*80)
-    logging.info("Initializing from DINO")
-    model.backbone = init_from_dino2_small_p14(model.backbone, train_mlp=True, init_embedding=False)
-    logging.info("="*80)
+    # logging.info("="*80)
+    # logging.info("Initializing from DINO")
+    # model.backbone = init_from_dino2_small_p14(model.backbone, train_mlp=True, init_embedding=False)
+    # logging.info("="*80)
 
     if accelerator.is_local_main_process:
         logging.info(f"Model created: {model.__class__.__name__}")
