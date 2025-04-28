@@ -362,8 +362,10 @@ def validate(model, loader, device, training_args, accelerator=None):
         for batch_idx, batch in enumerate(loader):
 
             # Process batch data
-            pixel_values = batch["pixel_values"]
-            labels = batch["labels"]
+            pixel_values = batch[0] # B, C, F, H, W
+            # make it B, F, C, H, W
+            pixel_values = pixel_values.permute(0, 2, 1, 3, 4)
+            labels = batch[1]
 
             # Move to device if not using accelerator
             if accelerator is None:
