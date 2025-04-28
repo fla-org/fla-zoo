@@ -6,7 +6,6 @@ from .masking_generator import (
     TubeRowMaskingGenerator,
     RandomRowMaskingGenerator
 )
-from .mae import VideoMAE
 from .kinetics import VideoClsDataset
 from .kinetics_sparse import VideoClsDataset_sparse
 from .ssv2 import SSVideoClsDataset, SSRawFrameClsDataset
@@ -68,29 +67,6 @@ class DataAugmentationForVideoMAE(object):
         repr += "  Masked position generator = %s,\n" % str(self.masked_position_generator)
         repr += ")"
         return repr
-
-
-def build_pretraining_dataset(args):
-    transform = DataAugmentationForVideoMAE(args)
-    dataset = VideoMAE(
-        root=None,
-        setting=args.data_path,
-        prefix=args.prefix,
-        split=args.split,
-        video_ext='mp4',
-        is_color=True,
-        modality='rgb',
-        num_segments=args.num_segments,
-        new_length=args.num_frames,
-        new_step=args.sampling_rate,
-        transform=transform,
-        temporal_jitter=False,
-        video_loader=True,
-        use_decord=args.use_decord,
-        lazy_init=False,
-        num_sample=args.num_sample)
-    print("Data Aug = %s" % str(transform))
-    return dataset
 
 
 def build_dataset(is_train, test_mode, args):
