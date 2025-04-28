@@ -69,6 +69,57 @@ def init_from_dino2_base_p14(
 
     return fla_model
 
+
+def init_from_dino2_small_p14(
+        fla_model,
+        dino_model: str = 'facebook/dinov2-small',
+        train_mlp: bool = False,
+        init_embedding: bool = True,
+):
+    """
+    Initialize a FLA model from a DINO model. \n
+    Note that dinov2-small use patch_size=14
+
+    Args:
+        fla_model: FLA models to be initialized
+        dino_model: Name or path of the DINO model to load
+        train_mlp: Whether to train the MLP layers (default: False)
+        init_embedding: Whether to initialize the embedding layers (default: True)
+
+    Returns:
+
+    """
+    dino = AutoModel.from_pretrained(dino_model)
+
+    # Define parameter mapping
+    param_mapping = {
+        "attn.q_proj": "attention.attention.query",
+        "attn.k_proj": "attention.attention.key",
+        "attn.v_proj": "attention.attention.value",
+        "attn.o_proj": "attention.output.dense",
+        "ln_1": "norm1",
+        "ln_2": "norm2",
+        "channel_mixer.net.0": "mlp.fc1",
+        "channel_mixer.net.2": "mlp.fc2"
+    }
+
+    # Initialize parameters
+    initialize_custom_mapping(
+        model_a=fla_model,
+        model_b=dino,
+        param_mapping=param_mapping
+    )
+
+    # Optionally freeze MLP layers
+
+    if not train_mlp:
+        for n, p in fla_model.named_parameters():
+            if "channel_mixer" in n:
+                p.requires_grad_(False)
+
+    return fla_model
+
+
 def init_from_siglip2_base_p16_224(
     fla_model,
     siglip_model: str = 'google/siglip2-base-patch16-224',
