@@ -256,7 +256,7 @@ class TrainingArguments:
     # training mode: distill, label, hybrid
     training_mode: str = field(default="label", metadata={"help": "Training mode: distill, label"})
     # if distill, which stage?
-    distill_stage: int = field(default=0, metadata={"help": "Distill stage: 0, 1, 2"})
+    distill_stage: int = field(default=1, metadata={"help": "Distill stage: 0, 1, 2"})
 
 def setup_logging(training_args):
     """Set up logging"""
@@ -542,7 +542,7 @@ def train_one_epoch(
 
         if teacher != None:
             # Get teacher model outputs
-            if training_args.stage == 1:
+            if training_args.distill_stage == 1:
                 # if stage is 1, use hidden states matching
                 with torch.no_grad():
                     teacher_hidden_states = teacher(pixel_values=inputs, output_hidden_states=True).hidden_states
@@ -553,7 +553,7 @@ def train_one_epoch(
                 loss_distill = 0
                 for i in range(len(student_hidden_states)):
                     loss_distill += F.mse_loss(student_hidden_states[i], teacher_hidden_states[i])
-            elif training_args.stage == 2:
+            elif training_args.distill_stage == 2:
                 # is stage is 2, use cross entropy for the pooler results
                 # this requires that we are training vision model instead full classification model
                 with torch.no_grad():
