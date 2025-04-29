@@ -23,6 +23,8 @@ from timm.scheduler import create_scheduler_v2
 from timm.utils import ModelEma, accuracy, AverageMeter, CheckpointSaver, update_summary
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.scheduler.scheduler import Scheduler
+import torch.nn.functional as F
+from torch import nn
 
 # Import datasets for loading data
 import datasets
@@ -250,6 +252,9 @@ class TrainingArguments:
     init_from_pretrained: bool = field(default=False, metadata={"help": "Whether to initialize from pretrained model"})
     # which model
     init_model: str = field(default="dino", metadata={"help": "Which model to initialize from"})
+
+    # training mode: distill, label, hybrid
+    training_mode: str = field(default="label", metadata={"help": "Training mode: distill, label, hybrid"})
 
 def setup_logging(training_args):
     """Set up logging"""
@@ -509,7 +514,7 @@ def print_model_info(model, model_args):
 
 def train_one_epoch(
     epoch, model, loader, optimizer, loss_fn, device, 
-    mixup_fn=None, model_ema=None, training_args=None, accelerator=None, lr_scheduler=None
+    mixup_fn=None, model_ema=None, training_args=None, accelerator=None, lr_scheduler=None, teacher=None, temperature=1.0
 ):
     """Train for one epoch"""
     model.train()
@@ -531,11 +536,27 @@ def train_one_epoch(
         if mixup_fn is not None:
             inputs, targets = mixup_fn(inputs, targets)
         
-        outputs = model(pixel_values=inputs)
+        outputs = model(pixel_values=inputs, output_hidden_states=(teacher != None))
+
+        if teacher != None:
+            with torch.no_grad():
+                teacher_hidden_states = teacher(pixel_values=inputs, output_hidden_states=True).hidden_states
+
+            student_hidden_states = outputs.hidden_states
+
+            # calculate loss in each hiddenm_states using mse loss
+            loss_distill = 0
+            for i in range(len(student_hidden_states)):
+                loss_distill += F.mse_loss(student_hidden_states[i], teacher_hidden_states[i])
+
+
         logits = outputs.logits
-        
+
         loss = loss_fn(logits, targets)
-        
+
+        if teacher != None:
+            loss = loss * 1e-9 + loss_distill
+                
         # Use accelerator for backward pass
         if accelerator is not None:
             accelerator.backward(loss)
@@ -618,8 +639,10 @@ def validate(model, loader, loss_fn, device, training_args, accelerator=None):
                 inputs, targets = inputs.to(device), targets.to(device)
             
             outputs = model(pixel_values=inputs)
+
             logits = outputs.logits
-            
+
+
             loss = loss_fn(logits, targets)
             
             # Calculate accuracy
@@ -754,7 +777,8 @@ def main():
         save_checkpoint=args.save_checkpoint,
         save_total_limit=args.save_total_limit if hasattr(args, 'save_total_limit') else 3,
         init_from_pretrained=args.init_from_pretrained,
-        init_model=args.init_model
+        init_model=args.init_model,
+        training_mode=args.training_mode
     )
     
     # Initialize accelerator
@@ -807,6 +831,8 @@ def main():
     # Create model
     model = get_model(model_args, data_args, num_classes)
 
+    teacher = None
+
     # init if needed
     if training_args.init_from_pretrained:
         if training_args.init_model == "dino":
@@ -814,14 +840,23 @@ def main():
             logging.info("="*80)
             logging.info("Initializing from DINO")
             logging.info("="*80)
-            model.backbone = init_from_dino2_base_p14(model.backbone, train_mlp=True)
+            model.backbone = init_from_dino2_base_p14(model.backbone, train_mlp=True, return_pretrained=False)
         elif training_args.init_model == "siglip":
             logging.info("="*80)
             logging.info("Initializing from SigLIP")
             logging.info("="*80)
-            model.backbone = init_from_siglip2_base_p16_224(model.backbone, train_mlp=False, init_embedding=True)
+            if training_args.training_mode == "label":
+                model.backbone = init_from_siglip2_base_p16_224(model.backbone, train_mlp=True, init_embedding=True, return_pretrained=False)
+            else:
+                logging.info("Retaining SigLIP for distillation and only training the backbone")
+                model.backbone, teacher = init_from_siglip2_base_p16_224(model.backbone, train_mlp=True, init_embedding=True, return_pretrained=True)
         else:
             raise ValueError(f"Unknown init model: {training_args.init_model}")
+    
+    
+    if teacher != None:
+        # eval
+        teacher.eval()
     
     # Print model info only on main process
     if accelerator.is_local_main_process:
@@ -904,8 +939,8 @@ def main():
         )
     
     # Prepare with accelerator
-    model, optimizer, train_loader, eval_loader, lr_scheduler = accelerator.prepare(
-        model, optimizer, train_loader, eval_loader, lr_scheduler
+    model, optimizer, train_loader, eval_loader, lr_scheduler, teacher = accelerator.prepare(
+        model, optimizer, train_loader, eval_loader, lr_scheduler, teacher
     )
     
     # Device is managed by accelerator
@@ -966,7 +1001,8 @@ def main():
             model_ema=model_ema,
             training_args=training_args,
             accelerator=accelerator,
-            lr_scheduler=lr_scheduler
+            lr_scheduler=lr_scheduler,
+            teacher=teacher
         )
         
         # Update learning rate
@@ -978,14 +1014,14 @@ def main():
             logging.info(f"Epoch {epoch+1}/{num_epochs} completed. LR: {current_lr:.3e}")
         
         # Evaluate on validation set
-        if epoch % training_args.eval_freq == 0 or epoch == num_epochs - 1:
+        if (epoch % training_args.eval_freq == 0 or epoch == num_epochs - 1) and training_args.training_mode == 'label':
             eval_metrics = validate(
                 model=model,
                 loader=eval_loader,
                 loss_fn=validate_loss_fn,
                 device=device,
                 training_args=training_args,
-                accelerator=accelerator
+                accelerator=accelerator,
             )
             
             # Log validation metrics - only on main process
@@ -1022,7 +1058,7 @@ def main():
                         loader=eval_loader,
                         loss_fn=validate_loss_fn,
                         device=device,
-                        training_args=training_args
+                        training_args=training_args,
                     )
                     logging.info(
                         f"EMA Validation: "
@@ -1105,9 +1141,13 @@ def main():
     total_time = time.time() - start_time
     hours, remainder = divmod(total_time, 3600)
     minutes, seconds = divmod(remainder, 60)
+
+    # save last model
+    unwrapped_model = accelerator.unwrap_model(model)
+    unwrapped_model.save_pretrained(os.path.join(training_args.output_dir, 'last_model_hf'))
     
     # Print final best results - only on main process
-    if accelerator.is_local_main_process:
+    if accelerator.is_local_main_process and training_args.training_mode == "label":
         logging.info(f"Training completed in {int(hours)}h {int(minutes)}m {seconds:.2f}s")
         logging.info(f"Best metric: {best_metric:.2f} (epoch {best_epoch})")
 
