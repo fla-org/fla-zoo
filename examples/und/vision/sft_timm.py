@@ -254,7 +254,9 @@ class TrainingArguments:
     init_model: str = field(default="dino", metadata={"help": "Which model to initialize from"})
 
     # training mode: distill, label, hybrid
-    training_mode: str = field(default="label", metadata={"help": "Training mode: distill, label, hybrid"})
+    training_mode: str = field(default="label", metadata={"help": "Training mode: distill, label"})
+    # if distill, which stage?
+    distill_stage: int = field(default=0, metadata={"help": "Distill stage: 0, 1, 2"})
 
 def setup_logging(training_args):
     """Set up logging"""
@@ -307,7 +309,6 @@ class FlaDatasetWrapper(Dataset):
         image = item[self.img_key]
         label = item[self.label_key]
         
-        # 确保图像是RGB格式
         if image.mode != 'RGB':
             image = image.convert('RGB')
             
@@ -509,6 +510,7 @@ def print_model_info(model, model_args):
             logging.info(f"{'Number of KV Heads:':<25} {model_args.attn_num_kv_heads}")
         if model_args.attn_window_size:
             logging.info(f"{'Window Size:':<25} {model_args.attn_window_size}")
+
     
     logging.info("="*40 + "\n")
 
@@ -539,15 +541,31 @@ def train_one_epoch(
         outputs = model(pixel_values=inputs, output_hidden_states=(teacher != None))
 
         if teacher != None:
-            with torch.no_grad():
-                teacher_hidden_states = teacher(pixel_values=inputs, output_hidden_states=True).hidden_states
+            # Get teacher model outputs
+            if training_args.stage == 1:
+                # if stage is 1, use hidden states matching
+                with torch.no_grad():
+                    teacher_hidden_states = teacher(pixel_values=inputs, output_hidden_states=True).hidden_states
 
-            student_hidden_states = outputs.hidden_states
+                student_hidden_states = outputs.hidden_states
 
-            # calculate loss in each hiddenm_states using mse loss
-            loss_distill = 0
-            for i in range(len(student_hidden_states)):
-                loss_distill += F.mse_loss(student_hidden_states[i], teacher_hidden_states[i])
+                # calculate loss in each hiddenm_states using mse loss
+                loss_distill = 0
+                for i in range(len(student_hidden_states)):
+                    loss_distill += F.mse_loss(student_hidden_states[i], teacher_hidden_states[i])
+            elif training_args.stage == 2:
+                # is stage is 2, use cross entropy for the pooler results
+                # this requires that we are training vision model instead full classification model
+                with torch.no_grad():
+                    teacher_logits = teacher(pixel_values=inputs).pooler_output
+                    # normalize teacher logits
+                    teacher_logits = F.softmax(teacher_logits, dim=-1)
+                
+                student_logits = outputs.pooler_output
+
+                # use cross entropy
+                loss_distill = F.cross_entropy(student_logits, teacher_logits)
+
 
 
         logits = outputs.logits
@@ -778,7 +796,9 @@ def main():
         save_total_limit=args.save_total_limit if hasattr(args, 'save_total_limit') else 3,
         init_from_pretrained=args.init_from_pretrained,
         init_model=args.init_model,
-        training_mode=args.training_mode
+        training_mode=args.training_mode,
+        # compl
+        distill_stage=args.distill_stage
     )
     
     # Initialize accelerator
