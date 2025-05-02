@@ -24,6 +24,7 @@ def init_from_fla_vision_und(
     another_fla_model,
     train_mlp: bool = True,
     init_embedding: bool = True,
+    init_head: bool = True,
     return_pretrained: bool = False,
 ):
     """
@@ -35,6 +36,7 @@ def init_from_fla_vision_und(
         another_fla_model: FLA models to load
         train_mlp: Whether to train the MLP layers (default: True)
         init_embedding: Whether to initialize the embedding layers (default: True)
+        init_head: Whether to initialize the head layers, useful for classification (default: True)
         return_pretrained: Whether to return the pretrained model (default: False)
 
     Returns:
@@ -87,6 +89,15 @@ def init_from_fla_vision_und(
             another_fla_model.embeddings.position_embeddings
         )
     
+    if init_head:
+        fla_model.classifier.weight.data.copy_(
+            another_fla_model.classifier.weight.data
+        )
+        if another_fla_model.classifier.bias is not None:
+            fla_model.classifier.bias.data.copy_(
+                another_fla_model.classifier.bias.data
+            )
+
     if not return_pretrained:
         return fla_model
     else:
