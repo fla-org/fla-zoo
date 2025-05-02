@@ -220,6 +220,7 @@ def init_from_siglip2_base_p16_224(
     siglip_model: str = 'google/siglip2-base-patch16-224',
     train_mlp: bool = False,
     init_embedding: bool = True,
+    init_head: bool = True,
     return_pretrained: bool = False,
 ):
     """
@@ -230,6 +231,7 @@ def init_from_siglip2_base_p16_224(
         siglip_model: Name or path of the SigLIP2 model to load
         train_mlp: Whether to train the MLP layers (default: False)
         init_embedding: Whether to initialize the embedding layers (default: True)
+        init_head: Whether to initialize the head layers, useful for classification (default: True)
         return_pretrained: Whether to return the pretrained model (default: False)
 
     Returns:
@@ -288,6 +290,15 @@ def init_from_siglip2_base_p16_224(
         for n, p in fla_model.named_parameters():
             if "channel_mixer" in n:
                 p.requires_grad_(False)
+    
+    if init_head:
+        fla_model.classifier.weight.data.copy_(
+            siglip.classifier.weight.data
+        )
+        if siglip.classifier.bias is not None:
+            fla_model.classifier.bias.data.copy_(
+                siglip.classifier.bias.data
+            )
 
     if not return_pretrained:
         return fla_model
