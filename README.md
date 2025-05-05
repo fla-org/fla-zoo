@@ -91,17 +91,19 @@ conda create -n flazoo python=3.12
 conda activate flazoo
 
 # Install PyTorch and related packages
-pip install torch==2.6.0 torchvision==0.21.0 accelerate diffusers timm pytorchvideo
+pip install torch==2.6.0 torchvision==0.21.0 accelerate diffusers timm --use-pep517
 
 # Install transformer-related packages
-pip install transformers datasets evaluate causal_conv1d einops scikit-learn wandb
+pip install transformers datasets evaluate causal_conv1d einops scikit-learn wandb --use-pep517
 
 # Install flash-attention
-pip install flash-attn --no-build-isolation
+pip install flash-attn --no-build-isolation --use-pep517
 
 # Install Hugging Face Hub CLI
-pip install -U "huggingface_hub[cli]"
+pip install -U "huggingface_hub[cli]" --use-pep517
 
+# Ensuring this
+pip install pillow==11.1.0 --use-pep517
 # Install FLA-Zoo in development mode
 pip install -e .
 ```
