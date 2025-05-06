@@ -254,9 +254,10 @@ class TrainingArguments:
     init_model: str = field(default="dino", metadata={"help": "Which model to initialize from"})
 
     # training mode: distill, label, hybrid
-    training_mode: str = field(default="label", metadata={"help": "Training mode: distill, label"})
-    # if distill, which stage?
-    distill_stage: int = field(default=1, metadata={"help": "Distill stage: 0, 1, 2"})
+    training_mode: str = field(default="label", metadata={"help": "Training mode: distill, label, hybrid"})
+
+    # only eval
+    eval_only: bool = field(default=False, metadata={"help": "Whether to only evaluate the model"})
 
 def setup_logging(training_args):
     """Set up logging"""
@@ -309,6 +310,7 @@ class FlaDatasetWrapper(Dataset):
         image = item[self.img_key]
         label = item[self.label_key]
         
+        # 确保图像是RGB格式
         if image.mode != 'RGB':
             image = image.convert('RGB')
             
@@ -510,7 +512,6 @@ def print_model_info(model, model_args):
             logging.info(f"{'Number of KV Heads:':<25} {model_args.attn_num_kv_heads}")
         if model_args.attn_window_size:
             logging.info(f"{'Window Size:':<25} {model_args.attn_window_size}")
-
     
     logging.info("="*40 + "\n")
 
@@ -541,32 +542,28 @@ def train_one_epoch(
         outputs = model(pixel_values=inputs, output_hidden_states=(teacher != None))
 
         if teacher != None:
-            # Get teacher model outputs
-            if training_args.distill_stage == 1:
-                # if stage is 1, use hidden states matching
-                with torch.no_grad():
-                    teacher_hidden_states = teacher(pixel_values=inputs, output_hidden_states=True).hidden_states
+            # with torch.no_grad():
+            #     teacher_hidden_states = teacher(pixel_values=inputs, output_hidden_states=True).hidden_states
 
-                student_hidden_states = outputs.hidden_states
+            # student_hidden_states = outputs.hidden_states
 
-                # calculate loss in each hiddenm_states using mse loss
-                loss_distill = 0
-                for i in range(len(student_hidden_states)):
-                    loss_distill += F.mse_loss(student_hidden_states[i], teacher_hidden_states[i])
-            elif training_args.distill_stage == 2:
-                # is stage is 2, use cross entropy for the pooler results
-                # this requires that we are training vision model instead full classification model
-                with torch.no_grad():
-                    teacher_logits = teacher(pixel_values=inputs).pooler_output
-                    # normalize teacher logits
-                    teacher_logits = F.softmax(teacher_logits, dim=-1)
+            # # calculate loss in each hiddenm_states using mse loss
+            # loss_distill = 0
+            # for i in range(len(student_hidden_states)):
+            #     loss_distill += F.mse_loss(student_hidden_states[i], teacher_hidden_states[i])
+
+            # kl loss
+            with torch.no_grad():
+                t_logits = teacher(pixel_values=inputs).logits / temperature
+            
+            loss_distill = F.kl_div(
+                F.log_softmax(outputs.logits / temperature, dim=-1),
+                F.softmax(t_logits, dim=-1),
+                reduction='batchmean'
+            ) * (temperature ** 2)
+
+            # logging.info(f"loss_distill: {loss_distill.item()}")
                 
-                student_logits = outputs.pooler_output
-
-                # use cross entropy
-                loss_distill = F.cross_entropy(student_logits, teacher_logits)
-
-
 
         logits = outputs.logits
 
@@ -639,7 +636,66 @@ def train_one_epoch(
     
     return {'loss': losses_m.avg}
 
+def validate_only(model, loader, loss_fn, device, training_args):
+
+    """Validate model performance"""
+    batch_time_m = AverageMeter()
+    losses_m = AverageMeter()
+    top1_m = AverageMeter()
+    top5_m = AverageMeter()
+    
+    model.eval()
+    
+    end = time.time()
+    last_idx = len(loader) - 1
+    
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+
+            # use amp
+            with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
+                outputs = model(pixel_values=inputs)
+            
+            logits = outputs.logits
+
+            loss = loss_fn(logits, targets)
+            
+            # Calculate accuracy
+            acc1, acc5 = accuracy(logits, targets, topk=(1, 5))
+            
+            # Update metrics
+            losses_m.update(loss.item(), inputs.size(0))
+            top1_m.update(acc1.item(), inputs.size(0))
+            top5_m.update(acc5.item(), inputs.size(0))
+            
+            batch_time_m.update(time.time() - end)
+            end = time.time()
+            
+            
+            logging.info(
+                'Test: [{:>4d}/{} ({:>3.0f}%)]  '
+                'Loss: {loss.val:#.4g} ({loss.avg:#.3g})  '
+                'Acc@1: {top1.val:>7.4f} ({top1.avg:>7.4f})  '
+                'Acc@5: {top5.val:>7.4f} ({top5.avg:>7.4f})  '
+                'Time: {batch_time.val:.3f}s, {rate:>7.2f}/s  '
+                '({batch_time.avg:.3f}s, {rate_avg:>7.2f}/s)'.format(
+                    batch_idx, len(loader),
+                    100. * batch_idx / last_idx,
+                    loss=losses_m,
+                    top1=top1_m,
+                    top5=top5_m,
+                    batch_time=batch_time_m,
+                    rate=inputs.size(0) / batch_time_m.val,
+                    rate_avg=inputs.size(0) / batch_time_m.avg
+                )
+            )
+
+    metrics = {'loss': losses_m.avg, 'top1': top1_m.avg, 'top5': top5_m.avg}
+    return metrics
+
 def validate(model, loader, loss_fn, device, training_args, accelerator=None):
+
     """Validate model performance"""
     batch_time_m = AverageMeter()
     losses_m = AverageMeter()
@@ -694,6 +750,17 @@ def validate(model, loader, loss_fn, device, training_args, accelerator=None):
                     )
                 )
     
+    # Gather metrics from all processes if using distributed training
+    if accelerator is not None and accelerator.num_processes > 1:
+        # Gather and average metrics across all processes
+        metrics_tensor = torch.tensor([losses_m.avg, top1_m.avg, top5_m.avg], device=device)
+        accelerator.wait_for_everyone()
+        gathered_metrics = accelerator.gather(metrics_tensor)
+        # Average the gathered metrics
+        gathered_metrics = gathered_metrics.view(accelerator.num_processes, 3)
+        avg_metrics = gathered_metrics.mean(dim=0)
+        losses_m.avg, top1_m.avg, top5_m.avg = avg_metrics.tolist()
+
     metrics = {'loss': losses_m.avg, 'top1': top1_m.avg, 'top5': top5_m.avg}
     return metrics
 
@@ -797,8 +864,7 @@ def main():
         init_from_pretrained=args.init_from_pretrained,
         init_model=args.init_model,
         training_mode=args.training_mode,
-        # compl
-        distill_stage=args.distill_stage
+        eval_only=args.eval_only
     )
     
     # Initialize accelerator
@@ -850,7 +916,16 @@ def main():
     
     # Create model
     model = get_model(model_args, data_args, num_classes)
-
+    from transformers import SiglipForImageClassification
+    # model = DeltaNetForImageClassification.from_pretrained("output/deltanet_stage1_imagenet/last_model_hf")
+    # model = DeltaNetForImageClassification.from_pretrained("output/deltanet_stage1_imagenet/last_model_hf")
+    # model = DeltaNetForImageClassification.from_pretrained("output/delta_siglip_210/best_model_ema_hf")
+    # from transformers import SiglipForImageClassification
+    # model = SiglipForImageClassification.from_pretrained("google/siglip2-base-patch16-224")
+    # model.config.num_labels = num_classes
+    # model.classifier = nn.Linear(model.config.vision_config.hidden_size, num_classes)
+    # model.vision_model.head.requires_grad_(False)
+        
     teacher = None
 
     # init if needed
@@ -869,11 +944,17 @@ def main():
                 model.backbone = init_from_siglip2_base_p16_224(model.backbone, train_mlp=True, init_embedding=True, return_pretrained=False)
             else:
                 logging.info("Retaining SigLIP for distillation and only training the backbone")
-                model.backbone, teacher = init_from_siglip2_base_p16_224(model.backbone, train_mlp=True, init_embedding=True, return_pretrained=True)
+                model, teacher = init_from_siglip2_base_p16_224(model.backbone, train_mlp=True, init_embedding=True, return_pretrained=True)
         else:
             raise ValueError(f"Unknown init model: {training_args.init_model}")
     
-    
+    # from transformers import SiglipForImageClassification
+    # teacher = SiglipForImageClassification.from_pretrained("output/siglip_imagenet_imagenet/best_model_ema_hf")
+    # # deep copy the classifier
+    # model.classifier.weight.data.copy_(teacher.classifier.weight.data)
+    # model.classifier.bias.data.copy_(teacher.classifier.bias.data)
+    # teacher = None
+
     if teacher != None:
         # eval
         teacher.eval()
@@ -957,6 +1038,36 @@ def main():
             decreasing=False,
             max_history=training_args.save_total_limit
         )
+
+    if training_args.eval_only:
+        
+        device = torch.device('cuda:0')
+
+        model.to(device)
+        # log about only eval, no trainig
+        logging.info("Evaluation only. No training.")
+
+        # firstly log the eval
+        eval_metrics = validate_only(
+                    model=model,
+                    loader=eval_loader,
+                    loss_fn=validate_loss_fn,
+                    device=torch.device('cuda:0'),
+                    training_args=training_args,
+                )
+                    
+        logging.info(
+            f"Validation: "
+            f"Loss: {eval_metrics['loss']:.4f}, "
+            f"Top-1: {eval_metrics['top1']:.2f}%, "
+            f"Top-5: {eval_metrics['top5']:.2f}%, "
+        )
+
+        if accelerator.is_local_main_process:
+            logging.info("Evaluation only. Exiting.")
+        return
+
+    accelerator.wait_for_everyone()
     
     # Prepare with accelerator
     model, optimizer, train_loader, eval_loader, lr_scheduler, teacher = accelerator.prepare(
@@ -1131,6 +1242,9 @@ def main():
                         # save hf model
                         unwrapped_model = accelerator.unwrap_model(model)
                         unwrapped_model.save_pretrained(os.path.join(training_args.output_dir, 'best_model_hf'))
+                        # save hf ema model
+                        if model_ema is not None:
+                            model_ema.ema.save_pretrained(os.path.join(training_args.output_dir, 'best_model_ema_hf'))
                         to_save = {
                             'model': unwrapped_model.state_dict(),
                             'model_ema': model_ema.ema.state_dict() if model_ema is not None else None,
@@ -1165,6 +1279,10 @@ def main():
     # save last model
     unwrapped_model = accelerator.unwrap_model(model)
     unwrapped_model.save_pretrained(os.path.join(training_args.output_dir, 'last_model_hf'))
+
+    # save last ema model
+    if model_ema is not None:
+        model_ema.ema.save_pretrained(os.path.join(training_args.output_dir, 'last_model_ema_hf'))
     
     # Print final best results - only on main process
     if accelerator.is_local_main_process and training_args.training_mode == "label":
@@ -1209,3 +1327,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
