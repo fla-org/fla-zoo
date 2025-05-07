@@ -134,16 +134,13 @@ Now we can start cooking! 🚀
 ### Basic Usage
 
 ```python
-from flazoo import DeltaNetVisionConfig, DeltaNetForImageClassification
+from flazoo import DeltaNetForImageClassification
 
-# Initialize a configuration
-config = DeltaNetVisionConfig()
+from flazoo.helpers.informer import log_model_parameters_flat
 
-# Initialize a model
-model = DeltaNetForImageClassification(config)
+model = DeltaNetForImageClassification.from_pretrained("fla-zoo/deltanet-siglip2-base-patch16-224")
 
-# use it for whatever you like
-
+log_model_parameters_flat(model, "delta-siglip2.log")
 ```
 
 ### Read the Documentation
