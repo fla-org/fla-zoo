@@ -35,9 +35,6 @@ fla_attn_mapping = {
     "rwkv7" : RWKV7Attention
 }
 
-# import logging
-
-
 class GeneralizedFlashLinearAttention(nn.Module):
     def __init__(self, fla_config, layer_idx: int = None):
         super().__init__()
