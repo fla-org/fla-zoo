@@ -142,7 +142,3 @@ model = DeltaNetForImageClassification.from_pretrained("fla-zoo/deltanet-siglip2
 
 log_model_parameters_flat(model, "delta-siglip2.log")
 ```
-
-### Read the Documentation
-
-See the [documentation](docs/vision/vision.md) for more details on how to use the models and their configurations.
