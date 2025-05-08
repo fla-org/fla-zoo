@@ -1,3 +1,3 @@
-from .configuration_siglip import FLASiglip2Config, FLASiglip2TextConfig, FLASiglip2VisionConfig
-from .modeling_siglip import FLASiglip2Model, FLASiglip2ForImageClassification, FLASiglip2VisionModel
+from .configuration_siglip import FLASiglipConfig, FLASiglipTextConfig, FLASiglipVisionConfig
+from .modeling_siglip import FLASiglipModel, FLASiglipForImageClassification, FLASiglipVisionModel
 
