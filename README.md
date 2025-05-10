@@ -90,10 +90,8 @@ For people who just want to use base linear or hybrid model, basical dependencie
 conda create -n flazoo python=3.12
 conda activate flazoo
 
-# Install PyTorch and related packages
 pip install torch==2.6.0 torchvision==0.21.0 accelerate diffusers timm --use-pep517
 
-# Install transformer-related packages
 pip install transformers datasets evaluate causal_conv1d einops scikit-learn wandb
 
 # Install flash-attention
