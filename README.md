@@ -97,11 +97,10 @@ pip install transformers datasets evaluate causal_conv1d einops scikit-learn wan
 # Install flash-attention
 pip install flash-attn --no-build-isolation --use-pep517
 
-# Install Hugging Face Hub CLI
 pip install -U "huggingface_hub[cli]" --use-pep517
-
-# Ensuring this
 pip install pillow==11.1.0 --use-pep517
+pip install git+https://github.com/facebookresearch/pytorchvideo.git
+
 # Install FLA-Zoo in development mode
 pip install -e .
 ```
