@@ -92,7 +92,7 @@ conda activate flazoo
 
 pip install torch==2.6.0 torchvision==0.21.0 accelerate diffusers timm --use-pep517
 
-pip install transformers datasets evaluate causal_conv1d einops scikit-learn wandb
+pip install transformers datasets evaluate causal_conv1d einops scikit-learn wandb matplotlib
 
 # Install flash-attention
 pip install flash-attn --no-build-isolation --use-pep517
