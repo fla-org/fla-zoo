@@ -25,6 +25,7 @@ from fla.models.utils import Cache
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
                          RMSNorm)
 from fla.modules.activations import swiglu_linear
+from fla.modules import GatedMLP as DeltaNetSwiGLU
 from fla.modules.layernorm import rms_norm_linear
 from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
 from ..utils import ImageEmbeddings, Pooler
@@ -92,9 +93,17 @@ class DeltaNetVisionBlock(nn.Module):
             self.compress_attention = False
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-            
-        self.channel_mixer = DeltaNetVisionMLP(config)
 
+
+        if config.use_swiglu:
+            # use a default ratio of 4
+            # TODO: support custom ratio or intermediate_size
+            self.channel_mixer = DeltaNetSwiGLU(
+                hidden_size=config.hidden_size,
+            )
+        else:
+            self.channel_mixer = DeltaNetVisionMLP(config)
+    
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
             self.test_scan_type = 'uni-scan'
@@ -463,7 +472,15 @@ class DeltaNetVideoBlock(nn.Module):
             
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
             
-        self.channel_mixer = DeltaNetVideoMLP(config)
+        if config.use_swiglu:
+            # use a default ratio of 4
+            # TODO: support custom ratio or intermediate_size
+            self.channel_mixer = DeltaNetSwiGLU(
+                hidden_size=config.hidden_size,
+            )
+        else:
+            self.channel_mixer = DeltaNetVideoMLP(config)
+            
         if config.attn is not None and layer_idx in config.attn['layers']:
             self.train_scan_type = 'uni-scan'
             self.test_scan_type = 'uni-scan'
