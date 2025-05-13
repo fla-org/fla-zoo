@@ -45,7 +45,7 @@ Vanilla Self-Attention
 Attention implementation used in hybrid model, adapted from https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/attn.py
 """
 
-class VisionAttention(nn.Module):
+class FullAttention(nn.Module):
 
     def __init__(
         self,
@@ -116,12 +116,11 @@ class VisionAttention(nn.Module):
         return o, attentions, None
 
 
-"""
-Local Attention
-Local attention implementation used in hybrid model
-"""
-
-class VisionLocalAttention(nn.Module):
+class Block1DAttention(nn.Module):
+    """
+    Block 1D Attention \\
+    For 1D sequence, attention calculated within each 1D block
+    """
 
     def __init__(
         self,
@@ -208,12 +207,102 @@ class VisionLocalAttention(nn.Module):
 
         return o, attentions, None
 
-"""
-Sliding Window Attention
-Sliding window attention implementation used in hybrid model
-"""
+class Block2DAttention(nn.Module):
+    """
+    Block 2D Attention \\
+    For 2D sequence, attention calculated within each 2D block
+    """
 
-class VisionSlidingWindowAttention(nn.Module):
+    def __init__(
+        self,
+        hidden_size: int = 2048,
+        num_heads: int = 32,
+        num_kv_heads: Optional[int] = None,
+        block_size_x: int = 32,
+        block_size_y: int = 32,
+        head_dim: int = None,
+        norm_first: bool = False,
+        norm_eps: float = 1e-5,
+        layer_idx: int = None
+    ):
+        super().__init__()
+
+        self.num_heads = num_heads
+        if num_kv_heads is None:
+            self.num_kv_heads = self.num_heads
+        else:
+            self.num_kv_heads = num_kv_heads
+        self.num_kv_groups = num_heads // self.num_kv_heads
+        self.hidden_size = hidden_size
+        if head_dim is None:
+            self.head_dim = self.hidden_size // self.num_heads
+        else:
+            self.head_dim = head_dim
+        self.kv_dim = self.num_kv_heads * self.head_dim
+        self.kv_dim = self.num_kv_heads * self.head_dim
+        self.norm_first = norm_first
+        self.layer_idx = layer_idx
+        self.block_size_x = block_size_x
+        self.block_size_y = block_size_y
+
+        if norm_first:
+            self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
+        self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
+        self.k_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
+        self.v_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
+        self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        output_attentions: bool = False,
+        x_dim: int = None,
+        y_dim: int = None, # for custom 2d data size
+        **kwargs,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+
+        batch_size, q_len, _ = hidden_states.size()
+
+        if self.norm_first:
+            hidden_states = self.norm(hidden_states)
+        
+        if x_dim is None:
+            x_dim = int(math.sqrt(q_len))
+        if y_dim is None:
+            y_dim = int(math.sqrt(q_len))
+
+        assert x_dim % self.block_size_x == 0, f"X dim size {x_dim} is not divisible by block size {self.block_size_x}"
+        assert y_dim % self.block_size_y == 0, f"Y dim size {y_dim} is not divisible by block size {self.block_size_y}"
+
+        q = rearrange(self.q_proj(hidden_states), 'b (bnx bsx bny bsy) (h d) -> (b bnx bny) (bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bsx=self.block_size_x, bsy=self.block_size_y, h=self.num_heads, d=self.head_dim)
+        k = rearrange(self.k_proj(hidden_states), 'b (bnx bsx bny bsy) (h d) -> (b bnx bny) (bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bsx=self.block_size_x, bsy=self.block_size_y, h=self.num_kv_heads, d=self.head_dim)
+        v = rearrange(self.v_proj(hidden_states), 'b (bnx bsx bny bsy) (h d) -> (b bnx bny) (bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bsx=self.block_size_x, bsy=self.block_size_y, h=self.num_kv_heads, d=self.head_dim)
+
+        if flash_attn_varlen_func is None:
+            raise ImportError("Please install Flash Attention via `pip install flash-attn --no-build-isolation` first")
+
+        o = flash_attn_varlen_func(
+            q, k, v,
+            causal=False, # use non-causal attention for vision
+            window_size=(-1, -1)
+        )
+        o = o.reshape(batch_size, q_len, self.hidden_size)
+        o = self.o_proj(o)
+
+        if not output_attentions:
+            attentions = None
+
+        return o, attentions, None
+
+class SlidingWindowAttention(nn.Module):
+
+    """
+        Sliding Window Attention \\
+        Sliding window attention implementation used in hybrid model \\
+        Note that this is for 1D sequence. \\
+        Use block2d for 2D image and block3d for video.
+    """
+
     def __init__(
         self,
         hidden_size: int = 2048,
@@ -287,9 +376,10 @@ class VisionSlidingWindowAttention(nn.Module):
 """
 Native Sparse Attention: Hardware-Aligned and Natively Trainable Sparse Attention
 NativeSparseAttention simplified implementation, adapted from https://github.com/fla-org/native-sparse-attention
+# TODO: currently the kernel of NSA is causal, need to make it non-causal and work for vision
 """
 
-class VisionNativeSparseAttention(nn.Module):
+class NativeSparseAttention(nn.Module):
 
     def __init__(
         self,
@@ -371,9 +461,10 @@ class VisionNativeSparseAttention(nn.Module):
 """
 MoBA: Mixture of Block Attention for Long-Context LLMs
 Simplified implementation for vision model, adapted from https://github.com/MoonshotAI/MoBA/blob/master/moba/moba_efficient.py
+# TODO: currently the kernel of MoBA is causal, need to make it non-causal and work for vision
 """
 
-class VisionMoBA(nn.Module):
+class MoBA(nn.Module):
     def __init__(
         self,
         hidden_size: int = 2048,
@@ -476,7 +567,7 @@ class VisionMoBA(nn.Module):
         return o, attentions, None
 
 
-ATTN_LISTS = ["full_attn", "moba", "nsa", "local_attn", "sw_attn"]
+ATTN_LISTS = ["full_attn", "moba", "nsa", "block1d_attn", "block2d_attn", "sw_attn"]
 def get_attn(config, layer_idx):
     """
     This is for full/local/sparse attention, not linear attention
@@ -485,14 +576,14 @@ def get_attn(config, layer_idx):
     assert attn_type in ATTN_LISTS, f"Attention type must be one of {ATTN_LISTS}"
 
     if attn_type == "full_attn":
-        return VisionAttention(
+        return FullAttention(
             hidden_size=config.hidden_size,
             num_heads=config.attn['num_heads'],
             num_kv_heads=config.attn['num_kv_heads'],
             layer_idx=layer_idx
         )
     elif attn_type == "moba":
-        return VisionMoBA(
+        return MoBA(
             hidden_size=config.hidden_size,
             num_heads=config.attn['num_heads'],
             num_kv_heads=config.attn['num_kv_heads'],
@@ -501,7 +592,7 @@ def get_attn(config, layer_idx):
             layer_idx=layer_idx
         )
     elif attn_type == "nsa":
-        return VisionNativeSparseAttention(
+        return NativeSparseAttention(
             hidden_size=config.hidden_size,
             num_heads=config.attn['num_heads'],
             num_kv_heads=config.attn['num_kv_heads'],
@@ -510,16 +601,25 @@ def get_attn(config, layer_idx):
             window_size=config.attn['window_size'],
             layer_idx=layer_idx
         )
-    elif attn_type == "local_attn":
-        return VisionLocalAttention(
+    elif attn_type == "block1d_attn":
+        return Block1DAttention(
             hidden_size=config.hidden_size,
             num_heads=config.attn['num_heads'],
             num_kv_heads=config.attn['num_kv_heads'],
             block_size=config.attn['block_size'],
             layer_idx=layer_idx
         )
+    elif attn_type == "block2d_attn":
+        return Block2DAttention(
+            hidden_size=config.hidden_size,
+            num_heads=config.attn['num_heads'],
+            num_kv_heads=config.attn['num_kv_heads'],
+            block_size_x=config.attn['block_size_x'],
+            block_size_y=config.attn['block_size_y'],
+            layer_idx=layer_idx
+        )
     elif attn_type == "sw_attn":
-        return VisionSlidingWindowAttention(
+        return SlidingWindowAttention(
             hidden_size=config.hidden_size,
             num_heads=config.attn['num_heads'],
             num_kv_heads=config.attn['num_kv_heads'],
