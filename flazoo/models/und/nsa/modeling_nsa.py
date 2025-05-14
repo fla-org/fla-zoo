@@ -18,7 +18,7 @@ from transformers.modeling_outputs import (ImageClassifierOutput,
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
-from flazoo.models.attentions import VisionNativeSparseAttention
+from flazoo.models.attentions import NativeSparseAttention
 from .configuration_nsa import NSAVisionConfig
 from fla.models.utils import Cache
 from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
@@ -56,7 +56,7 @@ class NSAVisionBlock(nn.Module):
         if not config.norm_first:
             self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         
-        self.attn = VisionNativeSparseAttention(
+        self.attn = NativeSparseAttention(
             hidden_size=config.hidden_size,
             num_heads=config.num_heads,
             num_kv_heads=config.num_kv_heads,
