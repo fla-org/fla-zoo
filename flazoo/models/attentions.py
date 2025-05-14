@@ -367,9 +367,9 @@ class Block3DAttention(nn.Module):
         assert y_dim % self.block_size_y == 0, f"Y dim size {y_dim} is not divisible by block size {self.block_size_y}"
         assert z_dim % self.block_size_z == 0, f"Z dim size {z_dim} is not divisible by block size {self.block_size_z}"
 
-        q = rearrange(self.q_proj(hidden_states), 'b (bnx bsx bny bsy bnz bsz) (h d) -> (b bnx bny bnz) (bsx bsy bsz) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bnz=z_dim//self.block_size_z, bsx=self.block_size_x, bsy=self.block_size_y, bsz=self.block_size_z, h=self.num_heads, d=self.head_dim)
-        k = rearrange(self.k_proj(hidden_states), 'b (bnx bsx bny bsy bnz bsz) (h d) -> (b bnx bny bnz) (bsx bsy bsz) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bnz=z_dim//self.block_size_z, bsx=self.block_size_x, bsy=self.block_size_y, bsz=self.block_size_z, h=self.num_kv_heads, d=self.head_dim)
-        v = rearrange(self.v_proj(hidden_states), 'b (bnx bsx bny bsy bnz bsz) (h d) -> (b bnx bny bnz) (bsx bsy bsz) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bnz=z_dim//self.block_size_z, bsx=self.block_size_x, bsy=self.block_size_y, bsz=self.block_size_z, h=self.num_kv_heads, d=self.head_dim)
+        q = rearrange(self.q_proj(hidden_states), 'b (bnz bsz bnx bsx bny bsy) (h d) -> (b bnz bnx bny) (bsz bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bnz=z_dim//self.block_size_z, bsx=self.block_size_x, bsy=self.block_size_y, bsz=self.block_size_z, h=self.num_heads, d=self.head_dim)
+        k = rearrange(self.k_proj(hidden_states), 'b (bnz bsz bnx bsx bny bsy) (h d) -> (b bnz bnx bny) (bsz bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bnz=z_dim//self.block_size_z, bsx=self.block_size_x, bsy=self.block_size_y, bsz=self.block_size_z, h=self.num_kv_heads, d=self.head_dim)
+        v = rearrange(self.v_proj(hidden_states), 'b (bnz bsz bnx bsx bny bsy) (h d) -> (b bnz bnx bny) (bsz bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bnz=z_dim//self.block_size_z, bsx=self.block_size_x, bsy=self.block_size_y, bsz=self.block_size_z, h=self.num_kv_heads, d=self.head_dim)
 
         if flash_attn_varlen_func is None:
             raise ImportError("Please install Flash Attention via `pip install flash-attn --no-build-isolation` first")
