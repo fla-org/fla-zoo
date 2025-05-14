@@ -9,7 +9,7 @@ import numpy as np
 from transformers.modeling_outputs import BaseModelOutput
 from transformers.modeling_utils import PreTrainedModel
 from fla.layers.delta_net import DeltaNet
-from flazoo.models.attentions import VisionAttention
+from flazoo.models.attentions import FullAttention
 from ..utils import get_2d_sincos_pos_embed, modulate
 from ..embeddings import Gen2DTimestepEmbedder
 from ..embeddings import Gen2DPatchEmbed, Gen2DLabelEmbedder
@@ -47,7 +47,7 @@ class DeltaNetGen2DBlock(nn.Module):
         self.layer_idx = layer_idx
         self.norm1 = nn.LayerNorm(config.hidden_size, elementwise_affine=False, eps=config.layer_norm_eps)
         if config.attn is not None and layer_idx in config.attn['layers']:
-            self.attn = VisionAttention(
+            self.attn = FullAttention(
                 hidden_size=config.hidden_size,
                 num_heads=config.attn['num_heads'],
                 num_kv_heads=config.attn['num_kv_heads'],
