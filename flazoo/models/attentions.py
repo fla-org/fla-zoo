@@ -29,7 +29,7 @@ except ImportError:
     flash_attn_func = None
 
 try:
-    from natten import na2d
+    from natten.functional import na2d
 except ImportError:
     warnings.warn(
         "NATTEN is not installed. Please install it via `pip install natten",
