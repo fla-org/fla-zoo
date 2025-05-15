@@ -115,6 +115,8 @@ class DeltaNetVisionBlock(nn.Module):
             # manually calculate seqlen
             seq_len = (config.image_size // config.patch_size) ** 2
             self.scanner = LearnableScan(seq_len=seq_len)
+        
+        self.num_heads = config.num_heads
 
 
     def forward(
@@ -133,7 +135,7 @@ class DeltaNetVisionBlock(nn.Module):
             hidden_states = compress_seq(hidden_states, self.block_size)
 
         
-        hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training, scan_module=self.scanner if self.train_scan_type == "learnable-scan" else None)
+        hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training, scan_module=self.scanner if self.train_scan_type == "learnable-scan" else None, num_heads=self.num_heads)
         
         hidden_states, attentions, past_key_values = self.attn(
             hidden_states=hidden_states,
@@ -143,7 +145,7 @@ class DeltaNetVisionBlock(nn.Module):
             **kwargs
         )
         
-        hidden_states = prepare_hidden_states_for_merge(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training, layer_idx=self.layer_idx)
+        hidden_states = prepare_hidden_states_for_merge(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training, layer_idx=self.layer_idx, num_heads=self.num_heads)
 
         if self.compress_attention:
             hidden_states = decompress_seq(hidden_states, self.block_size)
@@ -487,6 +489,8 @@ class DeltaNetVideoBlock(nn.Module):
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
+        
+        self.num_heads = config.num_heads
 
     def forward(
         self,
