@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 
 import torch
@@ -267,8 +268,8 @@ def multi_head_split_2d_torch(hidden_states: torch.Tensor, num_heads: int):
     PyTorch implementation of multi-head scanning
     - Divides heads into 4 equal groups, each with a different scanning direction:
       - Group 1 (0 to n/4-1): Original sequence order
-      - Group 2 (n/4 to n/2-1): Sequence reversal
-      - Group 3 (n/2 to 3n/4-1): 2D transpose
+      - Group 2 (n/4 to n/2-1): 2D transpose
+      - Group 3 (n/2 to 3n/4-1): Sequence reversal
       - Group 4 (3n/4 to n-1): 2D transpose + reversal
     
     Args:
@@ -294,21 +295,23 @@ def multi_head_split_2d_torch(hidden_states: torch.Tensor, num_heads: int):
     # Group 1: Keep original order
     result[:, :, :dim_per_group] = hidden_states[:, :, :dim_per_group]
     
-    # Group 2: Sequence reversal - efficiently implemented with torch.flip
-    result[:, :, dim_per_group:2*dim_per_group] = torch.flip(
-        hidden_states[:, :, dim_per_group:2*dim_per_group], 
-        dims=[1]
-    )
-    
     # Prepare for 2D operations
     hw = int(math.sqrt(L))
     assert hw * hw == L, f"Sequence length {L} must be a perfect square for 2D operations"
     
-    result[:, :, 2*dim_per_group:3*dim_per_group] = einops.rearrange(
-        hidden_states[:, :, 2*dim_per_group:3*dim_per_group],
+    # Group 2: 2D transpose
+    result[:, :, dim_per_group:2*dim_per_group] = einops.rearrange(
+        hidden_states[:, :, dim_per_group:2*dim_per_group],
         'b (h w) d -> b (w h) d', h=hw, w=hw
     )
+    
+    # Group 3: Sequence reversal
+    result[:, :, 2*dim_per_group:3*dim_per_group] = torch.flip(
+        hidden_states[:, :, 2*dim_per_group:3*dim_per_group], 
+        dims=[1]
+    )
 
+    # Group 4: 2D transpose + reversal
     result[:, :, 3*dim_per_group:] = torch.flip(
         einops.rearrange(
             hidden_states[:, :, 3*dim_per_group:],
@@ -326,8 +329,8 @@ def multi_head_merge_2d_torch(hidden_states: torch.Tensor, num_heads: int):
     - Restores the original ordering of the hidden states after processing
     - Each group of heads is merged back to the original sequence order:
       - Group 1: Original order
-      - Group 2: Sequence reversal
-      - Group 3: 2D transpose
+      - Group 2: 2D transpose
+      - Group 3: Sequence reversal
       - Group 4: 2D transpose + reversal
     
     Args:
@@ -353,20 +356,22 @@ def multi_head_merge_2d_torch(hidden_states: torch.Tensor, num_heads: int):
     # Group 1: Keep original order
     result[:, :, :dim_per_group] = hidden_states[:, :, :dim_per_group]
     
-    # Group 2: Restore from sequence reversal
-    result[:, :, dim_per_group:2*dim_per_group] = torch.flip(
-        hidden_states[:, :, dim_per_group:2*dim_per_group], 
-        dims=[1]
-    )
-    
     # Prepare for 2D operations
     hw = int(math.sqrt(L))
     
-    result[:, :, 2*dim_per_group:3*dim_per_group] = einops.rearrange(
-        hidden_states[:, :, 2*dim_per_group:3*dim_per_group],
+    # Group 2: Restore from 2D transpose
+    result[:, :, dim_per_group:2*dim_per_group] = einops.rearrange(
+        hidden_states[:, :, dim_per_group:2*dim_per_group],
         'b (w h) d -> b (h w) d', h=hw, w=hw
     )
+    
+    # Group 3: Restore from sequence reversal
+    result[:, :, 2*dim_per_group:3*dim_per_group] = torch.flip(
+        hidden_states[:, :, 2*dim_per_group:3*dim_per_group], 
+        dims=[1]
+    )
 
+    # Group 4: Restore from 2D transpose + reversal
     result[:, :, 3*dim_per_group:] = einops.rearrange(
         torch.flip(hidden_states[:, :, 3*dim_per_group:], dims=[1]),
         'b (w h) d -> b (h w) d', h=hw, w=hw
@@ -450,4 +455,3 @@ class LearnableScan(nn.Module):
         x_permuted = torch.matmul(perm_matrix, x)  # (batch, seq_len, dim)
             
         return x_permuted
-
