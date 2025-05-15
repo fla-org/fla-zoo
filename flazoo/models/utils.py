@@ -91,9 +91,7 @@ def prepare_hidden_states_for_merge(hidden_states: torch.Tensor, train_scan_type
         else:
             B, L, D = hidden_states.shape
             hw = int(math.sqrt(L))
-            hidden_states = einops.rearrange(hidden_states, "b (h w) d -> b h w d", h=hw, w=hw)
-            hidden_states = hidden_states.transpose(1, 2)
-            hidden_states = einops.rearrange(hidden_states, "b w h d -> b (w h) d")
+            hidden_states = einops.rearrange(hidden_states, "b (h w) d -> b w h d", h=hw, w=hw)
         
         return hidden_states
 
