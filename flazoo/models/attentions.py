@@ -218,7 +218,8 @@ class Block1DAttention(nn.Module):
 class Block2DAttention(nn.Module):
     """
     Block 2D Attention \\
-    For 2D sequence, attention calculated within each 2D block
+    For 2D sequence, attention calculated within each 2D block \\
+    Optional feature: shift blocks before attention computation to capture cross-block information
     """
 
     def __init__(
@@ -228,6 +229,7 @@ class Block2DAttention(nn.Module):
         num_kv_heads: Optional[int] = None,
         block_size_x: int = 32,
         block_size_y: int = 32,
+        shift_block: bool = False,  # Whether to shift blocks before attention
         head_dim: int = None,
         norm_first: bool = False,
         norm_eps: float = 1e-5,
@@ -247,11 +249,17 @@ class Block2DAttention(nn.Module):
         else:
             self.head_dim = head_dim
         self.kv_dim = self.num_kv_heads * self.head_dim
-        self.kv_dim = self.num_kv_heads * self.head_dim
         self.norm_first = norm_first
         self.layer_idx = layer_idx
         self.block_size_x = block_size_x
         self.block_size_y = block_size_y
+        self.shift_block = shift_block
+        
+        # Calculate shift sizes if shift_block is enabled
+        # Find closest multiple of 3 to half of block size
+        if self.shift_block:
+            self.shift_size_x = 1 + self.layer_idx % (self.block_size_x - 1)
+            self.shift_size_y = 1 + self.layer_idx % (self.block_size_y - 1)
 
         if norm_first:
             self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
@@ -282,6 +290,21 @@ class Block2DAttention(nn.Module):
         assert x_dim % self.block_size_x == 0, f"X dim size {x_dim} is not divisible by block size {self.block_size_x}"
         assert y_dim % self.block_size_y == 0, f"Y dim size {y_dim} is not divisible by block size {self.block_size_y}"
 
+        # Apply shifting if enabled
+        if self.shift_block:
+            # Reshape to 2D spatial dimensions for shift operation
+            hidden_states_2d = hidden_states.view(batch_size, x_dim, y_dim, -1)
+            
+            # Cyclic shift operation
+            shifted_hidden_states = torch.roll(
+                hidden_states_2d, 
+                shifts=(-self.shift_size_x, -self.shift_size_y), 
+                dims=(1, 2)
+            )
+            
+            # Convert back to sequence format
+            hidden_states = shifted_hidden_states.view(batch_size, q_len, -1)
+        
         q = rearrange(self.q_proj(hidden_states), 'b (bnx bsx bny bsy) (h d) -> (b bnx bny) (bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bsx=self.block_size_x, bsy=self.block_size_y, h=self.num_heads, d=self.head_dim)
         k = rearrange(self.k_proj(hidden_states), 'b (bnx bsx bny bsy) (h d) -> (b bnx bny) (bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bsx=self.block_size_x, bsy=self.block_size_y, h=self.num_kv_heads, d=self.head_dim)
         v = rearrange(self.v_proj(hidden_states), 'b (bnx bsx bny bsy) (h d) -> (b bnx bny) (bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bsx=self.block_size_x, bsy=self.block_size_y, h=self.num_kv_heads, d=self.head_dim)
@@ -289,12 +312,28 @@ class Block2DAttention(nn.Module):
         if flash_attn_varlen_func is None:
             raise ImportError("Please install Flash Attention via `pip install flash-attn --no-build-isolation` first")
 
+        # Compute attention using flash attention
         o = flash_attn_func(
             q, k, v,
             causal=False, # use non-causal attention for vision
             window_size=(-1, -1)
         )
+        
+        # Reshape output back to sequence format
         o = o.reshape(batch_size, q_len, self.hidden_size)
+        
+        # Reverse shift if shifting was applied
+        if self.shift_block:
+            o_2d = o.view(batch_size, x_dim, y_dim, -1)
+            # Reverse cyclic shift
+            o_2d = torch.roll(
+                o_2d, 
+                shifts=(self.shift_size_x, self.shift_size_y), 
+                dims=(1, 2)
+            )
+            o = o_2d.view(batch_size, q_len, -1)
+        
+        # Final projection
         o = self.o_proj(o)
 
         if not output_attentions:
