@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
-
+import math
 
 try:
     from moba.moba_efficient import moba_attn_varlen
