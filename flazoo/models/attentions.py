@@ -289,7 +289,7 @@ class Block2DAttention(nn.Module):
         if flash_attn_varlen_func is None:
             raise ImportError("Please install Flash Attention via `pip install flash-attn --no-build-isolation` first")
 
-        o = flash_attn_varlen_func(
+        o = flash_attn_func(
             q, k, v,
             causal=False, # use non-causal attention for vision
             window_size=(-1, -1)
@@ -382,7 +382,7 @@ class Block3DAttention(nn.Module):
         if flash_attn_varlen_func is None:
             raise ImportError("Please install Flash Attention via `pip install flash-attn --no-build-isolation` first")
 
-        o = flash_attn_varlen_func(
+        o = flash_attn_func(
             q, k, v,
             causal=False, # use non-causal attention for vision
             window_size=(-1, -1)
