@@ -261,7 +261,7 @@ def cross_merge_fn(y: torch.Tensor, in_channel_first=True, out_channel_first=Tru
     with torch.cuda.device(y.device):
         return CMF.apply(y, in_channel_first, out_channel_first, one_by_one, scans)
     
-
+@torch.compile
 def multi_head_split_2d_torch(hidden_states: torch.Tensor, num_heads: int):
     """
     PyTorch implementation of multi-head scanning
@@ -304,24 +304,22 @@ def multi_head_split_2d_torch(hidden_states: torch.Tensor, num_heads: int):
     hw = int(math.sqrt(L))
     assert hw * hw == L, f"Sequence length {L} must be a perfect square for 2D operations"
     
-    # Group 3: 2D transpose - efficient batch implementation
-    # Avoid using multiple view/reshape operations, use einops.rearrange directly
-    group3_data = hidden_states[:, :, 2*dim_per_group:3*dim_per_group]
     result[:, :, 2*dim_per_group:3*dim_per_group] = einops.rearrange(
-        group3_data, 'b (h w) d -> b (w h) d', h=hw, w=hw
+        hidden_states[:, :, 2*dim_per_group:3*dim_per_group],
+        'b (h w) d -> b (w h) d', h=hw, w=hw
     )
-    
-    # Group 4: 2D transpose + reversal - combined operation
-    group4_data = hidden_states[:, :, 3*dim_per_group:]
-    # First transpose
-    transposed = einops.rearrange(
-        group4_data, 'b (h w) d -> b (w h) d', h=hw, w=hw
+
+    result[:, :, 3*dim_per_group:] = torch.flip(
+        einops.rearrange(
+            hidden_states[:, :, 3*dim_per_group:],
+            'b (h w) d -> b (w h) d', h=hw, w=hw
+        ),
+        dims=[1]
     )
-    # Then flip
-    result[:, :, 3*dim_per_group:] = torch.flip(transposed, dims=[1])
     
     return result
 
+@torch.compile
 def multi_head_merge_2d_torch(hidden_states: torch.Tensor, num_heads: int):
     """
     PyTorch implementation for merging results from multi-head scanning
@@ -364,20 +362,14 @@ def multi_head_merge_2d_torch(hidden_states: torch.Tensor, num_heads: int):
     # Prepare for 2D operations
     hw = int(math.sqrt(L))
     
-    # Group 3: Restore from 2D transpose
-    group3_data = hidden_states[:, :, 2*dim_per_group:3*dim_per_group]
-    # Directly use einops.rearrange to avoid multiple view/reshape operations
     result[:, :, 2*dim_per_group:3*dim_per_group] = einops.rearrange(
-        group3_data, 'b (w h) d -> b (h w) d', h=hw, w=hw
+        hidden_states[:, :, 2*dim_per_group:3*dim_per_group],
+        'b (w h) d -> b (h w) d', h=hw, w=hw
     )
-    
-    # Group 4: Restore from 2D transpose + reversal
-    group4_data = hidden_states[:, :, 3*dim_per_group:]
-    # First undo the reversal
-    unflipped = torch.flip(group4_data, dims=[1])
-    # Then undo the transpose
+
     result[:, :, 3*dim_per_group:] = einops.rearrange(
-        unflipped, 'b (w h) d -> b (h w) d', h=hw, w=hw
+        torch.flip(hidden_states[:, :, 3*dim_per_group:], dims=[1]),
+        'b (w h) d -> b (h w) d', h=hw, w=hw
     )
     
     return result
