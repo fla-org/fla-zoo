@@ -8,10 +8,35 @@ import warnings
 import torch.nn as nn
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 from .scan import cross_scan_fn, cross_merge_fn
+from .scan import multi_head_2d_scan
 
 logger = logging.get_logger(__name__)
     
-def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, train_scan_type: str = "uni-scan", test_scan_type : str = "uni-scan", training: bool = True, random_level: str = "sample", scan_module: Optional[nn.Module] = None):
+def prepare_hidden_states_for_scan(
+    hidden_states: torch.Tensor, 
+    train_scan_type: str = "uni-scan", 
+    test_scan_type: str = "uni-scan", 
+    training: bool = True, 
+    random_level: str = "sample", 
+    num_heads: int = 16,
+    scan_module: Optional[nn.Module] = None
+) -> torch.Tensor:
+    """
+    Prepare hidden states for different scan types.
+    
+    Args:
+        hidden_states: Input tensor of shape [batch_size, seq_len, hidden_size]
+        train_scan_type: Scanning type to use during training
+        test_scan_type: Scanning type to use during evaluation
+        training: Whether in training mode
+        random_level: Level of randomization ("sample" or "batch") 
+        num_heads: Number of attention heads
+        scan_module: Optional module for learnable scanning
+        
+    Returns:
+        Processed hidden states ready for scanning
+    """
+
     # radnom level should be "sample" or "batch"
     assert random_level in ["sample", "batch"], "random_level should be 'sample' or 'batch'"
     scan_type = train_scan_type if training else test_scan_type
@@ -51,6 +76,9 @@ def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, train_scan_type:
         assert scan_module is not None, "scan_module should be provided for learnable-scan"
         return scan_module(hidden_states)
 
+    elif scan_type == "mh2d-scan":
+        return multi_head_2d_scan(hidden_states, num_heads=num_heads, operation="split")
+
     # cross-scan
     B, L, D  = hidden_states.shape
     hw = int(math.sqrt(L))
@@ -60,7 +88,28 @@ def prepare_hidden_states_for_scan(hidden_states: torch.Tensor, train_scan_type:
     hidden_states = einops.rearrange(hidden_states, "b l k d -> (b k) l d")
     return hidden_states
 
-def prepare_hidden_states_for_merge(hidden_states: torch.Tensor, train_scan_type: str = "uni-scan", test_scan_type : str = "uni-scan", training: bool = True, layer_idx: Optional[int] = None):
+def prepare_hidden_states_for_merge(
+    hidden_states: torch.Tensor, 
+    train_scan_type: str = "uni-scan", 
+    test_scan_type: str = "uni-scan", 
+    training: bool = True, 
+    num_heads: int = 16,
+    layer_idx: Optional[int] = None
+) -> torch.Tensor:
+    """
+    Prepare hidden states for merging after different scan types.
+    
+    Args:
+        hidden_states: Input tensor of shape [batch_size, seq_len, hidden_size]
+        train_scan_type: Scanning type used during training
+        test_scan_type: Scanning type used during evaluation
+        training: Whether currently in training mode
+        num_heads: Number of attention heads
+        layer_idx: Optional layer index for position-dependent operations
+        
+    Returns:
+        Processed hidden states after merging
+    """
     scan_type = train_scan_type if training else test_scan_type    
     # hidden_states shape should be: (BK, L, D), K=2 for bi-scan, K=1 for uni-scan, K=4 for cross-scan
     if scan_type == "uni-scan" or scan_type == "random-scan" or scan_type == "flip-scan" or scan_type == "learnable-scan":
@@ -94,6 +143,8 @@ def prepare_hidden_states_for_merge(hidden_states: torch.Tensor, train_scan_type
             hidden_states = einops.rearrange(hidden_states, "b (h w) d -> b w h d", h=hw, w=hw)
         
         return hidden_states
+    elif scan_type == "mh2d-scan":
+        return multi_head_2d_scan(hidden_states, num_heads=num_heads, operation="merge")
 
     # cross scan
 

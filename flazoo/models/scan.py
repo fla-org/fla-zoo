@@ -262,8 +262,177 @@ def cross_merge_fn(y: torch.Tensor, in_channel_first=True, out_channel_first=Tru
         return CMF.apply(y, in_channel_first, out_channel_first, one_by_one, scans)
     
 
+def multi_head_split_2d_torch(hidden_states: torch.Tensor, num_heads: int):
+    """
+    PyTorch implementation of multi-head scanning
+    - Divides heads into 4 equal groups, each with a different scanning direction:
+      - Group 1 (0 to n/4-1): Original sequence order
+      - Group 2 (n/4 to n/2-1): Sequence reversal
+      - Group 3 (n/2 to 3n/4-1): 2D transpose
+      - Group 4 (3n/4 to n-1): 2D transpose + reversal
+    
+    Args:
+        hidden_states: Input tensor of shape [batch_size, seq_len, hidden_size]
+        num_heads: Number of attention heads (must be divisible by 4)
+        
+    Returns:
+        Processed hidden states with different scanning patterns
+    """
+    B, L, D = hidden_states.shape
+    head_dim = D // num_heads
+    device = hidden_states.device
+    dtype = hidden_states.dtype
+    assert num_heads % 4 == 0, f"Number of heads {num_heads} must be divisible by 4"
+    
+    # Calculate dimensions for each group
+    heads_per_group = num_heads // 4
+    dim_per_group = heads_per_group * head_dim
+    
+    # Initialize result tensor
+    result = torch.empty_like(hidden_states)
+    
+    # Group 1: Keep original order
+    result[:, :, :dim_per_group] = hidden_states[:, :, :dim_per_group]
+    
+    # Group 2: Sequence reversal - efficiently implemented with torch.flip
+    result[:, :, dim_per_group:2*dim_per_group] = torch.flip(
+        hidden_states[:, :, dim_per_group:2*dim_per_group], 
+        dims=[1]
+    )
+    
+    # Prepare for 2D operations
+    hw = int(math.sqrt(L))
+    assert hw * hw == L, f"Sequence length {L} must be a perfect square for 2D operations"
+    
+    # Group 3: 2D transpose - efficient batch implementation
+    # Avoid using multiple view/reshape operations, use einops.rearrange directly
+    group3_data = hidden_states[:, :, 2*dim_per_group:3*dim_per_group]
+    result[:, :, 2*dim_per_group:3*dim_per_group] = einops.rearrange(
+        group3_data, 'b (h w) d -> b (w h) d', h=hw, w=hw
+    )
+    
+    # Group 4: 2D transpose + reversal - combined operation
+    group4_data = hidden_states[:, :, 3*dim_per_group:]
+    # First transpose
+    transposed = einops.rearrange(
+        group4_data, 'b (h w) d -> b (w h) d', h=hw, w=hw
+    )
+    # Then flip
+    result[:, :, 3*dim_per_group:] = torch.flip(transposed, dims=[1])
+    
+    return result
+
+def multi_head_merge_2d_torch(hidden_states: torch.Tensor, num_heads: int):
+    """
+    PyTorch implementation for merging results from multi-head scanning
+    - Restores the original ordering of the hidden states after processing
+    - Each group of heads is merged back to the original sequence order:
+      - Group 1: Original order
+      - Group 2: Sequence reversal
+      - Group 3: 2D transpose
+      - Group 4: 2D transpose + reversal
+    
+    Args:
+        hidden_states: Processed hidden states of shape [batch_size, seq_len, hidden_size]
+        num_heads: Number of attention heads (must be divisible by 4)
+        
+    Returns:
+        Merged hidden states with original ordering restored
+    """
+    B, L, D = hidden_states.shape
+    device = hidden_states.device
+    head_dim = D // num_heads
+    dtype = hidden_states.dtype
+    assert num_heads % 4 == 0, f"Number of heads {num_heads} must be divisible by 4"
+    
+    # Calculate dimensions for each group
+    heads_per_group = num_heads // 4
+    dim_per_group = heads_per_group * head_dim
+    
+    # Initialize result tensor
+    result = torch.empty_like(hidden_states)
+    
+    # Group 1: Keep original order
+    result[:, :, :dim_per_group] = hidden_states[:, :, :dim_per_group]
+    
+    # Group 2: Restore from sequence reversal
+    result[:, :, dim_per_group:2*dim_per_group] = torch.flip(
+        hidden_states[:, :, dim_per_group:2*dim_per_group], 
+        dims=[1]
+    )
+    
+    # Prepare for 2D operations
+    hw = int(math.sqrt(L))
+    
+    # Group 3: Restore from 2D transpose
+    group3_data = hidden_states[:, :, 2*dim_per_group:3*dim_per_group]
+    # Directly use einops.rearrange to avoid multiple view/reshape operations
+    result[:, :, 2*dim_per_group:3*dim_per_group] = einops.rearrange(
+        group3_data, 'b (w h) d -> b (h w) d', h=hw, w=hw
+    )
+    
+    # Group 4: Restore from 2D transpose + reversal
+    group4_data = hidden_states[:, :, 3*dim_per_group:]
+    # First undo the reversal
+    unflipped = torch.flip(group4_data, dims=[1])
+    # Then undo the transpose
+    result[:, :, 3*dim_per_group:] = einops.rearrange(
+        unflipped, 'b (w h) d -> b (h w) d', h=hw, w=hw
+    )
+    
+    return result
+
+# A wrapper function to handle both split and merge operations
+# and to choose between torch and triton backends
+# This function is designed to be universal and can be used for both splitting and merging operations
+
+def multi_head_2d_scan(
+    hidden_states: torch.Tensor, 
+    num_heads: int, 
+    backend: str = "torch",
+    operation: str = "split",
+    **kwargs
+) -> torch.Tensor:
+    """
+    Universal function for 2D multi-head scanning, supporting different backends and operations.
+    
+    Args:
+        hidden_states: Input tensor of shape [batch_size, seq_len, hidden_size]
+        num_heads: Number of attention heads (must be divisible by 4)
+        head_dim: Dimension of each attention head
+        backend: Which backend to use, currently supported: "torch", "triton" (if CUDA is available)
+        operation: Which operation to perform, either "split" or "merge"
+        **kwargs: Placeholder for additional parameters specific to the backend or operation
+    Raises:
+        ValueError: If the operation is not "split" or "merge"
+        
+    Returns:
+        Processed hidden states with different scanning patterns or merged back
+    """
+    # Validate operation parameter
+    valid_operations = ["split", "merge"]
+    if operation not in valid_operations:
+        raise ValueError(f"Operation must be one of {valid_operations}, got {operation}")
+    
+    # Validate backend parameter
+    valid_backends = ["torch", "triton"] 
+    if backend not in valid_backends:
+        raise ValueError(f"Backend must be one of {valid_backends}, got {backend}")
+    
+    # Handle the triton backend
+    if backend == "triton":
+        raise NotImplementedError("Triton backend is not implemented yet.")
+    # Handle the torch backend
+    else:  # backend == "torch"
+        if operation == "split":
+            output = multi_head_split_2d_torch(hidden_states, num_heads)
+        else:  # operation == "merge"
+            output = multi_head_merge_2d_torch(hidden_states, num_heads)
+    
+    return output
+
 class LearnableScan(nn.Module):
-    def __init__(self, seq_len: int, temperature: float = 1.0, init_scale: float = 1.0):
+    def __init__(self, seq_len: int, temperature: float = 1.0, init_scale: float = 10.0):
         super().__init__()
         self.seq_len = seq_len
         self.temperature = temperature
@@ -289,3 +458,4 @@ class LearnableScan(nn.Module):
         x_permuted = torch.matmul(perm_matrix, x)  # (batch, seq_len, dim)
             
         return x_permuted
+
