@@ -48,6 +48,20 @@ except ImportError:
 
 from .utils import _calc_chunks, compress_seq, decompress_seq
 
+try:
+    from torch.nn.attention.flex_attention import flex_attention
+    from torch.nn.attention.flex_attention import create_block_mask
+except ImportError:
+    warnings.warn(
+        "Flex Attention is not installed. Please install it via `pip install torch`",
+        category=ImportWarning
+    )
+    flex_attention = None
+
+
+def sliding_window_1d(b, h, q_idx, kv_idx, window_size):
+    return q_idx - kv_idx <= window_size
+
 """
 Vanilla Self-Attention
 Attention implementation used in hybrid model, adapted from https://github.com/fla-org/flash-linear-attention/blob/main/fla/layers/attn.py
@@ -453,6 +467,7 @@ class SlidingWindowAttention(nn.Module):
         head_dim: int = None,
         norm_first: bool = False,
         norm_eps: float = 1e-5,
+        backend: str = "flash_attn",
         layer_idx: int = None
     ):
         super().__init__()
@@ -472,6 +487,7 @@ class SlidingWindowAttention(nn.Module):
         self.norm_first = norm_first
         self.layer_idx = layer_idx
         self.window_size = window_size
+        self.backend = backend
 
         if norm_first:
             self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
@@ -492,19 +508,31 @@ class SlidingWindowAttention(nn.Module):
         if self.norm_first:
             hidden_states = self.norm(hidden_states)
 
-        q = rearrange(self.q_proj(hidden_states), 'b s (h d) -> b s h d', h=self.num_heads)
-        k = rearrange(self.k_proj(hidden_states), 'b s (h d) -> b s h d', h=self.num_kv_heads)
-        v = rearrange(self.v_proj(hidden_states), 'b s (h d) -> b s h d', h=self.num_kv_heads)
+        if self.backend == "flash_attn":
+            q = rearrange(self.q_proj(hidden_states), 'b s (h d) -> b s h d', h=self.num_heads)
+            k = rearrange(self.k_proj(hidden_states), 'b s (h d) -> b s h d', h=self.num_kv_heads)
+            v = rearrange(self.v_proj(hidden_states), 'b s (h d) -> b s h d', h=self.num_kv_heads)
+        elif self.backend == "flex_attn":
+            q = rearrange(self.q_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_heads)
+            k = rearrange(self.k_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_kv_heads)
+            v = rearrange(self.v_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_kv_heads)
 
         if flash_attn_func is None:
             raise ImportError("Please install Flash Attention via `pip install flash-attn --no-build-isolation` first")
 
         # Use Flash Attention with window_size parameter for sliding window attention
-        o = flash_attn_func(
-            q, k, v,
-            causal=False,
-            window_size=(self.window_size // 2, self.window_size // 2)  # symmetric window for non-causal attention
-        )
+        if self.backend == "flash_attn":
+            o = flash_attn_func(
+                q, k, v,
+                causal=False,
+                window_size=(self.window_size // 2, self.window_size // 2)  # symmetric window for non-causal attention
+            )
+        elif self.backend == "flex_attn":
+            block_mask = create_block_mask(sliding_window_1d, B=None, H=None, Q_LEN=seq_len, KV_LEN=seq_len)
+            o = flex_attention(
+                q, k, v,
+                block_mask=block_mask,
+            )
 
         o = o.reshape(batch_size, seq_len, self.hidden_size)
         o = self.o_proj(o)
