@@ -534,6 +534,10 @@ class Neighborhood2DAttention(nn.Module):
     ):
         super().__init__()
 
+        import logging
+        logging.warning("Using NATTEN for 2D data, this therotically is linear time and you may expect it to be MUCH faster than full attention, but actually not. \\")
+        logging.warning("See details in Table 1 from https://hao-ai-lab.github.io/blogs/sta/")
+
         self.num_heads = num_heads
         if num_kv_heads is None:
             self.num_kv_heads = self.num_heads
