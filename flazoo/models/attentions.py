@@ -58,9 +58,10 @@ except ImportError:
     )
     flex_attention = None
 
+WINDOW_SIZE = 256
 
-def sliding_window_1d(b, h, q_idx, kv_idx, window_size):
-    return q_idx - kv_idx <= window_size
+def sliding_window_1d(b, h, q_idx, kv_idx):
+    return q_idx - kv_idx <= WINDOW_SIZE
 
 """
 Vanilla Self-Attention
@@ -528,7 +529,10 @@ class SlidingWindowAttention(nn.Module):
                 window_size=(self.window_size // 2, self.window_size // 2)  # symmetric window for non-causal attention
             )
         elif self.backend == "flex_attn":
-            block_mask = create_block_mask(sliding_window_1d, B=None, H=None, Q_LEN=seq_len, KV_LEN=seq_len)
+            # change global varibale WINDOW_SIZE to self.window_size
+            global WINDOW_SIZE
+            WINDOW_SIZE = self.window_size
+            block_mask = create_block_mask(mask_mod=sliding_window_1d, B=None, H=None, Q_LEN=seq_len, KV_LEN=seq_len, device="cuda")
             o = flex_attention(
                 q, k, v,
                 block_mask=block_mask,
