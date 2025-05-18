@@ -51,6 +51,7 @@ from .utils import _calc_chunks, compress_seq, decompress_seq
 try:
     from torch.nn.attention.flex_attention import flex_attention
     from torch.nn.attention.flex_attention import create_block_mask
+    flex_attention = torch.compile(flex_attention, mode="max-autotune")
 except ImportError:
     warnings.warn(
         "Flex Attention is not installed. Please install it via `pip install torch`",
