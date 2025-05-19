@@ -59,10 +59,46 @@ except ImportError:
     )
     flex_attention = None
 
-WINDOW_SIZE = 256
+WINDOW_SIZE_1D = 256
+W_DIM = 14
+WINDOW_SIZE_2D_H = 16
+WINDOW_SIZE_2D_W = 16
+TILE_SIZE_2D_H = 8
+TILE_SIZE_2D_W = 8
 
 def sliding_window_1d(b, h, q_idx, kv_idx):
-    return (q_idx - kv_idx <= (WINDOW_SIZE // 2)) & (q_idx - kv_idx >= -(WINDOW_SIZE // 2))
+    return (q_idx - kv_idx <= (WINDOW_SIZE_1D // 2)) & (q_idx - kv_idx >= -(WINDOW_SIZE_1D // 2))
+
+def sliding_window_tile_2d(b, h, q_idx, kv_idx):
+    """
+    Determines if the block containing kv_idx is within the 2D block window
+    of the block containing q_idx.
+    q_idx and kv_idx are linear indices into the flattened 2D grid of pixels/tokens.
+    Assumes square blocks of side BLOCK_DIM_GLOBAL.
+    """
+    assert WINDOW_SIZE_2D_H % TILE_SIZE_2D_H == 0, f"WINDOW_SIZE_2D_X {WINDOW_SIZE_2D_H} is not divisible by TILE_SIZE_2D_X {TILE_SIZE_2D_H}"
+    assert WINDOW_SIZE_2D_W % TILE_SIZE_2D_W == 0, f"WINDOW_SIZE_2D_Y {WINDOW_SIZE_2D_W} is not divisible by TILE_SIZE_2D_Y {TILE_SIZE_2D_W}"
+    # 1. Convert linear q_idx (pixel index) to 2D pixel coordinates
+    q_pixel_row = q_idx // W_DIM
+    q_pixel_col = q_idx % W_DIM
+
+    # 2. Convert 2D pixel coordinates to 2D block coordinates
+    q_tile_row = q_pixel_row // TILE_SIZE_2D_H
+    q_tile_col = q_pixel_col // TILE_SIZE_2D_W
+
+    # 1. Convert linear kv_idx (pixel index) to 2D pixel coordinates
+    kv_pixel_row = kv_idx // W_DIM
+    kv_pixel_col = kv_idx % W_DIM
+
+    # 2. Convert 2D pixel coordinates to 2D block coordinates
+    kv_tile_row = kv_pixel_row // TILE_SIZE_2D_H
+    kv_tile_col = kv_pixel_col // TILE_SIZE_2D_W
+    
+    # 3. Check if kv_block is within the window centered at q_block
+    row_block_condition = torch.abs(q_tile_row - kv_tile_row) <= ((WINDOW_SIZE_2D_H // TILE_SIZE_2D_H) // 2)
+    col_block_condition = torch.abs(q_tile_col - kv_tile_col) <= ((WINDOW_SIZE_2D_W // TILE_SIZE_2D_W) // 2)
+
+    return row_block_condition & col_block_condition
 
 """
 Vanilla Self-Attention
@@ -251,8 +287,8 @@ class Block2DAttention(nn.Module):
         hidden_size: int = 2048,
         num_heads: int = 32,
         num_kv_heads: Optional[int] = None,
-        block_size_x: int = 32,
-        block_size_y: int = 32,
+        block_size_h: int = 32,
+        block_size_w: int = 32,
         shift_block: bool = False,  # Whether to shift blocks before attention
         head_dim: int = None,
         norm_first: bool = False,
@@ -275,18 +311,18 @@ class Block2DAttention(nn.Module):
         self.kv_dim = self.num_kv_heads * self.head_dim
         self.norm_first = norm_first
         self.layer_idx = layer_idx
-        self.block_size_x = block_size_x
-        self.block_size_y = block_size_y
+        self.block_size_h = block_size_h
+        self.block_size_w = block_size_w
         self.shift_block = shift_block
 
         import logging
-        logging.info(f"Using Block2DAttention with block size ({self.block_size_x}, {self.block_size_y}) and shift_block={self.shift_block}")
+        logging.info(f"Using Block2DAttention with block size ({self.block_size_h}, {self.block_size_w}) and shift_block={self.shift_block}")
         
         # Calculate shift sizes if shift_block is enabled
         # Find closest multiple of 3 to half of block size
         if self.shift_block:
-            self.shift_size_x = 1 + self.layer_idx % (self.block_size_x - 1)
-            self.shift_size_y = 1 + self.layer_idx % (self.block_size_y - 1)
+            self.shift_size_h = 1 + self.layer_idx % (self.block_size_h - 1)
+            self.shift_size_w = 1 + self.layer_idx % (self.block_size_w - 1)
 
         if norm_first:
             self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
@@ -299,8 +335,8 @@ class Block2DAttention(nn.Module):
         self,
         hidden_states: torch.Tensor,
         output_attentions: bool = False,
-        x_dim: int = None,
-        y_dim: int = None, # for custom 2d data size
+        h_dim: int = None,
+        w_dim: int = None, # for custom 2d data size
         **kwargs,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
 
@@ -309,32 +345,32 @@ class Block2DAttention(nn.Module):
         if self.norm_first:
             hidden_states = self.norm(hidden_states)
         
-        if x_dim is None:
-            x_dim = int(math.sqrt(q_len))
-        if y_dim is None:
-            y_dim = int(math.sqrt(q_len))
+        if h_dim is None:
+            h_dim = int(math.sqrt(q_len))
+        if w_dim is None:
+            w_dim = int(math.sqrt(q_len))
 
-        assert x_dim % self.block_size_x == 0, f"X dim size {x_dim} is not divisible by block size {self.block_size_x}"
-        assert y_dim % self.block_size_y == 0, f"Y dim size {y_dim} is not divisible by block size {self.block_size_y}"
+        assert h_dim % self.block_size_h == 0, f"X dim size {h_dim} is not divisible by block size {self.block_size_h}"
+        assert w_dim % self.block_size_w == 0, f"Y dim size {w_dim} is not divisible by block size {self.block_size_w}"
 
         # Apply shifting if enabled
         if self.shift_block:
             # Reshape to 2D spatial dimensions for shift operation
-            hidden_states_2d = hidden_states.view(batch_size, x_dim, y_dim, -1)
+            hidden_states_2d = hidden_states.view(batch_size, h_dim, w_dim, -1)
             
             # Cyclic shift operation
             shifted_hidden_states = torch.roll(
                 hidden_states_2d, 
-                shifts=(-self.shift_size_x, -self.shift_size_y), 
+                shifts=(-self.shift_size_h, -self.shift_size_w), 
                 dims=(1, 2)
             )
             
             # Convert back to sequence format
             hidden_states = shifted_hidden_states.view(batch_size, q_len, -1)
         
-        q = rearrange(self.q_proj(hidden_states), 'b (bnx bsx bny bsy) (h d) -> (b bnx bny) (bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bsx=self.block_size_x, bsy=self.block_size_y, h=self.num_heads, d=self.head_dim)
-        k = rearrange(self.k_proj(hidden_states), 'b (bnx bsx bny bsy) (h d) -> (b bnx bny) (bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bsx=self.block_size_x, bsy=self.block_size_y, h=self.num_kv_heads, d=self.head_dim)
-        v = rearrange(self.v_proj(hidden_states), 'b (bnx bsx bny bsy) (h d) -> (b bnx bny) (bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bsx=self.block_size_x, bsy=self.block_size_y, h=self.num_kv_heads, d=self.head_dim)
+        q = rearrange(self.q_proj(hidden_states), 'b (bnx bsx bny bsy) (h d) -> (b bnx bny) (bsx bsy) h d', bnx=h_dim//self.block_size_h, bny=w_dim//self.block_size_w, bsx=self.block_size_h, bsy=self.block_size_w, h=self.num_heads, d=self.head_dim)
+        k = rearrange(self.k_proj(hidden_states), 'b (bnx bsx bny bsy) (h d) -> (b bnx bny) (bsx bsy) h d', bnx=h_dim//self.block_size_h, bny=w_dim//self.block_size_w, bsx=self.block_size_h, bsy=self.block_size_w, h=self.num_kv_heads, d=self.head_dim)
+        v = rearrange(self.v_proj(hidden_states), 'b (bnx bsx bny bsy) (h d) -> (b bnx bny) (bsx bsy) h d', bnx=h_dim//self.block_size_h, bny=w_dim//self.block_size_w, bsx=self.block_size_h, bsy=self.block_size_w, h=self.num_kv_heads, d=self.head_dim)
 
         if flash_attn_varlen_func is None:
             raise ImportError("Please install Flash Attention via `pip install flash-attn --no-build-isolation` first")
@@ -351,11 +387,11 @@ class Block2DAttention(nn.Module):
         
         # Reverse shift if shifting was applied
         if self.shift_block:
-            o_2d = o.view(batch_size, x_dim, y_dim, -1)
+            o_2d = o.view(batch_size, h_dim, w_dim, -1)
             # Reverse cyclic shift
             o_2d = torch.roll(
                 o_2d, 
-                shifts=(self.shift_size_x, self.shift_size_y), 
+                shifts=(self.shift_size_h, self.shift_size_w), 
                 dims=(1, 2)
             )
             o = o_2d.view(batch_size, q_len, -1)
@@ -379,9 +415,9 @@ class Block3DAttention(nn.Module):
         hidden_size: int = 2048,
         num_heads: int = 32,
         num_kv_heads: Optional[int] = None,
-        block_size_x: int = 32,
-        block_size_y: int = 32,
-        block_size_z: int = 32,
+        block_size_h: int = 32,
+        block_size_w: int = 32,
+        block_size_t: int = 32,
         head_dim: int = None,
         norm_first: bool = False,
         norm_eps: float = 1e-5,
@@ -404,13 +440,13 @@ class Block3DAttention(nn.Module):
         self.kv_dim = self.num_kv_heads * self.head_dim
         self.norm_first = norm_first
         self.layer_idx = layer_idx
-        self.block_size_x = block_size_x
-        self.block_size_y = block_size_y
-        self.block_size_z = block_size_z
+        self.block_size_h = block_size_h
+        self.block_size_w = block_size_w
+        self.block_size_t = block_size_t
 
         # log
         import logging
-        logging.info(f"Using Block3DAttention with block size ({self.block_size_x}, {self.block_size_y}, {self.block_size_z})")
+        logging.info(f"Using Block3DAttention with block size ({self.block_size_t}, {self.block_size_h}, {self.block_size_w})")
 
         if norm_first:
             self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
@@ -423,9 +459,9 @@ class Block3DAttention(nn.Module):
         self,
         hidden_states: torch.Tensor,
         output_attentions: bool = False,
-        x_dim: int = None,
-        y_dim: int = None, 
-        z_dim: int = None, # for custom 3d data size
+        h_dim: int = None,
+        w_dim: int = None, 
+        t_dim: int = None, # for custom 3d data size
         **kwargs,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
 
@@ -434,20 +470,20 @@ class Block3DAttention(nn.Module):
         if self.norm_first:
             hidden_states = self.norm(hidden_states)
         
-        if x_dim is None:
-            x_dim = int(math.sqrt(q_len))
-        if y_dim is None:
-            y_dim = int(math.sqrt(q_len))
-        if z_dim is None:
-            z_dim = int(math.sqrt(q_len))
+        if h_dim is None:
+            h_dim = int(math.sqrt(q_len))
+        if w_dim is None:
+            w_dim = int(math.sqrt(q_len))
+        if t_dim is None:
+            t_dim = int(math.sqrt(q_len))
 
-        assert x_dim % self.block_size_x == 0, f"X dim size {x_dim} is not divisible by block size {self.block_size_x}"
-        assert y_dim % self.block_size_y == 0, f"Y dim size {y_dim} is not divisible by block size {self.block_size_y}"
-        assert z_dim % self.block_size_z == 0, f"Z dim size {z_dim} is not divisible by block size {self.block_size_z}"
+        assert h_dim % self.block_size_h == 0, f"X dim size {h_dim} is not divisible by block size {self.block_size_h}"
+        assert w_dim % self.block_size_w == 0, f"Y dim size {w_dim} is not divisible by block size {self.block_size_w}"
+        assert t_dim % self.block_size_t == 0, f"Z dim size {t_dim} is not divisible by block size {self.block_size_t}"
 
-        q = rearrange(self.q_proj(hidden_states), 'b (bnz bsz bnx bsx bny bsy) (h d) -> (b bnz bnx bny) (bsz bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bnz=z_dim//self.block_size_z, bsx=self.block_size_x, bsy=self.block_size_y, bsz=self.block_size_z, h=self.num_heads, d=self.head_dim)
-        k = rearrange(self.k_proj(hidden_states), 'b (bnz bsz bnx bsx bny bsy) (h d) -> (b bnz bnx bny) (bsz bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bnz=z_dim//self.block_size_z, bsx=self.block_size_x, bsy=self.block_size_y, bsz=self.block_size_z, h=self.num_kv_heads, d=self.head_dim)
-        v = rearrange(self.v_proj(hidden_states), 'b (bnz bsz bnx bsx bny bsy) (h d) -> (b bnz bnx bny) (bsz bsx bsy) h d', bnx=x_dim//self.block_size_x, bny=y_dim//self.block_size_y, bnz=z_dim//self.block_size_z, bsx=self.block_size_x, bsy=self.block_size_y, bsz=self.block_size_z, h=self.num_kv_heads, d=self.head_dim)
+        q = rearrange(self.q_proj(hidden_states), 'b (bnz bsz bnx bsx bny bsy) (h d) -> (b bnz bnx bny) (bsz bsx bsy) h d', bnx=h_dim//self.block_size_h, bny=w_dim//self.block_size_w, bnz=t_dim//self.block_size_t, bsx=self.block_size_h, bsy=self.block_size_w, bsz=self.block_size_t, h=self.num_heads, d=self.head_dim)
+        k = rearrange(self.k_proj(hidden_states), 'b (bnz bsz bnx bsx bny bsy) (h d) -> (b bnz bnx bny) (bsz bsx bsy) h d', bnx=h_dim//self.block_size_h, bny=w_dim//self.block_size_w, bnz=t_dim//self.block_size_t, bsx=self.block_size_h, bsy=self.block_size_w, bsz=self.block_size_t, h=self.num_kv_heads, d=self.head_dim)
+        v = rearrange(self.v_proj(hidden_states), 'b (bnz bsz bnx bsx bny bsy) (h d) -> (b bnz bnx bny) (bsz bsx bsy) h d', bnx=h_dim//self.block_size_h, bny=w_dim//self.block_size_w, bnz=t_dim//self.block_size_t, bsx=self.block_size_h, bsy=self.block_size_w, bsz=self.block_size_t, h=self.num_kv_heads, d=self.head_dim)
 
         if flash_attn_varlen_func is None:
             raise ImportError("Please install Flash Attention via `pip install flash-attn --no-build-isolation` first")
@@ -551,13 +587,112 @@ class SlidingWindowAttention(nn.Module):
             )
         elif self.backend == "flex_attn":
             # change global varibale WINDOW_SIZE to self.window_size
-            global WINDOW_SIZE
-            WINDOW_SIZE = self.window_size
+            global WINDOW_SIZE_1D
+            WINDOW_SIZE_1D = self.window_size
             block_mask = create_block_mask(mask_mod=sliding_window_1d, B=None, H=None, Q_LEN=seq_len, KV_LEN=seq_len, device="cuda")
             o = flex_attention(
                 q, k, v,
                 block_mask=block_mask,
             )
+
+        o = o.reshape(batch_size, seq_len, self.hidden_size)
+        o = self.o_proj(o)
+
+        if not output_attentions:
+            attentions = None
+
+        return o, attentions, None
+    
+class SlidingTileAttention2D(nn.Module):
+
+    """
+        Sliding Tile Attention \\
+        Sliding window attention for 2D used in hybrid model \\
+        Note that this is for 2D sequence. \\
+    """
+
+    def __init__(
+        self,
+        hidden_size: int = 2048,
+        num_heads: int = 32,
+        num_kv_heads: Optional[int] = None,
+        window_size_h: int = 16,
+        window_size_w: int = 16,
+        tile_size_h: int = 8,
+        tile_size_w: int = 8,
+        head_dim: int = None,
+        norm_first: bool = False,
+        norm_eps: float = 1e-5,
+        layer_idx: int = None
+    ):
+        super().__init__()
+
+        self.num_heads = num_heads
+        if num_kv_heads is None:
+            self.num_kv_heads = self.num_heads
+        else:
+            self.num_kv_heads = num_kv_heads
+        self.num_kv_groups = num_heads // self.num_kv_heads
+        self.hidden_size = hidden_size
+        if head_dim is None:
+            self.head_dim = self.hidden_size // self.num_heads
+        else:
+            self.head_dim = head_dim
+        self.kv_dim = self.num_kv_heads * self.head_dim
+        self.norm_first = norm_first
+        self.layer_idx = layer_idx
+        self.window_size_h = window_size_h
+        self.window_size_w = window_size_w
+        self.tile_size_h = tile_size_h
+        self.tile_size_w = tile_size_w
+
+        # log about backend and window size
+        import logging
+        logging.info(f"Using SlidingTileAttention2D with window size ({self.window_size_h}, {self.window_size_w}) and tile size ({self.tile_size_h}, {self.tile_size_w})")
+
+        if norm_first:
+            self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
+        self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
+        self.k_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
+        self.v_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
+        self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        output_attentions: bool = False,
+        **kwargs,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        
+        batch_size, seq_len, _ = hidden_states.size()
+
+        if self.norm_first:
+            hidden_states = self.norm(hidden_states)
+
+        q = rearrange(self.q_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_heads)
+        k = rearrange(self.k_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_kv_heads)
+        v = rearrange(self.v_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_kv_heads)
+
+        if flex_attention is None:
+            raise ImportError("Please install Flex Attention via `pip install torch` first")
+
+
+        # change global varibale WINDOW_SIZE to self.
+        # TODO: this mask creation could be cached
+        global WINDOW_SIZE_2D_H
+        global WINDOW_SIZE_2D_W
+        global TILE_SIZE_2D_H
+        global TILE_SIZE_2D_W
+        WINDOW_SIZE_2D_H = self.window_size_h
+        WINDOW_SIZE_2D_W = self.window_size_w
+        TILE_SIZE_2D_H = self.tile_size_h
+        TILE_SIZE_2D_W = self.tile_size_w
+        # create block mask
+        block_mask = create_block_mask(mask_mod=sliding_window_tile_2d, B=None, H=None, Q_LEN=seq_len, KV_LEN=seq_len, device="cuda")
+        o = flex_attention(
+            q, k, v,
+            block_mask=block_mask,
+        )
 
         o = o.reshape(batch_size, seq_len, self.hidden_size)
         o = self.o_proj(o)
@@ -900,8 +1035,8 @@ def get_attn(config, layer_idx):
             hidden_size=config.hidden_size,
             num_heads=config.attn['num_heads'],
             num_kv_heads=config.attn['num_kv_heads'],
-            block_size_x=config.attn['block_size_x'],
-            block_size_y=config.attn['block_size_y'],
+            block_size_h=config.attn['block_size_x'],
+            block_size_w=config.attn['block_size_y'],
             layer_idx=layer_idx
         )
     elif attn_type == "sw_attn":
