@@ -51,7 +51,7 @@ from .utils import _calc_chunks, compress_seq, decompress_seq
 try:
     from torch.nn.attention.flex_attention import flex_attention
     from torch.nn.attention.flex_attention import create_block_mask
-    flex_attention = torch.compile(flex_attention, mode="max-autotune")
+    flex_attention = torch.compile(flex_attention)
 except ImportError:
     warnings.warn(
         "Flex Attention is not installed. Please install it via `pip install torch`",
@@ -62,7 +62,7 @@ except ImportError:
 WINDOW_SIZE = 256
 
 def sliding_window_1d(b, h, q_idx, kv_idx):
-    return q_idx - kv_idx <= (WINDOW_SIZE // 2) and q_idx - kv_idx >= -(WINDOW_SIZE // 2)
+    return (q_idx - kv_idx <= (WINDOW_SIZE // 2)) & (q_idx - kv_idx >= -(WINDOW_SIZE // 2))
 
 """
 Vanilla Self-Attention
@@ -98,6 +98,10 @@ class FullAttention(nn.Module):
         self.kv_dim = self.num_kv_heads * self.head_dim
         self.norm_first = norm_first
         self.layer_idx = layer_idx
+
+        # log
+        import logging
+        logging.info(f"Using FullAttention")
 
         if norm_first:
             self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
@@ -175,6 +179,10 @@ class Block1DAttention(nn.Module):
         self.norm_first = norm_first
         self.layer_idx = layer_idx
         self.block_size = block_size
+
+        # log
+        import logging
+        logging.info(f"Using Block1DAttention with block size {self.block_size}")
 
         if norm_first:
             self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
@@ -270,6 +278,9 @@ class Block2DAttention(nn.Module):
         self.block_size_x = block_size_x
         self.block_size_y = block_size_y
         self.shift_block = shift_block
+
+        import logging
+        logging.info(f"Using Block2DAttention with block size ({self.block_size_x}, {self.block_size_y}) and shift_block={self.shift_block}")
         
         # Calculate shift sizes if shift_block is enabled
         # Find closest multiple of 3 to half of block size
@@ -397,6 +408,10 @@ class Block3DAttention(nn.Module):
         self.block_size_y = block_size_y
         self.block_size_z = block_size_z
 
+        # log
+        import logging
+        logging.info(f"Using Block3DAttention with block size ({self.block_size_x}, {self.block_size_y}, {self.block_size_z})")
+
         if norm_first:
             self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
         self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
@@ -491,6 +506,11 @@ class SlidingWindowAttention(nn.Module):
         self.window_size = window_size
         self.backend = backend
 
+        # log about backend and window size
+        import logging
+        logging.info(f"Using {self.backend} backend for sliding window attention with window size {self.window_size}")
+        logging.info(f"Note that this is for 1D sequence. Although it can be used for 2D image and 3D video.")
+
         if norm_first:
             self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
         self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
@@ -568,7 +588,7 @@ class Neighborhood2DAttention(nn.Module):
         super().__init__()
 
         import logging
-        logging.warning("Using NATTEN for 2D data, this therotically is linear time and you may expect it to be MUCH faster than full attention, but actually not. \\")
+        logging.warning("Using NATTEN for 2D data, this therotically is linear time and you may expect it to be MUCH faster than full attention, but actually nope. \\")
         logging.warning("See details in Table 1 from https://hao-ai-lab.github.io/blogs/sta/")
 
         self.num_heads = num_heads
@@ -588,6 +608,10 @@ class Neighborhood2DAttention(nn.Module):
         self.layer_idx = layer_idx
         self.block_size_x = block_size_x
         self.block_size_y = block_size_y
+
+        # log
+        import logging
+        logging.info(f"Using Neighborhood2DAttention with block size ({self.block_size_x}, {self.block_size_y})")
 
         if norm_first:
             self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
