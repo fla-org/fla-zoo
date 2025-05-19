@@ -623,6 +623,7 @@ class SlidingTileAttention2D(nn.Module):
         head_dim: int = None,
         norm_first: bool = False,
         norm_eps: float = 1e-5,
+        seq_len: int = 256,
         layer_idx: int = None
     ):
         super().__init__()
@@ -646,6 +647,12 @@ class SlidingTileAttention2D(nn.Module):
         self.tile_size_h = tile_size_h
         self.tile_size_w = tile_size_w
 
+        self.seq_len = seq_len
+
+        assert self.seq_len is not None, "seq_len must be provided for STA 2D"
+        assert self.seq_len % (self.window_size_h * self.window_size_w) == 0, f"seq_len {self.seq_len} is not divisible by (WINDOW_SIZE_2D_H * WINDOW_SIZE_2D_W) {self.window_size_h * self.window_size_w}"
+        assert self.seq_len % (self.tile_size_h * self.tile_size_w) == 0, f"seq_len {self.seq_len} is not divisible by (TILE_SIZE_2D_H * TILE_SIZE_2D_W) {self.tile_size_h * self.tile_size_w}"
+
         # log about backend and window size
         import logging
         logging.info(f"Using SlidingTileAttention2D with window size ({self.window_size_h}, {self.window_size_w}) and tile size ({self.tile_size_h}, {self.tile_size_w})")
@@ -656,6 +663,17 @@ class SlidingTileAttention2D(nn.Module):
         self.k_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
         self.v_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
         self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
+
+        global WINDOW_SIZE_2D_H
+        global WINDOW_SIZE_2D_W
+        global TILE_SIZE_2D_H
+        global TILE_SIZE_2D_W
+        WINDOW_SIZE_2D_H = self.window_size_h
+        WINDOW_SIZE_2D_W = self.window_size_w
+        TILE_SIZE_2D_H = self.tile_size_h
+        TILE_SIZE_2D_W = self.tile_size_w
+        # create block mask
+        self.block_mask = create_block_mask(mask_mod=sliding_window_tile_2d, B=None, H=None, Q_LEN=self.seq_len, KV_LEN=self.seq_len, device="cuda")
 
     def forward(
         self,
@@ -676,22 +694,9 @@ class SlidingTileAttention2D(nn.Module):
         if flex_attention is None:
             raise ImportError("Please install Flex Attention via `pip install torch` first")
 
-
-        # change global varibale WINDOW_SIZE to self.
-        # TODO: this mask creation could be cached
-        global WINDOW_SIZE_2D_H
-        global WINDOW_SIZE_2D_W
-        global TILE_SIZE_2D_H
-        global TILE_SIZE_2D_W
-        WINDOW_SIZE_2D_H = self.window_size_h
-        WINDOW_SIZE_2D_W = self.window_size_w
-        TILE_SIZE_2D_H = self.tile_size_h
-        TILE_SIZE_2D_W = self.tile_size_w
-        # create block mask
-        block_mask = create_block_mask(mask_mod=sliding_window_tile_2d, B=None, H=None, Q_LEN=seq_len, KV_LEN=seq_len, device="cuda")
         o = flex_attention(
             q, k, v,
-            block_mask=block_mask,
+            block_mask=self.block_mask,
         )
 
         o = o.reshape(batch_size, seq_len, self.hidden_size)
