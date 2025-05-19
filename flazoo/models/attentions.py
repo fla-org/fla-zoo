@@ -62,7 +62,7 @@ except ImportError:
 WINDOW_SIZE = 256
 
 def sliding_window_1d(b, h, q_idx, kv_idx):
-    return q_idx - kv_idx <= WINDOW_SIZE
+    return q_idx - kv_idx <= (WINDOW_SIZE // 2) and q_idx - kv_idx >= -(WINDOW_SIZE // 2)
 
 """
 Vanilla Self-Attention
