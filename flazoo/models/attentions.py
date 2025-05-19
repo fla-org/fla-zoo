@@ -521,6 +521,7 @@ class SlidingWindowAttention(nn.Module):
         norm_first: bool = False,
         norm_eps: float = 1e-5,
         backend: str = "flash_attn",
+        seq_len: Optional[int] = None,
         layer_idx: int = None
     ):
         super().__init__()
@@ -541,6 +542,14 @@ class SlidingWindowAttention(nn.Module):
         self.layer_idx = layer_idx
         self.window_size = window_size
         self.backend = backend
+        self.seq_len = seq_len
+
+        if self.backend == "flex_attn":
+            assert self.seq_len is not None, "seq_len must be provided for flex_attn"
+            global WINDOW_SIZE_1D
+            WINDOW_SIZE_1D = self.window_size
+            # cache the block mask.
+            self.block_mask = create_block_mask(mask_mod=sliding_window_1d, B=None, H=None, Q_LEN=self.seq_len, KV_LEN=self.seq_len, device="cuda")
 
         # log about backend and window size
         import logging
@@ -587,12 +596,9 @@ class SlidingWindowAttention(nn.Module):
             )
         elif self.backend == "flex_attn":
             # change global varibale WINDOW_SIZE to self.window_size
-            global WINDOW_SIZE_1D
-            WINDOW_SIZE_1D = self.window_size
-            block_mask = create_block_mask(mask_mod=sliding_window_1d, B=None, H=None, Q_LEN=seq_len, KV_LEN=seq_len, device="cuda")
             o = flex_attention(
                 q, k, v,
-                block_mask=block_mask,
+                block_mask=self.block_mask,
             )
 
         o = o.reshape(batch_size, seq_len, self.hidden_size)
