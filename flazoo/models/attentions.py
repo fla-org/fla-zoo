@@ -78,27 +78,28 @@ def sliding_window_tile_2d(b, h, q_idx, kv_idx):
     """
     assert WINDOW_SIZE_2D_H % TILE_SIZE_2D_H == 0, f"WINDOW_SIZE_2D_X {WINDOW_SIZE_2D_H} is not divisible by TILE_SIZE_2D_X {TILE_SIZE_2D_H}"
     assert WINDOW_SIZE_2D_W % TILE_SIZE_2D_W == 0, f"WINDOW_SIZE_2D_Y {WINDOW_SIZE_2D_W} is not divisible by TILE_SIZE_2D_Y {TILE_SIZE_2D_W}"
+    assert (WINDOW_SIZE_2D_H - TILE_SIZE_2D_H) % 2 == 0, f"WINDOW_SIZE_2D_X {WINDOW_SIZE_2D_H} - TILE_SIZE_2D_X {TILE_SIZE_2D_H} is not divisible by 2"
+    assert (WINDOW_SIZE_2D_W - TILE_SIZE_2D_W) % 2 == 0, f"WINDOW_SIZE_2D_Y {WINDOW_SIZE_2D_W} - TILE_SIZE_2D_Y {TILE_SIZE_2D_W} is not divisible by 2"
     # 1. Convert linear q_idx (pixel index) to 2D pixel coordinates
     q_pixel_row = q_idx // W_DIM
     q_pixel_col = q_idx % W_DIM
 
-    # 2. Convert 2D pixel coordinates to 2D block coordinates
-    q_tile_row = q_pixel_row // TILE_SIZE_2D_H
-    q_tile_col = q_pixel_col // TILE_SIZE_2D_W
-
-    # 1. Convert linear kv_idx (pixel index) to 2D pixel coordinates
+    # 2. Convert linear kv_idx (pixel index) to 2D pixel coordinates
     kv_pixel_row = kv_idx // W_DIM
     kv_pixel_col = kv_idx % W_DIM
 
-    # 2. Convert 2D pixel coordinates to 2D block coordinates
-    kv_tile_row = kv_pixel_row // TILE_SIZE_2D_H
-    kv_tile_col = kv_pixel_col // TILE_SIZE_2D_W
-    
-    # 3. Check if kv_block is within the window centered at q_block
-    row_block_condition = torch.abs(q_tile_row - kv_tile_row) <= ((WINDOW_SIZE_2D_H // TILE_SIZE_2D_H) // 2)
-    col_block_condition = torch.abs(q_tile_col - kv_tile_col) <= ((WINDOW_SIZE_2D_W // TILE_SIZE_2D_W) // 2)
+    # 3. Calculate anchor and delta
+    delta_row = (WINDOW_SIZE_2D_H - TILE_SIZE_2D_H) // 2
+    delta_col = (WINDOW_SIZE_2D_W - TILE_SIZE_2D_W) // 2
 
-    return row_block_condition & col_block_condition
+    anchor_row = q_pixel_row - (q_pixel_row % TILE_SIZE_2D_H)
+    anchor_col = q_pixel_col - (q_pixel_col % TILE_SIZE_2D_W)
+    
+    # define boundary masks
+    row_mask = (kv_pixel_row >= anchor_row - delta_row) & (kv_pixel_row <= anchor_row + delta_row + TILE_SIZE_2D_H)
+    col_mask = (kv_pixel_col >= anchor_col - delta_col) & (kv_pixel_col <= anchor_col + delta_col + TILE_SIZE_2D_W)
+
+    return row_mask & col_mask
 
 """
 Vanilla Self-Attention
@@ -630,6 +631,7 @@ class SlidingTileAttention2D(nn.Module):
         norm_first: bool = False,
         norm_eps: float = 1e-5,
         seq_len: int = 256,
+        w_dim: Optional[int] = None,
         layer_idx: int = None
     ):
         super().__init__()
@@ -655,6 +657,11 @@ class SlidingTileAttention2D(nn.Module):
 
         self.seq_len = seq_len
 
+        self.w_dim = w_dim
+
+        if self.w_dim is None:
+            self.w_dim = int(math.sqrt(self.seq_len))
+
         assert self.seq_len is not None, "seq_len must be provided for STA 2D"
         assert self.seq_len % (self.window_size_h * self.window_size_w) == 0, f"seq_len {self.seq_len} is not divisible by (WINDOW_SIZE_2D_H * WINDOW_SIZE_2D_W) {self.window_size_h * self.window_size_w}"
         assert self.seq_len % (self.tile_size_h * self.tile_size_w) == 0, f"seq_len {self.seq_len} is not divisible by (TILE_SIZE_2D_H * TILE_SIZE_2D_W) {self.tile_size_h * self.tile_size_w}"
@@ -674,10 +681,13 @@ class SlidingTileAttention2D(nn.Module):
         global WINDOW_SIZE_2D_W
         global TILE_SIZE_2D_H
         global TILE_SIZE_2D_W
+        global W_DIM
         WINDOW_SIZE_2D_H = self.window_size_h
         WINDOW_SIZE_2D_W = self.window_size_w
         TILE_SIZE_2D_H = self.tile_size_h
         TILE_SIZE_2D_W = self.tile_size_w
+        W_DIM = self.w_dim
+        
         # create block mask
         self.block_mask = create_block_mask(mask_mod=sliding_window_tile_2d, B=None, H=None, Q_LEN=self.seq_len, KV_LEN=self.seq_len, device="cuda")
 
