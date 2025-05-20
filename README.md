@@ -94,8 +94,11 @@ pip install torch==2.6.0 torchvision==0.21.0 accelerate diffusers timm --use-pep
 
 pip install transformers datasets evaluate causal_conv1d einops scikit-learn wandb matplotlib
 
-# Install flash-attention
+# Install flash-attention, this is required if you like hybrid models
 pip install flash-attn --no-build-isolation --use-pep517
+
+# A handy tool to monitor GPU
+pip install nvitop
 
 pip install -U "huggingface_hub[cli]" --use-pep517
 pip install pillow==11.1.0 --use-pep517
