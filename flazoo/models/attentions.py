@@ -999,7 +999,7 @@ class MoBA(nn.Module):
         return o, attentions, None
 
 
-ATTN_LISTS = ["full_attn", "moba", "nsa", "block1d_attn", "block2d_attn", "sw_attn", "na2d_attn"]
+ATTN_LISTS = ["full_attn", "moba", "nsa", "block1d_attn", "block2d_attn", "sw_attn", "sta2d_attn", "na2d_attn"]
 def get_attn(config, layer_idx):
     """
     This is for full/local/sparse attention, not linear attention
@@ -1046,8 +1046,8 @@ def get_attn(config, layer_idx):
             hidden_size=config.hidden_size,
             num_heads=config.attn['num_heads'],
             num_kv_heads=config.attn['num_kv_heads'],
-            block_size_h=config.attn['block_size_x'],
-            block_size_w=config.attn['block_size_y'],
+            block_size_h=config.attn['block_size_h'],
+            block_size_w=config.attn['block_size_w'],
             layer_idx=layer_idx
         )
     elif attn_type == "sw_attn":
@@ -1056,6 +1056,18 @@ def get_attn(config, layer_idx):
             num_heads=config.attn['num_heads'],
             num_kv_heads=config.attn['num_kv_heads'],
             window_size=config.attn['window_size'],
+            layer_idx=layer_idx
+        )
+    elif attn_type == "sta2d_attn":
+        return SlidingTileAttention2D(
+            hidden_size=config.hidden_size,
+            num_heads=config.attn['num_heads'],
+            num_kv_heads=config.attn['num_kv_heads'],
+            window_size_h=config.attn['window_size_h'],
+            window_size_w=config.attn['window_size_w'],
+            tile_size_h=config.attn['tile_size_h'],
+            tile_size_w=config.attn['tile_size_w'],
+            seq_len=config.attn['seq_len'],
             layer_idx=layer_idx
         )
     elif attn_type == "na2d_attn":
