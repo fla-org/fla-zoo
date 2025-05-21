@@ -714,18 +714,24 @@ class SlidingTileAttention2D(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
+        h_dim: int = None,
+        w_dim: int = None,
         output_attentions: bool = False,
         **kwargs,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         
         batch_size, seq_len, _ = hidden_states.size()
 
+        if h_dim is None or w_dim is None:
+            h_dim = int(math.sqrt(seq_len))
+            w_dim = int(math.sqrt(seq_len))
+
         if self.norm_first:
             hidden_states = self.norm(hidden_states)
 
-        q = rearrange(self.q_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_heads)
-        k = rearrange(self.k_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_kv_heads)
-        v = rearrange(self.v_proj(hidden_states), 'b s (h d) -> b h s d', h=self.num_kv_heads)
+        q = rearrange(self.q_proj(hidden_states), 'b (nth th ntw tw) (h d) -> b h (nth ntw th tw) d', h=self.num_heads, nth=h_dim // self.tile_size_h, ntw=w_dim // self.tile_size_w, th=self.tile_size_h, tw=self.tile_size_w)
+        k = rearrange(self.k_proj(hidden_states), 'b (nth th ntw tw) (h d) -> b h (nth ntw th tw) d', h=self.num_kv_heads, nth=h_dim // self.tile_size_h, ntw=w_dim // self.tile_size_w, th=self.tile_size_h, tw=self.tile_size_w)
+        v = rearrange(self.v_proj(hidden_states), 'b (nth th ntw tw) (h d) -> b h (nth ntw th tw) d', h=self.num_kv_heads, nth=h_dim // self.tile_size_h, ntw=w_dim // self.tile_size_w, th=self.tile_size_h, tw=self.tile_size_w)
 
         if flex_attention is None:
             raise ImportError("Please install Flex Attention via `pip install torch` first")
@@ -734,8 +740,7 @@ class SlidingTileAttention2D(nn.Module):
             q, k, v,
             block_mask=self.block_mask,
         )
-
-        o = o.reshape(batch_size, seq_len, self.hidden_size)
+        o = rearrange(o, 'b h (nth ntw th tw) d -> b (nth th ntw tw) (h d)', h=self.num_heads, nth=h_dim // self.tile_size_h, ntw=w_dim // self.tile_size_w, th=self.tile_size_h, tw=self.tile_size_w)
         o = self.o_proj(o)
 
         if not output_attentions:
