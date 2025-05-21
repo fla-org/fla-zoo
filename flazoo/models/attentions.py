@@ -60,45 +60,64 @@ except ImportError:
     flex_attention = None
 
 WINDOW_SIZE_1D = 256
-W_DIM = 14
-WINDOW_SIZE_2D_H = 16
-WINDOW_SIZE_2D_W = 16
-TILE_SIZE_2D_H = 8
-TILE_SIZE_2D_W = 8
+W_DIM = 16
+WINDOW_SIZE_2D_H = 8
+WINDOW_SIZE_2D_W = 8
+TILE_SIZE_2D_H = 4
+TILE_SIZE_2D_W = 4
 
 def sliding_window_1d(b, h, q_idx, kv_idx):
     return (q_idx - kv_idx <= (WINDOW_SIZE_1D // 2)) & (q_idx - kv_idx >= -(WINDOW_SIZE_1D // 2))
 
 def sliding_window_tile_2d(b, h, q_idx, kv_idx):
-    """
-    Determines if the block containing kv_idx is within the 2D block window
-    of the block containing q_idx.
-    q_idx and kv_idx are linear indices into the flattened 2D grid of pixels/tokens.
-    Assumes square blocks of side BLOCK_DIM_GLOBAL.
-    """
     assert WINDOW_SIZE_2D_H % TILE_SIZE_2D_H == 0, f"WINDOW_SIZE_2D_X {WINDOW_SIZE_2D_H} is not divisible by TILE_SIZE_2D_X {TILE_SIZE_2D_H}"
     assert WINDOW_SIZE_2D_W % TILE_SIZE_2D_W == 0, f"WINDOW_SIZE_2D_Y {WINDOW_SIZE_2D_W} is not divisible by TILE_SIZE_2D_Y {TILE_SIZE_2D_W}"
-    assert (WINDOW_SIZE_2D_H - TILE_SIZE_2D_H) % 2 == 0, f"WINDOW_SIZE_2D_X {WINDOW_SIZE_2D_H} - TILE_SIZE_2D_X {TILE_SIZE_2D_H} is not divisible by 2"
-    assert (WINDOW_SIZE_2D_W - TILE_SIZE_2D_W) % 2 == 0, f"WINDOW_SIZE_2D_Y {WINDOW_SIZE_2D_W} - TILE_SIZE_2D_Y {TILE_SIZE_2D_W} is not divisible by 2"
-    # 1. Convert linear q_idx (pixel index) to 2D pixel coordinates
-    q_pixel_row = q_idx // W_DIM
-    q_pixel_col = q_idx % W_DIM
-
-    # 2. Convert linear kv_idx (pixel index) to 2D pixel coordinates
-    kv_pixel_row = kv_idx // W_DIM
-    kv_pixel_col = kv_idx % W_DIM
-
-    # 3. Calculate anchor and delta
-    delta_row = (WINDOW_SIZE_2D_H - TILE_SIZE_2D_H) // 2
-    delta_col = (WINDOW_SIZE_2D_W - TILE_SIZE_2D_W) // 2
-
-    anchor_row = q_pixel_row - (q_pixel_row % TILE_SIZE_2D_H)
-    anchor_col = q_pixel_col - (q_pixel_col % TILE_SIZE_2D_W)
     
-    # define boundary masks
-    row_mask = (kv_pixel_row >= anchor_row - delta_row) & (kv_pixel_row <= anchor_row + delta_row + TILE_SIZE_2D_H)
-    col_mask = (kv_pixel_col >= anchor_col - delta_col) & (kv_pixel_col <= anchor_col + delta_col + TILE_SIZE_2D_W)
+    def cdiv(a, b):
+        return (a + (b - 1)) // b
 
+    q_idx, kv_idx = q_idx + 1, kv_idx + 1
+    # first, we convert everything to tile representation
+    tile_numel = TILE_SIZE_2D_H * TILE_SIZE_2D_W
+    tile_idx_q = cdiv(q_idx, tile_numel)
+    tile_idx_kv = cdiv(kv_idx, tile_numel)
+    tile_row_q = tile_idx_q // (W_DIM // TILE_SIZE_2D_W)
+    tile_col_q = tile_idx_q % (W_DIM // TILE_SIZE_2D_W)
+    tile_row_kv = tile_idx_kv // (W_DIM // TILE_SIZE_2D_W)
+    tile_col_kv = tile_idx_kv % (W_DIM // TILE_SIZE_2D_W)
+    w_dim = W_DIM // TILE_SIZE_2D_W
+
+    window_size_h = WINDOW_SIZE_2D_H // TILE_SIZE_2D_H
+    window_size_w = WINDOW_SIZE_2D_W // TILE_SIZE_2D_W
+
+    window_size_left_row = window_size_h // 2
+    window_size_right_row = window_size_h // 2 + (
+        window_size_h % 2 - 1
+    )
+    window_size_left_col = window_size_w // 2
+    window_size_right_col = window_size_w // 2 + (
+        window_size_w % 2 - 1
+    )
+    
+    window_center_row = tile_row_q.clamp(
+        window_size_left_row, w_dim - 1 - window_size_right_row
+    )
+    window_center_col = tile_col_q.clamp(
+        window_size_left_col, w_dim - 1 - window_size_right_col
+    )
+
+    row_mask = (
+        tile_row_kv >= window_center_row - window_size_left_row
+    ) & (
+        tile_row_kv <= window_center_row + window_size_right_row
+    )
+
+    col_mask = (
+        tile_col_kv >= window_center_col - window_size_left_col
+    ) & (
+        tile_col_kv <= window_center_col + window_size_right_col
+    )
+    
     return row_mask & col_mask
 
 """
