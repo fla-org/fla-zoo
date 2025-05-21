@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 
 import triton
@@ -708,7 +709,7 @@ class SlidingTileAttention2D(nn.Module):
         W_DIM = self.w_dim
         
         # create block mask
-        self.block_mask = create_block_mask(mask_mod=sliding_window_tile_2d, B=None, H=None, Q_LEN=self.seq_len, KV_LEN=self.seq_len, device="cuda")
+        self.block_mask = create_block_mask(mask_mod=sliding_window_tile_2d, B=None, H=None, Q_LEN=self.seq_len, KV_LEN=self.seq_len, device="cuda", _compile=True)
 
     def forward(
         self,
