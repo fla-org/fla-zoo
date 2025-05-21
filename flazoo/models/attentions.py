@@ -675,6 +675,8 @@ class SlidingTileAttention2D(nn.Module):
         self.tile_size_h = tile_size_h
         self.tile_size_w = tile_size_w
 
+        assert (self.tile_size_h * self.tile_size_w) % 128 == 0, f"tile numel {self.tile_size_h * self.tile_size_w} is not divisible by 128, which is required for flex attention"
+
         self.seq_len = seq_len
 
         self.w_dim = w_dim
