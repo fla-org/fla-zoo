@@ -679,7 +679,6 @@ class SlidingTileAttention2D(nn.Module):
             self.w_dim = int(math.sqrt(self.seq_len))
 
         assert self.seq_len is not None, "seq_len must be provided for STA 2D"
-        assert self.seq_len % (self.window_size_h * self.window_size_w) == 0, f"seq_len {self.seq_len} is not divisible by (WINDOW_SIZE_2D_H * WINDOW_SIZE_2D_W) {self.window_size_h * self.window_size_w}"
         assert self.seq_len % (self.tile_size_h * self.tile_size_w) == 0, f"seq_len {self.seq_len} is not divisible by (TILE_SIZE_2D_H * TILE_SIZE_2D_W) {self.tile_size_h * self.tile_size_w}"
 
         # log about backend and window size
