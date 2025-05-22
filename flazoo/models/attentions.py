@@ -87,10 +87,12 @@ def sliding_window_tile_2d(b, h, q_idx, kv_idx):
     window_size_h = WINDOW_SIZE_2D_H // TILE_SIZE_2D_H
     window_size_w = WINDOW_SIZE_2D_W // TILE_SIZE_2D_W
 
-    window_size_left_row = window_size_h // 2 + (tile_row_q % 2) * (window_size_h % 2 - 1)
-    window_size_right_row = window_size_h // 2 + (1 - (tile_row_q % 2)) * (window_size_h % 2 - 1)
-    window_size_left_col = window_size_w // 2 + (tile_col_q % 2) * (window_size_w % 2 - 1)
-    window_size_right_col = window_size_w // 2 + (1 - (tile_col_q % 2)) * (window_size_w % 2 - 1 )
+    window_size_left_row = window_size_h // 2
+    window_size_right_row = window_size_h // 2 + (window_size_h % 2 - 1)
+    window_size_left_col = window_size_w // 2
+    window_size_right_col = window_size_w // 2 + (
+        window_size_w % 2 - 1
+    )
     
     window_center_row = tile_row_q.clamp(
         window_size_left_row, w_dim - 1 - window_size_right_row
