@@ -66,7 +66,6 @@ WINDOW_SIZE_2D_H = 8
 WINDOW_SIZE_2D_W = 8
 TILE_SIZE_2D_H = 4
 TILE_SIZE_2D_W = 4
-LAYER_IDX = 0
 
 def sliding_window_1d(b, h, q_idx, kv_idx):
     return (q_idx - kv_idx <= (WINDOW_SIZE_1D // 2)) & (q_idx - kv_idx >= -(WINDOW_SIZE_1D // 2))
@@ -88,10 +87,10 @@ def sliding_window_tile_2d(b, h, q_idx, kv_idx):
     window_size_h = WINDOW_SIZE_2D_H // TILE_SIZE_2D_H
     window_size_w = WINDOW_SIZE_2D_W // TILE_SIZE_2D_W
 
-    window_size_left_row = window_size_h // 2 + (LAYER_IDX % 2) * (window_size_h % 2 - 1)
-    window_size_right_row = window_size_h // 2 + (1 - (LAYER_IDX % 2)) * (window_size_h % 2 - 1)
-    window_size_left_col = window_size_w // 2 + (LAYER_IDX % 2) * (window_size_w % 2 - 1)
-    window_size_right_col = window_size_w // 2 + (1 - (LAYER_IDX % 2)) * (window_size_w % 2 - 1 )
+    window_size_left_row = window_size_h // 2 + (tile_row_q % 2) * (window_size_h % 2 - 1)
+    window_size_right_row = window_size_h // 2 + (1 - (tile_row_q % 2)) * (window_size_h % 2 - 1)
+    window_size_left_col = window_size_w // 2 + (tile_col_q % 2) * (window_size_w % 2 - 1)
+    window_size_right_col = window_size_w // 2 + (1 - (tile_col_q % 2)) * (window_size_w % 2 - 1 )
     
     window_center_row = tile_row_q.clamp(
         window_size_left_row, w_dim - 1 - window_size_right_row
@@ -682,7 +681,7 @@ class SlidingTileAttention2D(nn.Module):
 
         # log about backend and window size
         import logging
-        logging.info(f"Using SlidingTileAttention2D with window size ({self.window_size_h}, {self.window_size_w}) and tile size ({self.tile_size_h}, {self.tile_size_w}) at layer {self.layer_idx // 2}")
+        logging.info(f"Using SlidingTileAttention2D with window size ({self.window_size_h}, {self.window_size_w}) and tile size ({self.tile_size_h}, {self.tile_size_w})")
 
         if norm_first:
             self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
@@ -696,13 +695,11 @@ class SlidingTileAttention2D(nn.Module):
         global TILE_SIZE_2D_H
         global TILE_SIZE_2D_W
         global W_DIM
-        global LAYER_IDX
         WINDOW_SIZE_2D_H = self.window_size_h
         WINDOW_SIZE_2D_W = self.window_size_w
         TILE_SIZE_2D_H = self.tile_size_h
         TILE_SIZE_2D_W = self.tile_size_w
         W_DIM = self.w_dim
-        LAYER_IDX = self.layer_idx // 2 # bacause we are using hybrid.
         
         # create block mask
         self.block_mask = create_block_mask(mask_mod=sliding_window_tile_2d, B=None, H=None, Q_LEN=self.seq_len, KV_LEN=self.seq_len, device="cuda", _compile=True)
