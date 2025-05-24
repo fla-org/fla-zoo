@@ -71,8 +71,8 @@ def sliding_window_1d(b, h, q_idx, kv_idx):
     return (q_idx - kv_idx <= (WINDOW_SIZE_1D // 2)) & (q_idx - kv_idx >= -(WINDOW_SIZE_1D // 2))
 
 def sliding_window_tile_2d(b, h, q_idx, kv_idx):
-    assert WINDOW_SIZE_2D_H % TILE_SIZE_2D_H == 0, f"WINDOW_SIZE_2D_X {WINDOW_SIZE_2D_H} is not divisible by TILE_SIZE_2D_X {TILE_SIZE_2D_H}"
-    assert WINDOW_SIZE_2D_W % TILE_SIZE_2D_W == 0, f"WINDOW_SIZE_2D_Y {WINDOW_SIZE_2D_W} is not divisible by TILE_SIZE_2D_Y {TILE_SIZE_2D_W}"
+    assert WINDOW_SIZE_2D_H % TILE_SIZE_2D_H == 0, f"WINDOW_SIZE_2D_H {WINDOW_SIZE_2D_H} is not divisible by TILE_SIZE_2D_H {TILE_SIZE_2D_H}"
+    assert WINDOW_SIZE_2D_W % TILE_SIZE_2D_W == 0, f"WINDOW_SIZE_2D_W {WINDOW_SIZE_2D_W} is not divisible by TILE_SIZE_2D_W {TILE_SIZE_2D_W}"
     
     # first, we convert everything to tile representation
     tile_numel = TILE_SIZE_2D_H * TILE_SIZE_2D_W
