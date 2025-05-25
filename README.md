@@ -112,9 +112,7 @@ Some repos are needed if you want to go deeper. Below is a basic example illustr
 
 ```bash
 # clone and install MoBA
-git clone https://github.com/MoonshotAI/MoBA
-cd MoBA
-pip install .
+git clone git+https://github.com/MoonshotAI/MoBA.git
 ```
 
 Below is a table of these repos and what they are used for in `fla-zoo`.
