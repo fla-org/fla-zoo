@@ -611,6 +611,8 @@ class DeltaNetVideoModel(DeltaNetVideoPreTrainedModel):
 
         self.embeddings = VideoEmbeddings(config)
         self.encoder = DeltaNetVideoEncoder(config)
+        self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.pooler = Pooler(config)
 
         self.post_init()
 
@@ -646,11 +648,15 @@ class DeltaNetVideoModel(DeltaNetVideoPreTrainedModel):
 
         sequence_output = encoder_outputs[0]
 
+        sequence_output = self.layernorm(sequence_output)
+        pooled_output = self.pooler(sequence_output)
+
         if not return_dict:
             return (sequence_output,) + encoder_outputs[1:]
 
         return BaseModelOutput(
             last_hidden_state=sequence_output,
+            pooler_output=pooled_output,
             hidden_states=encoder_outputs.hidden_states,
             attentions=encoder_outputs.attentions,
         )
@@ -883,7 +889,6 @@ class DeltaNetForVideoClassification(DeltaNetVideoPreTrainedModel):
         self.backbone = DeltaNetVideoModel(config)
 
         # Classifier head
-        self.fc_norm = nn.LayerNorm(config.hidden_size)
         self.classifier = nn.Linear(config.hidden_size, config.num_classes) if config.num_classes > 0 else nn.Identity()
 
         self.post_init()
@@ -907,12 +912,8 @@ class DeltaNetForVideoClassification(DeltaNetVideoPreTrainedModel):
 
         sequence_output = outputs[0]
 
-        if self.fc_norm is not None:
-            sequence_output = self.fc_norm(sequence_output.mean(1))
-        else:
-            sequence_output = sequence_output[:, 0]
-
-        logits = self.classifier(sequence_output)
+        pooled_output = outputs.pooler_output
+        logits = self.classifier(pooled_output)
 
         loss = None
         if labels is not None:
