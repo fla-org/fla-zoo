@@ -3,6 +3,7 @@
 
 import triton
 import torch
+from torch import IntTensor, BoolTensor
 import warnings
 import torch.nn as nn
 import torch.nn.functional as F
@@ -61,59 +62,84 @@ except ImportError:
     flex_attention = None
 
 WINDOW_SIZE_1D = 256
-W_DIM = 16
-WINDOW_SIZE_2D_H = 8
-WINDOW_SIZE_2D_W = 8
-TILE_SIZE_2D_H = 4
-TILE_SIZE_2D_W = 4
 
 def sliding_window_1d(b, h, q_idx, kv_idx):
     return (q_idx - kv_idx <= (WINDOW_SIZE_1D // 2)) & (q_idx - kv_idx >= -(WINDOW_SIZE_1D // 2))
 
-def sliding_window_tile_2d(b, h, q_idx, kv_idx):
+def generate_sta_mask_2d(
+    H_DIM: int = 16,
+    W_DIM: int = 16,
+    WINDOW_SIZE_2D_H: int = 12,
+    WINDOW_SIZE_2D_W: int = 12,
+    TILE_SIZE_2D_H: int = 4,
+    TILE_SIZE_2D_W: int = 4,
+):
+    """
+    Generates a sliding tile attention mask for 2D sequence.
+    Args:
+        H_DIM (int): Height of the input 2D sequence.
+        W_DIM (int): Width of the input 2D sequence.
+        WINDOW_SIZE_2D_H (int): Height of the sliding window.
+        WINDOW_SIZE_2D_W (int): Width of the sliding window.
+        TILE_SIZE_2D_H (int): Height of the tile size.
+        TILE_SIZE_2D_W (int): Width of the tile size.
+    Returns:
+        mask (torch.Tensor): Sliding window attention mask for 2D sequence.
+    """
+    assert H_DIM % TILE_SIZE_2D_H == 0, f"H_DIM {H_DIM} is not divisible by TILE_SIZE_2D_H {TILE_SIZE_2D_H}"
+    assert W_DIM % TILE_SIZE_2D_W == 0, f"W_DIM {W_DIM} is not divisible by TILE_SIZE_2D_W {TILE_SIZE_2D_W}"
     assert WINDOW_SIZE_2D_H % TILE_SIZE_2D_H == 0, f"WINDOW_SIZE_2D_H {WINDOW_SIZE_2D_H} is not divisible by TILE_SIZE_2D_H {TILE_SIZE_2D_H}"
     assert WINDOW_SIZE_2D_W % TILE_SIZE_2D_W == 0, f"WINDOW_SIZE_2D_W {WINDOW_SIZE_2D_W} is not divisible by TILE_SIZE_2D_W {TILE_SIZE_2D_W}"
+    assert TILE_SIZE_2D_H * TILE_SIZE_2D_W % 128 == 0, f"tile numel {TILE_SIZE_2D_H * TILE_SIZE_2D_W} is not divisible by 128, which is required for flex attention"
+
+    def sta_mask_mod_2d(
+        b: IntTensor,
+        h: IntTensor,
+        q_idx: IntTensor,
+        kv_idx: IntTensor,
+    ) -> BoolTensor:
+        tile_numel = TILE_SIZE_2D_H * TILE_SIZE_2D_W
+        tile_idx_q = q_idx // tile_numel
+        tile_idx_kv = kv_idx // tile_numel
+        h_dim = H_DIM // TILE_SIZE_2D_H
+        w_dim = W_DIM // TILE_SIZE_2D_W
+        tile_h_q = tile_idx_q // w_dim
+        tile_w_q = tile_idx_q % w_dim
+        tile_h_kv = tile_idx_kv // w_dim
+        tile_w_kv = tile_idx_kv % w_dim
+
+        window_size_h = WINDOW_SIZE_2D_H // TILE_SIZE_2D_H
+        window_size_w = WINDOW_SIZE_2D_W // TILE_SIZE_2D_W
+
+        window_size_left_h = window_size_h // 2
+        window_size_right_h = window_size_h // 2 + (window_size_h % 2 - 1)
+        window_size_left_w = window_size_w // 2
+        window_size_right_w = window_size_w // 2 + (window_size_w % 2 - 1)
+        
+        window_center_h = tile_h_q.clamp(
+            window_size_left_h, h_dim - 1 - window_size_right_h
+        )
+        window_center_w = tile_w_q.clamp(
+            window_size_left_w, w_dim - 1 - window_size_right_w
+        )
+
+        h_mask = (
+            tile_h_kv >= window_center_h - window_size_left_h
+        ) & (
+            tile_h_kv <= window_center_h + window_size_right_h
+        )
+
+        w_mask = (
+            tile_w_kv >= window_center_w - window_size_left_w
+        ) & (
+            tile_w_kv <= window_center_w + window_size_right_w
+        )
+        
+        return h_mask & w_mask
     
-    # first, we convert everything to tile representation
-    tile_numel = TILE_SIZE_2D_H * TILE_SIZE_2D_W
-    tile_idx_q = q_idx // tile_numel
-    tile_idx_kv = kv_idx // tile_numel
-    tile_row_q = tile_idx_q // (W_DIM // TILE_SIZE_2D_W)
-    tile_col_q = tile_idx_q % (W_DIM // TILE_SIZE_2D_W)
-    tile_row_kv = tile_idx_kv // (W_DIM // TILE_SIZE_2D_W)
-    tile_col_kv = tile_idx_kv % (W_DIM // TILE_SIZE_2D_W)
-    w_dim = W_DIM // TILE_SIZE_2D_W
-
-    window_size_h = WINDOW_SIZE_2D_H // TILE_SIZE_2D_H
-    window_size_w = WINDOW_SIZE_2D_W // TILE_SIZE_2D_W
-
-    window_size_left_row = window_size_h // 2
-    window_size_right_row = window_size_h // 2 + (window_size_h % 2 - 1)
-    window_size_left_col = window_size_w // 2
-    window_size_right_col = window_size_w // 2 + (
-        window_size_w % 2 - 1
-    )
+    sta_mask_mod_2d.__name__ = f"sta2d_h{H_DIM}_w{W_DIM}_wh{WINDOW_SIZE_2D_H}_ww{WINDOW_SIZE_2D_W}_th{TILE_SIZE_2D_H}_tw{TILE_SIZE_2D_W}"
+    return sta_mask_mod_2d
     
-    window_center_row = tile_row_q.clamp(
-        window_size_left_row, w_dim - 1 - window_size_right_row
-    )
-    window_center_col = tile_col_q.clamp(
-        window_size_left_col, w_dim - 1 - window_size_right_col
-    )
-
-    row_mask = (
-        tile_row_kv >= window_center_row - window_size_left_row
-    ) & (
-        tile_row_kv <= window_center_row + window_size_right_row
-    )
-
-    col_mask = (
-        tile_col_kv >= window_center_col - window_size_left_col
-    ) & (
-        tile_col_kv <= window_center_col + window_size_right_col
-    )
-    
-    return row_mask & col_mask
 
 """
 Vanilla Self-Attention
@@ -645,6 +671,7 @@ class SlidingTileAttention2D(nn.Module):
         norm_first: bool = False,
         norm_eps: float = 1e-5,
         seq_len: int = 256,
+        h_dim: Optional[int] = None,
         w_dim: Optional[int] = None,
         layer_idx: int = None
     ):
@@ -672,9 +699,12 @@ class SlidingTileAttention2D(nn.Module):
         assert (self.tile_size_h * self.tile_size_w) % 128 == 0, f"tile numel {self.tile_size_h * self.tile_size_w} is not divisible by 128, which is required for flex attention"
 
         self.seq_len = seq_len
-
+        self.h_dim = h_dim  
         self.w_dim = w_dim
 
+        if self.h_dim is None:
+            self.h_dim = int(math.sqrt(self.seq_len))
+            
         if self.w_dim is None:
             self.w_dim = int(math.sqrt(self.seq_len))
 
@@ -691,20 +721,18 @@ class SlidingTileAttention2D(nn.Module):
         self.k_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
         self.v_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
         self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
-
-        global WINDOW_SIZE_2D_H
-        global WINDOW_SIZE_2D_W
-        global TILE_SIZE_2D_H
-        global TILE_SIZE_2D_W
-        global W_DIM
-        WINDOW_SIZE_2D_H = self.window_size_h
-        WINDOW_SIZE_2D_W = self.window_size_w
-        TILE_SIZE_2D_H = self.tile_size_h
-        TILE_SIZE_2D_W = self.tile_size_w
-        W_DIM = self.w_dim
         
         # create block mask
-        self.block_mask = create_block_mask(mask_mod=sliding_window_tile_2d, B=None, H=None, Q_LEN=self.seq_len, KV_LEN=self.seq_len, device="cuda", _compile=True)
+        sta2d_mask = generate_sta_mask_2d(
+            H_DIM=self.h_dim,
+            W_DIM=self.w_dim,
+            WINDOW_SIZE_2D_H=self.window_size_h,
+            WINDOW_SIZE_2D_W=self.window_size_w,
+            TILE_SIZE_2D_H=self.tile_size_h,
+            TILE_SIZE_2D_W=self.tile_size_w,
+        )
+
+        self.block_mask = create_block_mask(mask_mod=sta2d_mask, B=None, H=None, Q_LEN=self.seq_len, KV_LEN=self.seq_len, device="cuda", _compile=True)
 
     def forward(
         self,
