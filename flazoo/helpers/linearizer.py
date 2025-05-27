@@ -20,24 +20,77 @@ For example, SigLIP2 has some extra components like head.mlp.fc1.weight and head
 
 """
 
-def init_from_fla_vision_und(
+def copy_matching_params(model_a, model_b, outlier_list=None, verbose=False):
+    """
+    Copy parameters from model_b to model_a where parameter names match,
+    skipping parameters specified in outlier_list.
+    
+    Args:
+        model_a: Target model whose parameters will be updated
+        model_b: Source model whose parameters will be copied
+        outlier_list: List of parameter names to skip (exact name matching)
+        verbose: Whether to print detailed matching information
+    
+    Returns:
+        tuple: (number of copied parameters, total parameters in model_a)
+    """
+    copied_params_count = 0
+    total_params_count = 0
+    
+    outliers = set(outlier_list if outlier_list is not None else [])
+    
+    dict_a = dict(model_a.named_parameters())
+    dict_b = dict(model_b.named_parameters())
+    
+    for name, param_a in model_a.named_parameters():
+        total_params_count += param_a.numel()
+        
+        # Skip if parameter name is in outliers set (exact match)
+        if name in outliers:
+            if verbose:
+                logging.info(f"Skipped parameter (in outlier list): {name}")
+            continue
+        
+        # Check if parameter name exists in model_b
+        if name in dict_b:
+            param_b = dict_b[name]
+            
+            # Check if parameter shapes match
+            if param_a.shape == param_b.shape:
+                # Copy parameter data
+                param_a.data.copy_(param_b.data)
+                copied_params_count += param_a.numel()
+                if verbose:
+                    logging.info(f"Copied parameter: {name}, shape: {param_a.shape}")
+            else:
+                if verbose:
+                    logging.warning(f"Parameter shape mismatch, skipped: {name}, "
+                                  f"model_a shape: {param_a.shape}, "
+                                  f"model_b shape: {param_b.shape}")
+    
+    # Print summary
+    logging.info(f"Copied {copied_params_count}/{total_params_count} "
+               f"parameters ({copied_params_count/total_params_count*100:.2f}%)")
+    
+    return copied_params_count, total_params_count
+
+
+def init_video_und_from_pure_fla_vision_und(
     fla_model,
     another_fla_model,
     train_mlp: bool = True,
     init_embedding: bool = True,
-    init_head: bool = True,
     return_pretrained: bool = False,
 ):
     """
-    Initialize a FLA vision und model also from a FLA model \n
-    Note that the two models should have the same architecture.
+    Initialize a FLA model from another FLA model. \n
+    This function is used to initialize a video FLA model from a pure FLA vision model. \n
 
     Args:
         fla_model: FLA models to be initialized
         another_fla_model: FLA models to load
         train_mlp: Whether to train the MLP layers (default: True)
         init_embedding: Whether to initialize the embedding layers (default: True)
-        init_head: Whether to initialize the head layers, useful for classification (default: True)
         return_pretrained: Whether to return the pretrained model (default: False)
 
     Returns:
@@ -93,15 +146,6 @@ def init_from_fla_vision_und(
     fla_model.layernorm.bias = nn.Parameter(another_fla_model.layernorm.bias.clone())
     fla_model.pooler.dense.weight = nn.Parameter(another_fla_model.pooler.dense.weight.clone())
     fla_model.pooler.dense.bias = nn.Parameter(another_fla_model.pooler.dense.bias.clone())
-    
-    if init_head:
-        fla_model.classifier.weight.data.copy_(
-            another_fla_model.classifier.weight.data
-        )
-        if another_fla_model.classifier.bias is not None:
-            fla_model.classifier.bias.data.copy_(
-                another_fla_model.classifier.bias.data
-            )
 
     if not return_pretrained:
         return fla_model
