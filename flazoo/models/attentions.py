@@ -139,7 +139,110 @@ def generate_sta_mask_2d(
     
     sta_mask_mod_2d.__name__ = f"sta2d_h{H_DIM}_w{W_DIM}_wh{WINDOW_SIZE_2D_H}_ww{WINDOW_SIZE_2D_W}_th{TILE_SIZE_2D_H}_tw{TILE_SIZE_2D_W}"
     return sta_mask_mod_2d
+
+def generate_sta_mask_3d(
+    T_DIM: int = 8,
+    H_DIM: int = 16,
+    W_DIM: int = 16,
+    WINDOW_SIZE_3D_T: int = 6,
+    WINDOW_SIZE_3D_H: int = 12,
+    WINDOW_SIZE_3D_W: int = 12,
+    TILE_SIZE_3D_T: int = 2,
+    TILE_SIZE_3D_H: int = 4,
+    TILE_SIZE_3D_W: int = 4,
+):
+    """
+    Generates a sliding tile attention mask for 3D spatio-temporal sequence.
+    Args:
+        T_DIM (int): Temporal dimension of the input 3D sequence.
+        H_DIM (int): Height of the input 3D sequence.
+        W_DIM (int): Width of the input 3D sequence.
+        WINDOW_SIZE_3D_T (int): Size of the sliding window along temporal dimension.
+        WINDOW_SIZE_3D_H (int): Height of the sliding window in spatial dimensions.
+        WINDOW_SIZE_3D_W (int): Width of the sliding window in spatial dimensions.
+        TILE_SIZE_3D_T (int): Size of the tile along temporal dimension.
+        TILE_SIZE_3D_H (int): Height of the tile size in spatial dimensions.
+        TILE_SIZE_3D_W (int): Width of the tile size in spatial dimensions.
+    Returns:
+        mask (torch.Tensor): Sliding window attention mask for 3D sequence.
+    """
+    assert T_DIM % TILE_SIZE_3D_T == 0, f"T_DIM {T_DIM} is not divisible by TILE_SIZE_3D_T {TILE_SIZE_3D_T}"
+    assert H_DIM % TILE_SIZE_3D_H == 0, f"H_DIM {H_DIM} is not divisible by TILE_SIZE_3D_H {TILE_SIZE_3D_H}"
+    assert W_DIM % TILE_SIZE_3D_W == 0, f"W_DIM {W_DIM} is not divisible by TILE_SIZE_3D_W {TILE_SIZE_3D_W}"
+    assert WINDOW_SIZE_3D_T % TILE_SIZE_3D_T == 0, f"WINDOW_SIZE_3D_T {WINDOW_SIZE_3D_T} is not divisible by TILE_SIZE_3D_T {TILE_SIZE_3D_T}"
+    assert WINDOW_SIZE_3D_H % TILE_SIZE_3D_H == 0, f"WINDOW_SIZE_3D_H {WINDOW_SIZE_3D_H} is not divisible by TILE_SIZE_3D_H {TILE_SIZE_3D_H}"
+    assert WINDOW_SIZE_3D_W % TILE_SIZE_3D_W == 0, f"WINDOW_SIZE_3D_W {WINDOW_SIZE_3D_W} is not divisible by TILE_SIZE_3D_W {TILE_SIZE_3D_W}"
+    assert (TILE_SIZE_3D_T * TILE_SIZE_3D_H * TILE_SIZE_3D_W) % 128 == 0, f"tile numel {TILE_SIZE_3D_T * TILE_SIZE_3D_H * TILE_SIZE_3D_W} is not divisible by 128, which is required for flex attention"
+
+    def sta_mask_mod_3d(
+        b: IntTensor,
+        h: IntTensor,
+        q_idx: IntTensor,
+        kv_idx: IntTensor,
+    ) -> BoolTensor:
+        tile_numel = TILE_SIZE_3D_T * TILE_SIZE_3D_H * TILE_SIZE_3D_W
+        tile_idx_q = q_idx // tile_numel
+        tile_idx_kv = kv_idx // tile_numel
+        
+        hw_dim = (H_DIM // TILE_SIZE_3D_H) * (W_DIM // TILE_SIZE_3D_W)
+        t_dim = T_DIM // TILE_SIZE_3D_T
+        h_dim = H_DIM // TILE_SIZE_3D_H
+        w_dim = W_DIM // TILE_SIZE_3D_W
+        
+        tile_t_q = tile_idx_q // hw_dim
+        hw_idx_q = tile_idx_q % hw_dim
+        tile_h_q = hw_idx_q // w_dim
+        tile_w_q = hw_idx_q % w_dim
+        
+        tile_t_kv = tile_idx_kv // hw_dim
+        hw_idx_kv = tile_idx_kv % hw_dim
+        tile_h_kv = hw_idx_kv // w_dim
+        tile_w_kv = hw_idx_kv % w_dim
+        
+        window_size_t = WINDOW_SIZE_3D_T // TILE_SIZE_3D_T
+        window_size_h = WINDOW_SIZE_3D_H // TILE_SIZE_3D_H
+        window_size_w = WINDOW_SIZE_3D_W // TILE_SIZE_3D_W
+
+        window_size_left_t = window_size_t // 2
+        window_size_right_t = window_size_t // 2 + (window_size_t % 2 - 1)
+        window_size_left_h = window_size_h // 2
+        window_size_right_h = window_size_h // 2 + (window_size_h % 2 - 1)
+        window_size_left_w = window_size_w // 2
+        window_size_right_w = window_size_w // 2 + (window_size_w % 2 - 1)
+        
+        window_center_t = tile_t_q.clamp(
+            window_size_left_t, t_dim - 1 - window_size_right_t
+        )
+        window_center_h = tile_h_q.clamp(
+            window_size_left_h, h_dim - 1 - window_size_right_h
+        )
+        window_center_w = tile_w_q.clamp(
+            window_size_left_w, w_dim - 1 - window_size_right_w
+        )
+
+        t_mask = (
+            tile_t_kv >= window_center_t - window_size_left_t
+        ) & (
+            tile_t_kv <= window_center_t + window_size_right_t
+        )
+
+        h_mask = (
+            tile_h_kv >= window_center_h - window_size_left_h
+        ) & (
+            tile_h_kv <= window_center_h + window_size_right_h
+        )
+
+        w_mask = (
+            tile_w_kv >= window_center_w - window_size_left_w
+        ) & (
+            tile_w_kv <= window_center_w + window_size_right_w
+        )
+        
+        return t_mask & h_mask & w_mask
     
+    sta_mask_mod_3d.__name__ = f"sta3d_t{T_DIM}_h{H_DIM}_w{W_DIM}_wt{WINDOW_SIZE_3D_T}_wh{WINDOW_SIZE_3D_H}_ww{WINDOW_SIZE_3D_W}_tt{TILE_SIZE_3D_T}_th{TILE_SIZE_3D_H}_tw{TILE_SIZE_3D_W}"
+    return sta_mask_mod_3d
+
 
 """
 Vanilla Self-Attention
@@ -651,7 +754,6 @@ class SlidingWindowAttention(nn.Module):
         return o, attentions, None
     
 class SlidingTileAttention2D(nn.Module):
-
     """
         Sliding Tile Attention \\
         Sliding window attention for 2D used in hybrid model \\
@@ -691,30 +793,40 @@ class SlidingTileAttention2D(nn.Module):
         self.kv_dim = self.num_kv_heads * self.head_dim
         self.norm_first = norm_first
         self.layer_idx = layer_idx
+        
+        # Window and tile sizes for 2D data
         self.window_size_h = window_size_h
         self.window_size_w = window_size_w
         self.tile_size_h = tile_size_h
         self.tile_size_w = tile_size_w
 
-        assert (self.tile_size_h * self.tile_size_w) % 128 == 0, f"tile numel {self.tile_size_h * self.tile_size_w} is not divisible by 128, which is required for flex attention"
+        # Validate tile size for flex attention requirements
+        assert (self.tile_size_h * self.tile_size_w) % 128 == 0, \
+            f"tile numel {self.tile_size_h * self.tile_size_w} is not divisible by 128, which is required for flex attention"
 
         self.seq_len = seq_len
-        self.h_dim = h_dim  
+        self.h_dim = h_dim
         self.w_dim = w_dim
 
+        # Calculate dimensions if not provided
         if self.h_dim is None:
             self.h_dim = int(math.sqrt(self.seq_len))
             
         if self.w_dim is None:
             self.w_dim = int(math.sqrt(self.seq_len))
 
-        assert self.seq_len is not None, "seq_len must be provided for STA 2D"
-        assert self.seq_len % (self.tile_size_h * self.tile_size_w) == 0, f"seq_len {self.seq_len} is not divisible by (TILE_SIZE_2D_H * TILE_SIZE_2D_W) {self.tile_size_h * self.tile_size_w}"
+        # Validate sequence length against dimensions
+        expected_seq_len = self.h_dim * self.w_dim
+        assert self.seq_len == expected_seq_len, f"seq_len {self.seq_len} does not match product of dimensions {expected_seq_len}"
+        assert self.seq_len % (self.tile_size_h * self.tile_size_w) == 0, \
+            f"seq_len {self.seq_len} is not divisible by (TILE_SIZE_2D_H * TILE_SIZE_2D_W) {self.tile_size_h * self.tile_size_w}"
 
-        # log about backend and window size
+        # Log configuration
         import logging
-        logging.info(f"Using SlidingTileAttention2D with window size ({self.window_size_h}, {self.window_size_w}) and tile size ({self.tile_size_h}, {self.tile_size_w})")
+        logging.info(f"Using SlidingTileAttention2D with window size ({self.window_size_h}, {self.window_size_w}) "
+                     f"and tile size ({self.tile_size_h}, {self.tile_size_w})")
 
+        # Initialize layers
         if norm_first:
             self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
         self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
@@ -722,7 +834,7 @@ class SlidingTileAttention2D(nn.Module):
         self.v_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
         self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
         
-        # create block mask
+        # Create block mask for 2D sliding tile attention
         sta2d_mask = generate_sta_mask_2d(
             H_DIM=self.h_dim,
             W_DIM=self.w_dim,
@@ -732,7 +844,15 @@ class SlidingTileAttention2D(nn.Module):
             TILE_SIZE_2D_W=self.tile_size_w,
         )
 
-        self.block_mask = create_block_mask(mask_mod=sta2d_mask, B=None, H=None, Q_LEN=self.seq_len, KV_LEN=self.seq_len, device="cuda", _compile=True)
+        self.block_mask = create_block_mask(
+            mask_mod=sta2d_mask, 
+            B=None, 
+            H=None, 
+            Q_LEN=self.seq_len, 
+            KV_LEN=self.seq_len, 
+            device="cuda", 
+            _compile=True
+        )
 
     def forward(
         self,
@@ -745,16 +865,43 @@ class SlidingTileAttention2D(nn.Module):
         
         batch_size, seq_len, _ = hidden_states.size()
 
-        if h_dim is None or w_dim is None:
-            h_dim = int(math.sqrt(seq_len))
-            w_dim = int(math.sqrt(seq_len))
+        h_dim = h_dim or self.h_dim
+        w_dim = w_dim or self.w_dim
+
+        assert h_dim * w_dim == seq_len, f"Dimensions {h_dim}x{w_dim} don't match sequence length {seq_len}"
 
         if self.norm_first:
             hidden_states = self.norm(hidden_states)
 
-        q = rearrange(self.q_proj(hidden_states), 'b (nth th ntw tw) (h d) -> b h (nth ntw th tw) d', h=self.num_heads, nth=h_dim // self.tile_size_h, ntw=w_dim // self.tile_size_w, th=self.tile_size_h, tw=self.tile_size_w)
-        k = rearrange(self.k_proj(hidden_states), 'b (nth th ntw tw) (h d) -> b h (nth ntw th tw) d', h=self.num_kv_heads, nth=h_dim // self.tile_size_h, ntw=w_dim // self.tile_size_w, th=self.tile_size_h, tw=self.tile_size_w)
-        v = rearrange(self.v_proj(hidden_states), 'b (nth th ntw tw) (h d) -> b h (nth ntw th tw) d', h=self.num_kv_heads, nth=h_dim // self.tile_size_h, ntw=w_dim // self.tile_size_w, th=self.tile_size_h, tw=self.tile_size_w)
+        q = rearrange(
+            self.q_proj(hidden_states), 
+            'b (nth th ntw tw) (h d) -> b h (nth ntw th tw) d', 
+            h=self.num_heads, 
+            nth=h_dim // self.tile_size_h, 
+            ntw=w_dim // self.tile_size_w, 
+            th=self.tile_size_h, 
+            tw=self.tile_size_w
+        )
+        
+        k = rearrange(
+            self.k_proj(hidden_states), 
+            'b (nth th ntw tw) (h d) -> b h (nth ntw th tw) d', 
+            h=self.num_kv_heads, 
+            nth=h_dim // self.tile_size_h, 
+            ntw=w_dim // self.tile_size_w, 
+            th=self.tile_size_h, 
+            tw=self.tile_size_w
+        )
+        
+        v = rearrange(
+            self.v_proj(hidden_states), 
+            'b (nth th ntw tw) (h d) -> b h (nth ntw th tw) d', 
+            h=self.num_kv_heads, 
+            nth=h_dim // self.tile_size_h, 
+            ntw=w_dim // self.tile_size_w, 
+            th=self.tile_size_h, 
+            tw=self.tile_size_w
+        )
 
         if flex_attention is None:
             raise ImportError("Please install Flex Attention via `pip install torch` first")
@@ -763,7 +910,215 @@ class SlidingTileAttention2D(nn.Module):
             q, k, v,
             block_mask=self.block_mask,
         )
-        o = rearrange(o, 'b h (nth ntw th tw) d -> b (nth th ntw tw) (h d)', h=self.num_heads, nth=h_dim // self.tile_size_h, ntw=w_dim // self.tile_size_w, th=self.tile_size_h, tw=self.tile_size_w)
+        
+        o = rearrange(
+            o, 
+            'b h (nth ntw th tw) d -> b (nth th ntw tw) (h d)', 
+            h=self.num_heads, 
+            nth=h_dim // self.tile_size_h, 
+            ntw=w_dim // self.tile_size_w, 
+            th=self.tile_size_h, 
+            tw=self.tile_size_w
+        )
+        
+        o = self.o_proj(o)
+
+        if not output_attentions:
+            attentions = None
+
+        return o, attentions, None
+
+
+class SlidingTileAttention3D(nn.Module):
+    """
+        Sliding Tile Attention for 3D spatio-temporal data \\
+        Sliding window attention for video data (TxHxW) used in hybrid model \\
+        Extends the 2D STA to handle temporal dimension efficiently
+    """
+
+    def __init__(
+        self,
+        hidden_size: int = 2048,
+        num_heads: int = 32,
+        num_kv_heads: Optional[int] = None,
+        window_size_t: int = 6,
+        window_size_h: int = 16,
+        window_size_w: int = 16,
+        tile_size_t: int = 2,
+        tile_size_h: int = 8,
+        tile_size_w: int = 8,
+        head_dim: int = None,
+        norm_first: bool = False,
+        norm_eps: float = 1e-5,
+        seq_len: int = 2048,
+        t_dim: Optional[int] = None,
+        h_dim: Optional[int] = None,
+        w_dim: Optional[int] = None,
+        layer_idx: int = None
+    ):
+        super().__init__()
+
+        self.num_heads = num_heads
+        if num_kv_heads is None:
+            self.num_kv_heads = self.num_heads
+        else:
+            self.num_kv_heads = num_kv_heads
+        self.num_kv_groups = num_heads // self.num_kv_heads
+        self.hidden_size = hidden_size
+        if head_dim is None:
+            self.head_dim = self.hidden_size // self.num_heads
+        else:
+            self.head_dim = head_dim
+        self.kv_dim = self.num_kv_heads * self.head_dim
+        self.norm_first = norm_first
+        self.layer_idx = layer_idx
+        
+        # Window and tile sizes for 3D data
+        self.window_size_t = window_size_t
+        self.window_size_h = window_size_h
+        self.window_size_w = window_size_w
+        self.tile_size_t = tile_size_t
+        self.tile_size_h = tile_size_h
+        self.tile_size_w = tile_size_w
+
+        # Validate tile size for flex attention requirements
+        assert (self.tile_size_t * self.tile_size_h * self.tile_size_w) % 128 == 0, \
+            f"tile numel {self.tile_size_t * self.tile_size_h * self.tile_size_w} is not divisible by 128, which is required for flex attention"
+
+        self.seq_len = seq_len
+        self.t_dim = t_dim
+        self.h_dim = h_dim
+        self.w_dim = w_dim
+
+        # Calculate dimensions if not provided
+        if self.t_dim is None or self.h_dim is None or self.w_dim is None:
+            # For 3D data, use default cubic root heuristic if dimensions not specified
+            cube_root = round(self.seq_len ** (1/3))
+            if self.t_dim is None:
+                self.t_dim = cube_root
+            if self.h_dim is None:
+                self.h_dim = cube_root
+            if self.w_dim is None:
+                self.w_dim = cube_root
+
+        # Validate sequence length against dimensions
+        expected_seq_len = self.t_dim * self.h_dim * self.w_dim
+        assert self.seq_len == expected_seq_len, f"seq_len {self.seq_len} does not match product of dimensions {expected_seq_len}"
+        assert self.seq_len % (self.tile_size_t * self.tile_size_h * self.tile_size_w) == 0, \
+            f"seq_len {self.seq_len} is not divisible by (TILE_SIZE_3D_T * TILE_SIZE_3D_H * TILE_SIZE_3D_W) {self.tile_size_t * self.tile_size_h * self.tile_size_w}"
+
+        # Log configuration
+        import logging
+        logging.info(f"Using SlidingTileAttention3D with window size ({self.window_size_t}, {self.window_size_h}, {self.window_size_w}) "
+                     f"and tile size ({self.tile_size_t}, {self.tile_size_h}, {self.tile_size_w})")
+
+        # Initialize layers
+        if norm_first:
+            self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
+        self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
+        self.k_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
+        self.v_proj = nn.Linear(self.hidden_size, self.kv_dim, bias=False)
+        self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
+        
+        sta3d_mask = generate_sta_mask_3d(
+            T_DIM=self.t_dim,
+            H_DIM=self.h_dim,
+            W_DIM=self.w_dim,
+            WINDOW_SIZE_3D_T=self.window_size_t,
+            WINDOW_SIZE_3D_H=self.window_size_h,
+            WINDOW_SIZE_3D_W=self.window_size_w,
+            TILE_SIZE_3D_T=self.tile_size_t,
+            TILE_SIZE_3D_H=self.tile_size_h,
+            TILE_SIZE_3D_W=self.tile_size_w,
+        )
+
+        self.block_mask = create_block_mask(
+            mask_mod=sta3d_mask, 
+            B=None, 
+            H=None, 
+            Q_LEN=self.seq_len, 
+            KV_LEN=self.seq_len, 
+            device="cuda", 
+            _compile=True
+        )
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        t_dim: int = None,
+        h_dim: int = None,
+        w_dim: int = None,
+        output_attentions: bool = False,
+        **kwargs,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        
+        batch_size, seq_len, _ = hidden_states.size()
+
+        t_dim = t_dim or self.t_dim
+        h_dim = h_dim or self.h_dim
+        w_dim = w_dim or self.w_dim
+
+        assert t_dim * h_dim * w_dim == seq_len, f"Dimensions {t_dim}x{h_dim}x{w_dim} don't match sequence length {seq_len}"
+
+        if self.norm_first:
+            hidden_states = self.norm(hidden_states)
+
+        q = rearrange(
+            self.q_proj(hidden_states), 
+            'b (ntt tt nth th ntw tw) (h d) -> b h (ntt nth ntw tt th tw) d', 
+            h=self.num_heads, 
+            ntt=t_dim // self.tile_size_t,
+            ntw=w_dim // self.tile_size_w,
+            nth=h_dim // self.tile_size_h,
+            tt=self.tile_size_t,
+            tw=self.tile_size_w,
+            th=self.tile_size_h
+        )
+        
+        k = rearrange(
+            self.k_proj(hidden_states), 
+            'b (ntt tt nth th ntw tw) (h d) -> b h (ntt nth ntw tt th tw) d', 
+            h=self.num_kv_heads, 
+            ntt=t_dim // self.tile_size_t,
+            ntw=w_dim // self.tile_size_w,
+            nth=h_dim // self.tile_size_h,
+            tt=self.tile_size_t,
+            tw=self.tile_size_w,
+            th=self.tile_size_h
+        )
+        
+        v = rearrange(
+            self.v_proj(hidden_states), 
+            'b (ntt tt nth th ntw tw) (h d) -> b h (ntt nth ntw tt th tw) d', 
+            h=self.num_kv_heads, 
+            ntt=t_dim // self.tile_size_t,
+            ntw=w_dim // self.tile_size_w,
+            nth=h_dim // self.tile_size_h,
+            tt=self.tile_size_t,
+            tw=self.tile_size_w,
+            th=self.tile_size_h
+        )
+
+        if flex_attention is None:
+            raise ImportError("Please install Flex Attention via `pip install torch` first")
+
+        o = flex_attention(
+            q, k, v,
+            block_mask=self.block_mask,
+        )
+        
+        o = rearrange(
+            o, 
+            'b h (ntt nth ntw tt th tw) d -> b (ntt tt nth th ntw tw) (h d)', 
+            h=self.num_heads, 
+            ntt=t_dim // self.tile_size_t,
+            ntw=w_dim // self.tile_size_w,
+            nth=h_dim // self.tile_size_h,
+            tt=self.tile_size_t,
+            tw=self.tile_size_w,
+            th=self.tile_size_h
+        )
+        
         o = self.o_proj(o)
 
         if not output_attentions:
