@@ -3,6 +3,7 @@ from flazoo.helpers.initializer import (
     initialize_custom_mapping
 )
 import torch
+from torch import nn
 import logging
 
 
@@ -48,6 +49,11 @@ def init_from_fla_vision_und(
         "attn.k_proj": "attn.k_proj",
         "attn.v_proj": "attn.v_proj",
         "attn.o_proj": "attn.o_proj",
+        "attn.b_proj": "attn.b_proj",
+        "attn.k_conv1d": "attn.k_conv1d",
+        "attn.v_conv1d": "attn.v_conv1d",
+        "attn.q_conv1d": "attn.q_conv1d",
+        "attn.o_norm": "attn.o_norm",
         "ln_1": "ln_1",
         "ln_2": "ln_2",
         "channel_mixer.net.0": "channel_mixer.net.0",
@@ -68,26 +74,25 @@ def init_from_fla_vision_und(
     if init_embedding:
         logging.info("Initializing embedding layers, make sure your shapes match.")
         fla_model.embeddings.patch_embeddings.projection.weight.data.copy_(
-            another_fla_model.embeddings.patch_embeddings.projection.weight.data
+            another_fla_model.embeddings.patch_embeddings.projection.weight.data.unsqueeze(2)
         )
         fla_model.embeddings.patch_embeddings.projection.bias.data.copy_(
             another_fla_model.embeddings.patch_embeddings.projection.bias.data
         )
-        fla_model.embeddings.position_embeddings.data.copy_(
-            another_fla_model.embeddings.position_embeddings.data
-        )
         assert torch.equal(
             fla_model.embeddings.patch_embeddings.projection.weight,
-            another_fla_model.embeddings.patch_embeddings.projection.weight
+            another_fla_model.embeddings.patch_embeddings.projection.weight.unsqueeze(2)
         )
         assert torch.equal(
             fla_model.embeddings.patch_embeddings.projection.bias,
             another_fla_model.embeddings.patch_embeddings.projection.bias
         )
-        assert torch.equal(
-            fla_model.embeddings.position_embeddings,
-            another_fla_model.embeddings.position_embeddings
-        )
+    
+    # init layernorm weight and bias
+    fla_model.layernorm.weight = nn.Parameter(another_fla_model.layernorm.weight.clone())
+    fla_model.layernorm.bias = nn.Parameter(another_fla_model.layernorm.bias.clone())
+    fla_model.pooler.dense.weight = nn.Parameter(another_fla_model.pooler.dense.weight.clone())
+    fla_model.pooler.dense.bias = nn.Parameter(another_fla_model.pooler.dense.bias.clone())
     
     if init_head:
         fla_model.classifier.weight.data.copy_(
@@ -102,7 +107,6 @@ def init_from_fla_vision_und(
         return fla_model
     else:
         return fla_model, another_fla_model
-
 
 
 def init_from_dino2_base_p14(
