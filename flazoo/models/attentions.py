@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from einops import rearrange
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 import math
-
+from torch.nn.attention.flex_attention import _mask_mod_signature
 try:
     from moba.moba_efficient import moba_attn_varlen
 except ImportError:
@@ -67,29 +67,41 @@ def sliding_window_1d(b, h, q_idx, kv_idx):
     return (q_idx - kv_idx <= (WINDOW_SIZE_1D // 2)) & (q_idx - kv_idx >= -(WINDOW_SIZE_1D // 2))
 
 def generate_sta_mask_2d(
-    H_DIM: int = 16,
-    W_DIM: int = 16,
-    WINDOW_SIZE_2D_H: int = 12,
-    WINDOW_SIZE_2D_W: int = 12,
-    TILE_SIZE_2D_H: int = 4,
-    TILE_SIZE_2D_W: int = 4,
-):
-    """
-    Generates a sliding tile attention mask for 2D sequence.
+        canvas_hw: Tuple[int, int],
+        kernel_hw: Tuple[int, int],
+        tile_hw: Tuple[int, int],
+        text_seq_len: int = 0,
+) -> _mask_mod_signature:
+    """Generates a 2D STA mask with a given kernel size.
+    
     Args:
-        H_DIM (int): Height of the input 2D sequence.
-        W_DIM (int): Width of the input 2D sequence.
-        WINDOW_SIZE_2D_H (int): Height of the sliding window.
-        WINDOW_SIZE_2D_W (int): Width of the sliding window.
-        TILE_SIZE_2D_H (int): Height of the tile size.
-        TILE_SIZE_2D_W (int): Width of the tile size.
-    Returns:
-        mask (torch.Tensor): Sliding window attention mask for 2D sequence.
+        canvas_hw (Tuple[int, int]): The shape of the canvas (height, width).
+        kernel_hw (Tuple[int, int]): The shape of the kernel (height, width).
+        tile_hw (Tuple[int, int]): The shape of the tile (height, width).
+        text_seq_len (int): The length of the text sequence for masking.
     """
-    assert H_DIM % TILE_SIZE_2D_H == 0, f"H_DIM {H_DIM} is not divisible by TILE_SIZE_2D_H {TILE_SIZE_2D_H}"
-    assert W_DIM % TILE_SIZE_2D_W == 0, f"W_DIM {W_DIM} is not divisible by TILE_SIZE_2D_W {TILE_SIZE_2D_W}"
-    assert WINDOW_SIZE_2D_H % TILE_SIZE_2D_H == 0, f"WINDOW_SIZE_2D_H {WINDOW_SIZE_2D_H} is not divisible by TILE_SIZE_2D_H {TILE_SIZE_2D_H}"
-    assert WINDOW_SIZE_2D_W % TILE_SIZE_2D_W == 0, f"WINDOW_SIZE_2D_W {WINDOW_SIZE_2D_W} is not divisible by TILE_SIZE_2D_W {TILE_SIZE_2D_W}"
+    canvas_h, canvas_w = canvas_hw
+    kernel_h, kernel_w = kernel_hw
+    tile_h, tile_w = tile_hw
+    tile_numel = tile_h * tile_w
+    assert canvas_h % tile_h == 0, f"Canvas height {canvas_h} is not divisible by tile height {tile_h}"
+    assert canvas_w % tile_w == 0, f"Canvas width {canvas_w} is not divisible by tile width {tile_w}"
+    assert kernel_h % tile_h == 0, f"Kernel height {kernel_h} is not divisible by tile height {tile_h}"
+    assert kernel_w % tile_w == 0, f"Kernel width {kernel_w} is not divisible by tile width {tile_w}"
+    canvas_tile_h, canvas_tile_w = canvas_h // tile_h, canvas_w // tile_w
+    kernel_tile_h, kernel_tile_w = kernel_h // tile_h, kernel_w // tile_w
+    vision_seq_len = canvas_h * canvas_w
+
+    def get_h_w_idx_tiled(idx: IntTensor) -> Tuple[IntTensor, IntTensor]:
+        tile_id = idx // tile_numel
+        tile_h_idx = tile_id // canvas_tile_w
+        tile_w_idx = tile_id % canvas_tile_w
+        return tile_h_idx, tile_w_idx
+    
+    def get_border(kernel_size: IntTensor) -> Tuple[IntTensor, IntTensor]:
+        left_border = kernel_size // 2
+        right_border = kernel_size // 2 + (kernel_size % 2 - 1)
+        return left_border, right_border
 
     def sta_mask_mod_2d(
         b: IntTensor,
@@ -97,80 +109,61 @@ def generate_sta_mask_2d(
         q_idx: IntTensor,
         kv_idx: IntTensor,
     ) -> BoolTensor:
-        tile_numel = TILE_SIZE_2D_H * TILE_SIZE_2D_W
-        tile_idx_q = q_idx // tile_numel
-        tile_idx_kv = kv_idx // tile_numel
-        h_dim = H_DIM // TILE_SIZE_2D_H
-        w_dim = W_DIM // TILE_SIZE_2D_W
-        tile_h_q = tile_idx_q // w_dim
-        tile_w_q = tile_idx_q % w_dim
-        tile_h_kv = tile_idx_kv // w_dim
-        tile_w_kv = tile_idx_kv % w_dim
+        q_tile_h, q_tile_w = get_h_w_idx_tiled(q_idx)
+        kv_tile_h, kv_tile_w = get_h_w_idx_tiled(kv_idx)
+        left_border_h, right_border_h = get_border(kernel_tile_h)
+        left_border_w, right_border_w = get_border(kernel_tile_w)
+        kernel_center_h = q_tile_h.clamp(left_border_h, (canvas_tile_h - 1) - right_border_h)
+        kernel_center_w = q_tile_w.clamp(left_border_w, (canvas_tile_w - 1) - right_border_w)
+        h_mask = (kv_tile_h >= kernel_center_h - left_border_h) & (kv_tile_h <= kernel_center_h + right_border_h)
+        w_mask = (kv_tile_w >= kernel_center_w - left_border_w) & (kv_tile_w <= kernel_center_w + right_border_w)
+        vision_mask = (q_idx < vision_seq_len) & (kv_idx < vision_seq_len)
+        vision_to_text_mask = (q_idx < vision_seq_len) & (kv_idx >= vision_seq_len) & (kv_idx < vision_seq_len + text_seq_len)
+        text_to_all_mask = (q_idx >= vision_seq_len) & (kv_idx < vision_seq_len + text_seq_len)
+        return (vision_mask & h_mask & w_mask) | vision_to_text_mask | text_to_all_mask
 
-        window_size_h = WINDOW_SIZE_2D_H // TILE_SIZE_2D_H
-        window_size_w = WINDOW_SIZE_2D_W // TILE_SIZE_2D_W
-
-        window_size_left_h = window_size_h // 2
-        window_size_right_h = window_size_h // 2 + (window_size_h % 2 - 1)
-        window_size_left_w = window_size_w // 2
-        window_size_right_w = window_size_w // 2 + (window_size_w % 2 - 1)
-        
-        window_center_h = tile_h_q.clamp(
-            window_size_left_h, h_dim - 1 - window_size_right_h
-        )
-        window_center_w = tile_w_q.clamp(
-            window_size_left_w, w_dim - 1 - window_size_right_w
-        )
-
-        h_mask = (
-            tile_h_kv >= window_center_h - window_size_left_h
-        ) & (
-            tile_h_kv <= window_center_h + window_size_right_h
-        )
-
-        w_mask = (
-            tile_w_kv >= window_center_w - window_size_left_w
-        ) & (
-            tile_w_kv <= window_center_w + window_size_right_w
-        )
-        
-        return h_mask & w_mask
-    
-    sta_mask_mod_2d.__name__ = f"sta2d_h{H_DIM}_w{W_DIM}_wh{WINDOW_SIZE_2D_H}_ww{WINDOW_SIZE_2D_W}_th{TILE_SIZE_2D_H}_tw{TILE_SIZE_2D_W}"
+    sta_mask_mod_2d.__name__ = f"sta_2d_c{canvas_h}x{canvas_w}_k{kernel_h}x{kernel_w}_t{tile_h}x{tile_w}"
     return sta_mask_mod_2d
 
 def generate_sta_mask_3d(
-    T_DIM: int = 8,
-    H_DIM: int = 16,
-    W_DIM: int = 16,
-    WINDOW_SIZE_3D_T: int = 6,
-    WINDOW_SIZE_3D_H: int = 12,
-    WINDOW_SIZE_3D_W: int = 12,
-    TILE_SIZE_3D_T: int = 2,
-    TILE_SIZE_3D_H: int = 4,
-    TILE_SIZE_3D_W: int = 4,
-):
-    """
-    Generates a sliding tile attention mask for 3D spatio-temporal sequence.
+        canvas_twh: Tuple[int, int, int],
+        kernel_twh: Tuple[int, int, int],
+        tile_twh: Tuple[int, int, int],
+        text_seq_len: int = 0,
+) -> _mask_mod_signature:
+    """Generates a 3D STA mask with a given kernel size.
+    
     Args:
-        T_DIM (int): Temporal dimension of the input 3D sequence.
-        H_DIM (int): Height of the input 3D sequence.
-        W_DIM (int): Width of the input 3D sequence.
-        WINDOW_SIZE_3D_T (int): Size of the sliding window along temporal dimension.
-        WINDOW_SIZE_3D_H (int): Height of the sliding window in spatial dimensions.
-        WINDOW_SIZE_3D_W (int): Width of the sliding window in spatial dimensions.
-        TILE_SIZE_3D_T (int): Size of the tile along temporal dimension.
-        TILE_SIZE_3D_H (int): Height of the tile size in spatial dimensions.
-        TILE_SIZE_3D_W (int): Width of the tile size in spatial dimensions.
-    Returns:
-        mask (torch.Tensor): Sliding window attention mask for 3D sequence.
+        canvas_twh (Tuple[int, int, int]): The shape of the canvas (time, height, width).
+        kernel_twh (Tuple[int, int, int]): The shape of the kernel (time, height, width).
+        tile_twh (Tuple[int, int, int]): The shape of the tile (time, height, width).
+        text_seq_len (int): The length of the text sequence for masking.
     """
-    assert T_DIM % TILE_SIZE_3D_T == 0, f"T_DIM {T_DIM} is not divisible by TILE_SIZE_3D_T {TILE_SIZE_3D_T}"
-    assert H_DIM % TILE_SIZE_3D_H == 0, f"H_DIM {H_DIM} is not divisible by TILE_SIZE_3D_H {TILE_SIZE_3D_H}"
-    assert W_DIM % TILE_SIZE_3D_W == 0, f"W_DIM {W_DIM} is not divisible by TILE_SIZE_3D_W {TILE_SIZE_3D_W}"
-    assert WINDOW_SIZE_3D_T % TILE_SIZE_3D_T == 0, f"WINDOW_SIZE_3D_T {WINDOW_SIZE_3D_T} is not divisible by TILE_SIZE_3D_T {TILE_SIZE_3D_T}"
-    assert WINDOW_SIZE_3D_H % TILE_SIZE_3D_H == 0, f"WINDOW_SIZE_3D_H {WINDOW_SIZE_3D_H} is not divisible by TILE_SIZE_3D_H {TILE_SIZE_3D_H}"
-    assert WINDOW_SIZE_3D_W % TILE_SIZE_3D_W == 0, f"WINDOW_SIZE_3D_W {WINDOW_SIZE_3D_W} is not divisible by TILE_SIZE_3D_W {TILE_SIZE_3D_W}"
+    canvas_t, canvas_h, canvas_w = canvas_twh
+    kernel_t, kernel_h, kernel_w = kernel_twh
+    tile_t, tile_h, tile_w = tile_twh
+    tile_numel = tile_t * tile_h * tile_w
+    assert canvas_t % tile_t == 0, f"Canvas time {canvas_t} is not divisible by tile time {tile_t}"
+    assert canvas_h % tile_h == 0, f"Canvas height {canvas_h} is not divisible by tile height {tile_h}"
+    assert canvas_w % tile_w == 0, f"Canvas width {canvas_w} is not divisible by tile width {tile_w}"
+    assert kernel_t % tile_t == 0, f"Kernel time {kernel_t} is not divisible by tile time {tile_t}"
+    assert kernel_h % tile_h == 0, f"Kernel height {kernel_h} is not divisible by tile height {tile_h}"
+    assert kernel_w % tile_w == 0, f"Kernel width {kernel_w} is not divisible by tile width {tile_w}"
+    canvas_tile_t, canvas_tile_h, canvas_tile_w = canvas_t // tile_t, canvas_h // tile_h, canvas_w // tile_w
+    kernel_tile_t, kernel_tile_h, kernel_tile_w = kernel_t // tile_t, kernel_h // tile_h, kernel_w // tile_w
+    vision_seq_len = canvas_t * canvas_h * canvas_w
+
+    def get_t_h_w_idx_tiled(idx: IntTensor) -> Tuple[IntTensor, IntTensor, IntTensor]:
+        tile_id = idx // tile_numel
+        tile_t_idx = tile_id // (canvas_tile_h * canvas_tile_w)
+        tile_h_idx = (tile_id % (canvas_tile_h * canvas_tile_w)) // canvas_tile_w
+        tile_w_idx = tile_id % canvas_tile_w
+        return tile_t_idx, tile_h_idx, tile_w_idx
+    
+    def get_border(kernel_size: IntTensor) -> Tuple[IntTensor, IntTensor]:
+        left_border = kernel_size // 2
+        right_border = kernel_size // 2 + (kernel_size % 2 - 1)
+        return left_border, right_border
 
     def sta_mask_mod_3d(
         b: IntTensor,
@@ -178,69 +171,24 @@ def generate_sta_mask_3d(
         q_idx: IntTensor,
         kv_idx: IntTensor,
     ) -> BoolTensor:
-        tile_numel = TILE_SIZE_3D_T * TILE_SIZE_3D_H * TILE_SIZE_3D_W
-        tile_idx_q = q_idx // tile_numel
-        tile_idx_kv = kv_idx // tile_numel
-        
-        hw_dim = (H_DIM // TILE_SIZE_3D_H) * (W_DIM // TILE_SIZE_3D_W)
-        t_dim = T_DIM // TILE_SIZE_3D_T
-        h_dim = H_DIM // TILE_SIZE_3D_H
-        w_dim = W_DIM // TILE_SIZE_3D_W
-        
-        tile_t_q = tile_idx_q // hw_dim
-        hw_idx_q = tile_idx_q % hw_dim
-        tile_h_q = hw_idx_q // w_dim
-        tile_w_q = hw_idx_q % w_dim
-        
-        tile_t_kv = tile_idx_kv // hw_dim
-        hw_idx_kv = tile_idx_kv % hw_dim
-        tile_h_kv = hw_idx_kv // w_dim
-        tile_w_kv = hw_idx_kv % w_dim
-        
-        window_size_t = WINDOW_SIZE_3D_T // TILE_SIZE_3D_T
-        window_size_h = WINDOW_SIZE_3D_H // TILE_SIZE_3D_H
-        window_size_w = WINDOW_SIZE_3D_W // TILE_SIZE_3D_W
+        q_tile_t, q_tile_h, q_tile_w = get_t_h_w_idx_tiled(q_idx)
+        kv_tile_t, kv_tile_h, kv_tile_w = get_t_h_w_idx_tiled(kv_idx)
+        left_border_t, right_border_t = get_border(kernel_tile_t)
+        left_border_h, right_border_h = get_border(kernel_tile_h)
+        left_border_w, right_border_w = get_border(kernel_tile_w)
+        kernel_center_t = q_tile_t.clamp(left_border_t, (canvas_tile_t - 1) - right_border_t)
+        kernel_center_h = q_tile_h.clamp(left_border_h, (canvas_tile_h - 1) - right_border_h)
+        kernel_center_w = q_tile_w.clamp(left_border_w, (canvas_tile_w - 1) - right_border_w)
+        t_mask = (kv_tile_t >= kernel_center_t - left_border_t) & (kv_tile_t <= kernel_center_t + right_border_t)
+        h_mask = (kv_tile_h >= kernel_center_h - left_border_h) & (kv_tile_h <= kernel_center_h + right_border_h)
+        w_mask = (kv_tile_w >= kernel_center_w - left_border_w) & (kv_tile_w <= kernel_center_w + right_border_w)
+        vision_mask = (q_idx < vision_seq_len) & (kv_idx < vision_seq_len)
+        vision_to_text_mask = (q_idx < vision_seq_len) & (kv_idx >= vision_seq_len) & (kv_idx < vision_seq_len + text_seq_len)
+        text_to_all_mask = (q_idx >= vision_seq_len) & (kv_idx < vision_seq_len + text_seq_len)
+        return (vision_mask & t_mask & w_mask & h_mask) | vision_to_text_mask | text_to_all_mask
 
-        window_size_left_t = window_size_t // 2
-        window_size_right_t = window_size_t // 2 + (window_size_t % 2 - 1)
-        window_size_left_h = window_size_h // 2
-        window_size_right_h = window_size_h // 2 + (window_size_h % 2 - 1)
-        window_size_left_w = window_size_w // 2
-        window_size_right_w = window_size_w // 2 + (window_size_w % 2 - 1)
-        
-        window_center_t = tile_t_q.clamp(
-            window_size_left_t, t_dim - 1 - window_size_right_t
-        )
-        window_center_h = tile_h_q.clamp(
-            window_size_left_h, h_dim - 1 - window_size_right_h
-        )
-        window_center_w = tile_w_q.clamp(
-            window_size_left_w, w_dim - 1 - window_size_right_w
-        )
-
-        t_mask = (
-            tile_t_kv >= window_center_t - window_size_left_t
-        ) & (
-            tile_t_kv <= window_center_t + window_size_right_t
-        )
-
-        h_mask = (
-            tile_h_kv >= window_center_h - window_size_left_h
-        ) & (
-            tile_h_kv <= window_center_h + window_size_right_h
-        )
-
-        w_mask = (
-            tile_w_kv >= window_center_w - window_size_left_w
-        ) & (
-            tile_w_kv <= window_center_w + window_size_right_w
-        )
-        
-        return t_mask & h_mask & w_mask
-    
-    sta_mask_mod_3d.__name__ = f"sta3d_t{T_DIM}_h{H_DIM}_w{W_DIM}_wt{WINDOW_SIZE_3D_T}_wh{WINDOW_SIZE_3D_H}_ww{WINDOW_SIZE_3D_W}_tt{TILE_SIZE_3D_T}_th{TILE_SIZE_3D_H}_tw{TILE_SIZE_3D_W}"
+    sta_mask_mod_3d.__name__ = f"sta_3d_c{canvas_t}x{canvas_h}x{canvas_w}_k{kernel_t}x{kernel_h}x{kernel_w}_t{tile_t}x{tile_h}x{tile_w}"
     return sta_mask_mod_3d
-
 
 """
 Vanilla Self-Attention
@@ -1019,15 +967,9 @@ class SlidingTileAttention3D(nn.Module):
         self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
         
         sta3d_mask = generate_sta_mask_3d(
-            T_DIM=self.t_dim,
-            H_DIM=self.h_dim,
-            W_DIM=self.w_dim,
-            WINDOW_SIZE_3D_T=self.window_size_t,
-            WINDOW_SIZE_3D_H=self.window_size_h,
-            WINDOW_SIZE_3D_W=self.window_size_w,
-            TILE_SIZE_3D_T=self.tile_size_t,
-            TILE_SIZE_3D_H=self.tile_size_h,
-            TILE_SIZE_3D_W=self.tile_size_w,
+            canvas_twh=(self.t_dim, self.h_dim, self.w_dim),
+            kernel_twh=(self.window_size_t, self.window_size_h, self.window_size_w),
+            tile_twh=(self.tile_size_t, self.tile_size_h, self.tile_size_w),
         )
 
         self.block_mask = create_block_mask(
