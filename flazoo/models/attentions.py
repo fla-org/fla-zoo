@@ -90,7 +90,6 @@ def generate_sta_mask_2d(
     assert W_DIM % TILE_SIZE_2D_W == 0, f"W_DIM {W_DIM} is not divisible by TILE_SIZE_2D_W {TILE_SIZE_2D_W}"
     assert WINDOW_SIZE_2D_H % TILE_SIZE_2D_H == 0, f"WINDOW_SIZE_2D_H {WINDOW_SIZE_2D_H} is not divisible by TILE_SIZE_2D_H {TILE_SIZE_2D_H}"
     assert WINDOW_SIZE_2D_W % TILE_SIZE_2D_W == 0, f"WINDOW_SIZE_2D_W {WINDOW_SIZE_2D_W} is not divisible by TILE_SIZE_2D_W {TILE_SIZE_2D_W}"
-    assert TILE_SIZE_2D_H * TILE_SIZE_2D_W % 128 == 0, f"tile numel {TILE_SIZE_2D_H * TILE_SIZE_2D_W} is not divisible by 128, which is required for flex attention"
 
     def sta_mask_mod_2d(
         b: IntTensor,
@@ -172,7 +171,6 @@ def generate_sta_mask_3d(
     assert WINDOW_SIZE_3D_T % TILE_SIZE_3D_T == 0, f"WINDOW_SIZE_3D_T {WINDOW_SIZE_3D_T} is not divisible by TILE_SIZE_3D_T {TILE_SIZE_3D_T}"
     assert WINDOW_SIZE_3D_H % TILE_SIZE_3D_H == 0, f"WINDOW_SIZE_3D_H {WINDOW_SIZE_3D_H} is not divisible by TILE_SIZE_3D_H {TILE_SIZE_3D_H}"
     assert WINDOW_SIZE_3D_W % TILE_SIZE_3D_W == 0, f"WINDOW_SIZE_3D_W {WINDOW_SIZE_3D_W} is not divisible by TILE_SIZE_3D_W {TILE_SIZE_3D_W}"
-    assert (TILE_SIZE_3D_T * TILE_SIZE_3D_H * TILE_SIZE_3D_W) % 128 == 0, f"tile numel {TILE_SIZE_3D_T * TILE_SIZE_3D_H * TILE_SIZE_3D_W} is not divisible by 128, which is required for flex attention"
 
     def sta_mask_mod_3d(
         b: IntTensor,
