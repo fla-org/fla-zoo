@@ -782,12 +782,9 @@ class SlidingTileAttention2D(nn.Module):
         
         # Create block mask for 2D sliding tile attention
         sta2d_mask = generate_sta_mask_2d(
-            H_DIM=self.h_dim,
-            W_DIM=self.w_dim,
-            WINDOW_SIZE_2D_H=self.window_size_h,
-            WINDOW_SIZE_2D_W=self.window_size_w,
-            TILE_SIZE_2D_H=self.tile_size_h,
-            TILE_SIZE_2D_W=self.tile_size_w,
+            canvas_hw=(self.h_dim, self.w_dim),
+            kernel_hw=(self.window_size_h, self.window_size_w),
+            tile_hw=(self.tile_size_h, self.tile_size_w),
         )
 
         self.block_mask = create_block_mask(
