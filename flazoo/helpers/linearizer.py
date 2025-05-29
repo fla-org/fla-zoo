@@ -102,8 +102,8 @@ def init_video_und_from_hybrid_fla_vision_und(
     """
     # Define parameter mapping
     outlier_list = [
-        "patch_embeddings.projection.weight",
-        "patch_embeddings.projection.bias",
+        "embeddings.patch_embeddings.projection.weight",
+        "embeddings.patch_embeddings.projection.bias",
     ]
 
     copy_matching_params(
