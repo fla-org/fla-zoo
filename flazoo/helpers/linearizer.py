@@ -52,6 +52,7 @@ def copy_matching_params(model_a, model_b, outlier_list=None, verbose=False):
 
         # Check if parameter name exists in model_b
         if name in dict_b:
+            logging.info(f"Matching parameter found: {name}")
             param_b = dict_b[name]
 
             # Check if parameter shapes match
@@ -76,6 +77,84 @@ def copy_matching_params(model_a, model_b, outlier_list=None, verbose=False):
     )
 
     return copied_params_count, total_params_count
+
+
+def init_video_und_from_hybrid_fla_vision_und(
+    fla_model,
+    another_fla_model,
+    train_mlp: bool = True,
+    init_embedding: bool = True,
+    return_pretrained: bool = False,
+):
+    """
+    Initialize a FLA model from another FLA model. \n
+    This function is used to initialize a video FLA model from a hybrid FLA vision model. \n
+
+    Args:
+        fla_model: FLA models to be initialized
+        another_fla_model: FLA models to load
+        train_mlp: Whether to train the MLP layers (default: True)
+        init_embedding: Whether to initialize the embedding layers (default: True)
+        return_pretrained: Whether to return the pretrained model (default: False)
+
+    Returns:
+        Initialized FLA model
+    """
+    # Define parameter mapping
+    outlier_list = [
+        "patch_embeddings.projection.weight",
+        "patch_embeddings.projection.bias",
+    ]
+
+    copy_matching_params(
+        model_a=fla_model,
+        model_b=another_fla_model,
+        outlier_list=outlier_list,
+        verbose=True,
+    )
+
+    if not train_mlp:
+        for n, p in fla_model.named_parameters():
+            if "channel_mixer" in n:
+                p.requires_grad_(False)
+
+    if init_embedding:
+        logging.info("Initializing embedding layers, make sure your shapes match.")
+        fla_model.embeddings.patch_embeddings.projection.weight.data.copy_(
+            another_fla_model.embeddings.patch_embeddings.projection.weight.data.unsqueeze(
+                2
+            )
+        )
+        fla_model.embeddings.patch_embeddings.projection.bias.data.copy_(
+            another_fla_model.embeddings.patch_embeddings.projection.bias.data
+        )
+        assert torch.equal(
+            fla_model.embeddings.patch_embeddings.projection.weight,
+            another_fla_model.embeddings.patch_embeddings.projection.weight.unsqueeze(
+                2
+            ),
+        )
+        assert torch.equal(
+            fla_model.embeddings.patch_embeddings.projection.bias,
+            another_fla_model.embeddings.patch_embeddings.projection.bias,
+        )
+
+    # init layernorm weight and bias
+    fla_model.layernorm.weight = nn.Parameter(
+        another_fla_model.layernorm.weight.clone()
+    )
+    fla_model.layernorm.bias = nn.Parameter(another_fla_model.layernorm.bias.clone())
+    fla_model.pooler.dense.weight = nn.Parameter(
+        another_fla_model.pooler.dense.weight.clone()
+    )
+    fla_model.pooler.dense.bias = nn.Parameter(
+        another_fla_model.pooler.dense.bias.clone()
+    )
+
+    if not return_pretrained:
+        return fla_model
+    else:
+        return fla_model, another_fla_model
 
 
 def init_video_und_from_pure_fla_vision_und(
