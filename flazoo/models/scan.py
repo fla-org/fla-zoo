@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 
 import torch
@@ -19,10 +18,11 @@ from typing import TYPE_CHECKING, Optional, Tuple, Union
 Cross Scan and Cross Merge implemented in Triton (only). Taken from https://github.com/MzeroMiko/VMamba/blob/main/classification/models/csm_triton.py
 """
 
+
 @triton.jit
 def triton_cross_scan_flex(
-    x: tl.tensor, # (B, C, H, W) | (B, H, W, C) | (B, 4, C, H, W) | (B, H, W, 4, C)
-    y: tl.tensor, # (B, 4, C, H, W) | (B, H, W, 4, C)
+    x: tl.tensor,  # (B, C, H, W) | (B, H, W, C) | (B, 4, C, H, W) | (B, H, W, 4, C)
+    y: tl.tensor,  # (B, 4, C, H, W) | (B, H, W, 4, C)
     x_layout: tl.constexpr,
     y_layout: tl.constexpr,
     operation: tl.constexpr,
@@ -50,16 +50,16 @@ def triton_cross_scan_flex(
     _mask_hw = _mask_h[:, None] & _mask_w[None, :]
     _for_C = min(DC - i_c * BC, BC)
 
-    pos_h = (i_h * BH + tl.arange(0, BH)[:, None])
-    pos_w = (i_w * BW + tl.arange(0, BW)[None, :])
-    neg_h = (DH - i_h * BH - 1 - tl.arange(0, BH)[:, None])
-    neg_w = (DW - i_w * BW - 1 - tl.arange(0, BW)[None, :])
+    pos_h = i_h * BH + tl.arange(0, BH)[:, None]
+    pos_w = i_w * BW + tl.arange(0, BW)[None, :]
+    neg_h = DH - i_h * BH - 1 - tl.arange(0, BH)[:, None]
+    neg_w = DW - i_w * BW - 1 - tl.arange(0, BW)[None, :]
     if scans == 0:
         # none; trans; flip; trans + flip;
         HWRoute0 = pos_h * DW + pos_w
-        HWRoute1 = pos_w * DH + pos_h # trans
-        HWRoute2 = neg_h * DW + neg_w # flip
-        HWRoute3 = neg_w * DH + neg_h # trans + flip
+        HWRoute1 = pos_w * DH + pos_h  # trans
+        HWRoute2 = neg_h * DW + neg_w  # flip
+        HWRoute3 = neg_w * DH + neg_h  # trans + flip
     elif scans == 1:
         # none; none; none; none;
         HWRoute0 = pos_h * DW + pos_w
@@ -70,12 +70,14 @@ def triton_cross_scan_flex(
         # none; none; flip; flip;
         HWRoute0 = pos_h * DW + pos_w
         HWRoute1 = HWRoute0
-        HWRoute2 = neg_h * DW + neg_w # flip
-        HWRoute3 = HWRoute2      
+        HWRoute2 = neg_h * DW + neg_w  # flip
+        HWRoute3 = HWRoute2
 
     _tmp1 = DC * DH * DW
 
-    y_ptr_base = y + i_b * 4 * _tmp1 + (i_c * BC * DH * DW if y_layout == 0 else i_c * BC)
+    y_ptr_base = (
+        y + i_b * 4 * _tmp1 + (i_c * BC * DH * DW if y_layout == 0 else i_c * BC)
+    )
     if y_layout == 0:
         p_y1 = y_ptr_base + HWRoute0
         p_y2 = y_ptr_base + _tmp1 + HWRoute1
@@ -85,10 +87,12 @@ def triton_cross_scan_flex(
         p_y1 = y_ptr_base + HWRoute0 * 4 * DC
         p_y2 = y_ptr_base + DC + HWRoute1 * 4 * DC
         p_y3 = y_ptr_base + 2 * DC + HWRoute2 * 4 * DC
-        p_y4 = y_ptr_base + 3 * DC + HWRoute3 * 4 * DC       
-    
+        p_y4 = y_ptr_base + 3 * DC + HWRoute3 * 4 * DC
+
     if onebyone == 0:
-        x_ptr_base = x + i_b * _tmp1 + (i_c * BC * DH * DW if x_layout == 0 else i_c * BC)
+        x_ptr_base = (
+            x + i_b * _tmp1 + (i_c * BC * DH * DW if x_layout == 0 else i_c * BC)
+        )
         if x_layout == 0:
             p_x = x_ptr_base + HWRoute0
         else:
@@ -114,26 +118,36 @@ def triton_cross_scan_flex(
                 tl.store(p_x + _idx_x, _y1 + _y2 + _y3 + _y4, mask=_mask_hw)
 
     else:
-        x_ptr_base = x + i_b * 4 * _tmp1 + (i_c * BC * DH * DW if x_layout == 0 else i_c * BC)
+        x_ptr_base = (
+            x + i_b * 4 * _tmp1 + (i_c * BC * DH * DW if x_layout == 0 else i_c * BC)
+        )
         if x_layout == 0:
             p_x1 = x_ptr_base + HWRoute0
             p_x2 = p_x1 + _tmp1
             p_x3 = p_x2 + _tmp1
-            p_x4 = p_x3 + _tmp1  
+            p_x4 = p_x3 + _tmp1
         else:
             p_x1 = x_ptr_base + HWRoute0 * 4 * DC
             p_x2 = p_x1 + DC
             p_x3 = p_x2 + DC
-            p_x4 = p_x3 + DC        
-    
+            p_x4 = p_x3 + DC
+
         if operation == 0:
             for idxc in range(_for_C):
                 _idx_x = idxc * DH * DW if x_layout == 0 else idxc
                 _idx_y = idxc * DH * DW if y_layout == 0 else idxc
-                tl.store(p_y1 + _idx_y, tl.load(p_x1 + _idx_x, mask=_mask_hw), mask=_mask_hw)
-                tl.store(p_y2 + _idx_y, tl.load(p_x2 + _idx_x, mask=_mask_hw), mask=_mask_hw)
-                tl.store(p_y3 + _idx_y, tl.load(p_x3 + _idx_x, mask=_mask_hw), mask=_mask_hw)
-                tl.store(p_y4 + _idx_y, tl.load(p_x4 + _idx_x, mask=_mask_hw), mask=_mask_hw)
+                tl.store(
+                    p_y1 + _idx_y, tl.load(p_x1 + _idx_x, mask=_mask_hw), mask=_mask_hw
+                )
+                tl.store(
+                    p_y2 + _idx_y, tl.load(p_x2 + _idx_x, mask=_mask_hw), mask=_mask_hw
+                )
+                tl.store(
+                    p_y3 + _idx_y, tl.load(p_x3 + _idx_x, mask=_mask_hw), mask=_mask_hw
+                )
+                tl.store(
+                    p_y4 + _idx_y, tl.load(p_x4 + _idx_x, mask=_mask_hw), mask=_mask_hw
+                )
         else:
             for idxc in range(_for_C):
                 _idx_x = idxc * DH * DW if x_layout == 0 else idxc
@@ -146,7 +160,14 @@ def triton_cross_scan_flex(
 
 class CrossScanTritonF(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x: torch.Tensor, in_channel_first=True, out_channel_first=True, one_by_one=False, scans=0):
+    def forward(
+        ctx,
+        x: torch.Tensor,
+        in_channel_first=True,
+        out_channel_first=True,
+        one_by_one=False,
+        scans=0,
+    ):
         if one_by_one:
             if in_channel_first:
                 B, _, C, H, W = x.shape
@@ -160,7 +181,7 @@ class CrossScanTritonF(torch.autograd.Function):
         B, C, H, W = int(B), int(C), int(H), int(W)
         BC, BH, BW = 1, 32, 32
         NH, NW, NC = triton.cdiv(H, BH), triton.cdiv(W, BW), triton.cdiv(C, BC)
-        
+
         ctx.in_channel_first = in_channel_first
         ctx.out_channel_first = out_channel_first
         ctx.one_by_one = one_by_one
@@ -168,14 +189,30 @@ class CrossScanTritonF(torch.autograd.Function):
         ctx.shape = (B, C, H, W)
         ctx.triton_shape = (BC, BH, BW, NC, NH, NW)
 
-        y = x.new_empty((B, 4, C, H * W)) if out_channel_first else x.new_empty((B, H * W, 4, C))
+        y = (
+            x.new_empty((B, 4, C, H * W))
+            if out_channel_first
+            else x.new_empty((B, H * W, 4, C))
+        )
         triton_cross_scan_flex[(NH * NW, NC, B)](
-            x.contiguous(), y, 
-            (0 if in_channel_first else 1), (0 if out_channel_first else 1), 0, (0 if not one_by_one else 1), scans, 
-            BC, BH, BW, C, H, W, NH, NW
+            x.contiguous(),
+            y,
+            (0 if in_channel_first else 1),
+            (0 if out_channel_first else 1),
+            0,
+            (0 if not one_by_one else 1),
+            scans,
+            BC,
+            BH,
+            BW,
+            C,
+            H,
+            W,
+            NH,
+            NW,
         )
         return y
-        
+
     @staticmethod
     def backward(ctx, y: torch.Tensor):
         in_channel_first = ctx.in_channel_first
@@ -185,21 +222,48 @@ class CrossScanTritonF(torch.autograd.Function):
         B, C, H, W = ctx.shape
         BC, BH, BW, NC, NH, NW = ctx.triton_shape
         if one_by_one:
-            x = y.new_empty((B, 4, C, H, W)) if in_channel_first else y.new_empty((B, H, W, 4, C))
+            x = (
+                y.new_empty((B, 4, C, H, W))
+                if in_channel_first
+                else y.new_empty((B, H, W, 4, C))
+            )
         else:
-            x = y.new_empty((B, C, H, W)) if in_channel_first else y.new_empty((B, H, W, C))
-        
+            x = (
+                y.new_empty((B, C, H, W))
+                if in_channel_first
+                else y.new_empty((B, H, W, C))
+            )
+
         triton_cross_scan_flex[(NH * NW, NC, B)](
-            x, y.contiguous(), 
-            (0 if in_channel_first else 1), (0 if out_channel_first else 1), 1, (0 if not one_by_one else 1), scans,
-            BC, BH, BW, C, H, W, NH, NW
+            x,
+            y.contiguous(),
+            (0 if in_channel_first else 1),
+            (0 if out_channel_first else 1),
+            1,
+            (0 if not one_by_one else 1),
+            scans,
+            BC,
+            BH,
+            BW,
+            C,
+            H,
+            W,
+            NH,
+            NW,
         )
         return x, None, None, None, None
 
 
 class CrossMergeTritonF(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, y: torch.Tensor, in_channel_first=True, out_channel_first=True, one_by_one=False, scans=0):
+    def forward(
+        ctx,
+        y: torch.Tensor,
+        in_channel_first=True,
+        out_channel_first=True,
+        one_by_one=False,
+        scans=0,
+    ):
         if out_channel_first:
             B, _, C, H, W = y.shape
         else:
@@ -214,16 +278,36 @@ class CrossMergeTritonF(torch.autograd.Function):
         ctx.shape = (B, C, H, W)
         ctx.triton_shape = (BC, BH, BW, NC, NH, NW)
         if one_by_one:
-            x = y.new_empty((B, 4, C, H * W)) if in_channel_first else y.new_empty((B, H * W, 4, C))
+            x = (
+                y.new_empty((B, 4, C, H * W))
+                if in_channel_first
+                else y.new_empty((B, H * W, 4, C))
+            )
         else:
-            x = y.new_empty((B, C, H * W)) if in_channel_first else y.new_empty((B, H * W, C))
+            x = (
+                y.new_empty((B, C, H * W))
+                if in_channel_first
+                else y.new_empty((B, H * W, C))
+            )
         triton_cross_scan_flex[(NH * NW, NC, B)](
-            x, y.contiguous(), 
-            (0 if in_channel_first else 1), (0 if out_channel_first else 1), 1, (0 if not one_by_one else 1), scans,
-            BC, BH, BW, C, H, W, NH, NW
+            x,
+            y.contiguous(),
+            (0 if in_channel_first else 1),
+            (0 if out_channel_first else 1),
+            1,
+            (0 if not one_by_one else 1),
+            scans,
+            BC,
+            BH,
+            BW,
+            C,
+            H,
+            W,
+            NH,
+            NW,
         )
         return x
-        
+
     @staticmethod
     def backward(ctx, x: torch.Tensor):
         in_channel_first = ctx.in_channel_first
@@ -232,17 +316,40 @@ class CrossMergeTritonF(torch.autograd.Function):
         scans = ctx.scans
         B, C, H, W = ctx.shape
         BC, BH, BW, NC, NH, NW = ctx.triton_shape
-        y = x.new_empty((B, 4, C, H, W)) if out_channel_first else x.new_empty((B, H, W, 4, C))
+        y = (
+            x.new_empty((B, 4, C, H, W))
+            if out_channel_first
+            else x.new_empty((B, H, W, 4, C))
+        )
         triton_cross_scan_flex[(NH * NW, NC, B)](
-            x.contiguous(), y, 
-            (0 if in_channel_first else 1), (0 if out_channel_first else 1), 0, (0 if not one_by_one else 1), scans,
-            BC, BH, BW, C, H, W, NH, NW
+            x.contiguous(),
+            y,
+            (0 if in_channel_first else 1),
+            (0 if out_channel_first else 1),
+            0,
+            (0 if not one_by_one else 1),
+            scans,
+            BC,
+            BH,
+            BW,
+            C,
+            H,
+            W,
+            NH,
+            NW,
         )
         return y, None, None, None, None, None
 
 
 # @torch.compile(options={"triton.cudagraphs": True}, fullgraph=True)
-def cross_scan_fn(x: torch.Tensor, in_channel_first=True, out_channel_first=True, one_by_one=False, scans=0, force_torch=False):
+def cross_scan_fn(
+    x: torch.Tensor,
+    in_channel_first=True,
+    out_channel_first=True,
+    one_by_one=False,
+    scans=0,
+    force_torch=False,
+):
     # x: (B, C, H, W) | (B, H, W, C) | (B, 4, C, H, W) | (B, H, W, 4, C)
     # y: (B, 4, C, L) | (B, L, 4, C)
     # scans: 0: cross scan; 1 unidirectional; 2: bidirectional;
@@ -253,7 +360,14 @@ def cross_scan_fn(x: torch.Tensor, in_channel_first=True, out_channel_first=True
 
 
 # @torch.compile(options={"triton.cudagraphs": True}, fullgraph=True)
-def cross_merge_fn(y: torch.Tensor, in_channel_first=True, out_channel_first=True, one_by_one=False, scans=0, force_torch=False):
+def cross_merge_fn(
+    y: torch.Tensor,
+    in_channel_first=True,
+    out_channel_first=True,
+    one_by_one=False,
+    scans=0,
+    force_torch=False,
+):
     # y: (B, 4, C, L) | (B, L, 4, C)
     # x: (B, C, H * W) | (B, H * W, C) | (B, 4, C, H * W) | (B, H * W, 4, C)
     # scans: 0: cross scan; 1 unidirectional; 2: bidirectional;
@@ -261,7 +375,8 @@ def cross_merge_fn(y: torch.Tensor, in_channel_first=True, out_channel_first=Tru
     CMF = CrossMergeTritonF
     with torch.cuda.device(y.device):
         return CMF.apply(y, in_channel_first, out_channel_first, one_by_one, scans)
-    
+
+
 @torch.compile
 def multi_head_split_2d_torch(hidden_states: torch.Tensor, num_heads: int):
     """
@@ -271,11 +386,11 @@ def multi_head_split_2d_torch(hidden_states: torch.Tensor, num_heads: int):
       - Group 2 (n/4 to n/2-1): 2D transpose
       - Group 3 (n/2 to 3n/4-1): Sequence reversal
       - Group 4 (3n/4 to n-1): 2D transpose + reversal
-    
+
     Args:
         hidden_states: Input tensor of shape [batch_size, seq_len, hidden_size]
         num_heads: Number of attention heads (must be divisible by 4)
-        
+
     Returns:
         Processed hidden states with different scanning patterns
     """
@@ -284,43 +399,49 @@ def multi_head_split_2d_torch(hidden_states: torch.Tensor, num_heads: int):
     device = hidden_states.device
     dtype = hidden_states.dtype
     assert num_heads % 4 == 0, f"Number of heads {num_heads} must be divisible by 4"
-    
+
     # Calculate dimensions for each group
     heads_per_group = num_heads // 4
     dim_per_group = heads_per_group * head_dim
-    
+
     # Initialize result tensor
     result = torch.empty_like(hidden_states)
-    
+
     # Group 1: Keep original order
     result[:, :, :dim_per_group] = hidden_states[:, :, :dim_per_group]
-    
+
     # Prepare for 2D operations
     hw = int(math.sqrt(L))
-    assert hw * hw == L, f"Sequence length {L} must be a perfect square for 2D operations"
-    
-    # Group 2: 2D transpose
-    result[:, :, dim_per_group:2*dim_per_group] = einops.rearrange(
-        hidden_states[:, :, dim_per_group:2*dim_per_group],
-        'b (h w) d -> b (w h) d', h=hw, w=hw
+    assert hw * hw == L, (
+        f"Sequence length {L} must be a perfect square for 2D operations"
     )
-    
+
+    # Group 2: 2D transpose
+    result[:, :, dim_per_group : 2 * dim_per_group] = einops.rearrange(
+        hidden_states[:, :, dim_per_group : 2 * dim_per_group],
+        "b (h w) d -> b (w h) d",
+        h=hw,
+        w=hw,
+    )
+
     # Group 3: Sequence reversal
-    result[:, :, 2*dim_per_group:3*dim_per_group] = torch.flip(
-        hidden_states[:, :, 2*dim_per_group:3*dim_per_group], 
-        dims=[1]
+    result[:, :, 2 * dim_per_group : 3 * dim_per_group] = torch.flip(
+        hidden_states[:, :, 2 * dim_per_group : 3 * dim_per_group], dims=[1]
     )
 
     # Group 4: 2D transpose + reversal
-    result[:, :, 3*dim_per_group:] = torch.flip(
+    result[:, :, 3 * dim_per_group :] = torch.flip(
         einops.rearrange(
-            hidden_states[:, :, 3*dim_per_group:],
-            'b (h w) d -> b (w h) d', h=hw, w=hw
+            hidden_states[:, :, 3 * dim_per_group :],
+            "b (h w) d -> b (w h) d",
+            h=hw,
+            w=hw,
         ),
-        dims=[1]
+        dims=[1],
     )
-    
+
     return result
+
 
 @torch.compile
 def multi_head_merge_2d_torch(hidden_states: torch.Tensor, num_heads: int):
@@ -332,11 +453,11 @@ def multi_head_merge_2d_torch(hidden_states: torch.Tensor, num_heads: int):
       - Group 2: 2D transpose
       - Group 3: Sequence reversal
       - Group 4: 2D transpose + reversal
-    
+
     Args:
         hidden_states: Processed hidden states of shape [batch_size, seq_len, hidden_size]
         num_heads: Number of attention heads (must be divisible by 4)
-        
+
     Returns:
         Merged hidden states with original ordering restored
     """
@@ -345,54 +466,59 @@ def multi_head_merge_2d_torch(hidden_states: torch.Tensor, num_heads: int):
     head_dim = D // num_heads
     dtype = hidden_states.dtype
     assert num_heads % 4 == 0, f"Number of heads {num_heads} must be divisible by 4"
-    
+
     # Calculate dimensions for each group
     heads_per_group = num_heads // 4
     dim_per_group = heads_per_group * head_dim
-    
+
     # Initialize result tensor
     result = torch.empty_like(hidden_states)
-    
+
     # Group 1: Keep original order
     result[:, :, :dim_per_group] = hidden_states[:, :, :dim_per_group]
-    
+
     # Prepare for 2D operations
     hw = int(math.sqrt(L))
-    
+
     # Group 2: Restore from 2D transpose
-    result[:, :, dim_per_group:2*dim_per_group] = einops.rearrange(
-        hidden_states[:, :, dim_per_group:2*dim_per_group],
-        'b (w h) d -> b (h w) d', h=hw, w=hw
+    result[:, :, dim_per_group : 2 * dim_per_group] = einops.rearrange(
+        hidden_states[:, :, dim_per_group : 2 * dim_per_group],
+        "b (w h) d -> b (h w) d",
+        h=hw,
+        w=hw,
     )
-    
+
     # Group 3: Restore from sequence reversal
-    result[:, :, 2*dim_per_group:3*dim_per_group] = torch.flip(
-        hidden_states[:, :, 2*dim_per_group:3*dim_per_group], 
-        dims=[1]
+    result[:, :, 2 * dim_per_group : 3 * dim_per_group] = torch.flip(
+        hidden_states[:, :, 2 * dim_per_group : 3 * dim_per_group], dims=[1]
     )
 
     # Group 4: Restore from 2D transpose + reversal
-    result[:, :, 3*dim_per_group:] = einops.rearrange(
-        torch.flip(hidden_states[:, :, 3*dim_per_group:], dims=[1]),
-        'b (w h) d -> b (h w) d', h=hw, w=hw
+    result[:, :, 3 * dim_per_group :] = einops.rearrange(
+        torch.flip(hidden_states[:, :, 3 * dim_per_group :], dims=[1]),
+        "b (w h) d -> b (h w) d",
+        h=hw,
+        w=hw,
     )
-    
+
     return result
+
 
 # A wrapper function to handle both split and merge operations
 # and to choose between torch and triton backends
 # This function is designed to be universal and can be used for both splitting and merging operations
 
+
 def multi_head_2d_scan(
-    hidden_states: torch.Tensor, 
-    num_heads: int, 
+    hidden_states: torch.Tensor,
+    num_heads: int,
     backend: str = "torch",
     operation: str = "split",
-    **kwargs
+    **kwargs,
 ) -> torch.Tensor:
     """
     Universal function for 2D multi-head scanning, supporting different backends and operations.
-    
+
     Args:
         hidden_states: Input tensor of shape [batch_size, seq_len, hidden_size]
         num_heads: Number of attention heads (must be divisible by 4)
@@ -402,20 +528,22 @@ def multi_head_2d_scan(
         **kwargs: Placeholder for additional parameters specific to the backend or operation
     Raises:
         ValueError: If the operation is not "split" or "merge"
-        
+
     Returns:
         Processed hidden states with different scanning patterns or merged back
     """
     # Validate operation parameter
     valid_operations = ["split", "merge"]
     if operation not in valid_operations:
-        raise ValueError(f"Operation must be one of {valid_operations}, got {operation}")
-    
+        raise ValueError(
+            f"Operation must be one of {valid_operations}, got {operation}"
+        )
+
     # Validate backend parameter
-    valid_backends = ["torch", "triton"] 
+    valid_backends = ["torch", "triton"]
     if backend not in valid_backends:
         raise ValueError(f"Backend must be one of {valid_backends}, got {backend}")
-    
+
     # Handle the triton backend
     if backend == "triton":
         raise NotImplementedError("Triton backend is not implemented yet.")
@@ -425,33 +553,33 @@ def multi_head_2d_scan(
             output = multi_head_split_2d_torch(hidden_states, num_heads)
         else:  # operation == "merge"
             output = multi_head_merge_2d_torch(hidden_states, num_heads)
-    
+
     return output
 
+
 class LearnableScan(nn.Module):
-    def __init__(self, seq_len: int, temperature: float = 1.0, init_scale: float = 10.0):
+    def __init__(
+        self, seq_len: int, temperature: float = 1.0, init_scale: float = 10.0
+    ):
         super().__init__()
         self.seq_len = seq_len
         self.temperature = temperature
         logits = torch.zeros(seq_len, seq_len)
-        logits.fill_(-init_scale) 
+        logits.fill_(-init_scale)
         logits.fill_diagonal_(init_scale)
-        self.logits = nn.Parameter(logits) # make the logits learnable
-        
+        self.logits = nn.Parameter(logits)  # make the logits learnable
+
     def forward(self, x: torch.Tensor):
         """
         Args:
             x: Input tensor of shape (batch_size, seq_len, dim)
         Returns:
             Permuted tensor with the same shape as input
-        """            
+        """
         perm_matrix = F.gumbel_softmax(
-            self.logits, 
-            tau=self.temperature, 
-            hard=True,
-            dim=-1
-        )  # (seq_len, seq_len)    
-        # TODO: this is very inefficient, and just serve for analysis    
+            self.logits, tau=self.temperature, hard=True, dim=-1
+        )  # (seq_len, seq_len)
+        # TODO: this is very inefficient, and just serve for analysis
         x_permuted = torch.matmul(perm_matrix, x)  # (batch, seq_len, dim)
-            
+
         return x_permuted

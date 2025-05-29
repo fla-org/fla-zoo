@@ -11,34 +11,37 @@ from .scan import cross_scan_fn, cross_merge_fn
 from .scan import multi_head_2d_scan
 
 logger = logging.get_logger(__name__)
-    
+
+
 def prepare_hidden_states_for_scan(
-    hidden_states: torch.Tensor, 
-    train_scan_type: str = "uni-scan", 
-    test_scan_type: str = "uni-scan", 
-    training: bool = True, 
-    random_level: str = "sample", 
+    hidden_states: torch.Tensor,
+    train_scan_type: str = "uni-scan",
+    test_scan_type: str = "uni-scan",
+    training: bool = True,
+    random_level: str = "sample",
     num_heads: int = 16,
-    scan_module: Optional[nn.Module] = None
+    scan_module: Optional[nn.Module] = None,
 ) -> torch.Tensor:
     """
     Prepare hidden states for different scan types.
-    
+
     Args:
         hidden_states: Input tensor of shape [batch_size, seq_len, hidden_size]
         train_scan_type: Scanning type to use during training
         test_scan_type: Scanning type to use during evaluation
         training: Whether in training mode
-        random_level: Level of randomization ("sample" or "batch") 
+        random_level: Level of randomization ("sample" or "batch")
         num_heads: Number of attention heads
         scan_module: Optional module for learnable scanning
-        
+
     Returns:
         Processed hidden states ready for scanning
     """
 
     # radnom level should be "sample" or "batch"
-    assert random_level in ["sample", "batch"], "random_level should be 'sample' or 'batch'"
+    assert random_level in ["sample", "batch"], (
+        "random_level should be 'sample' or 'batch'"
+    )
     scan_type = train_scan_type if training else test_scan_type
     # hidden_states shape should be: (B, L, D)
     if scan_type == "uni-scan":
@@ -56,7 +59,7 @@ def prepare_hidden_states_for_scan(
             batch_indices = torch.arange(B, device=device).view(B, 1).expand(B, L)
             hidden_states = hidden_states[batch_indices, random_indices]
         return hidden_states
-    
+
     elif scan_type == "flip-scan":
         hidden_states = hidden_states.flip(-2)
         return hidden_states
@@ -71,34 +74,45 @@ def prepare_hidden_states_for_scan(
         flipped_hidden_states = hidden_states.flip(-2)
         hidden_states = torch.cat([hidden_states, flipped_hidden_states], dim=0)
         return hidden_states
-    
+
     elif scan_type == "learnable-scan":
-        assert scan_module is not None, "scan_module should be provided for learnable-scan"
+        assert scan_module is not None, (
+            "scan_module should be provided for learnable-scan"
+        )
         return scan_module(hidden_states)
 
     elif scan_type == "mh2d-scan":
         return multi_head_2d_scan(hidden_states, num_heads=num_heads, operation="split")
 
     # cross-scan
-    B, L, D  = hidden_states.shape
+    B, L, D = hidden_states.shape
     hw = int(math.sqrt(L))
-    assert (hw * hw == L) 
-    hidden_states = einops.rearrange(hidden_states, "b (h w) d -> b h w d", h=hw, w=hw) # change the shape to feed to cross_scan
-    hidden_states = cross_scan_fn(hidden_states, in_channel_first=False, out_channel_first=False, one_by_one=False, scans=0)
+    assert hw * hw == L
+    hidden_states = einops.rearrange(
+        hidden_states, "b (h w) d -> b h w d", h=hw, w=hw
+    )  # change the shape to feed to cross_scan
+    hidden_states = cross_scan_fn(
+        hidden_states,
+        in_channel_first=False,
+        out_channel_first=False,
+        one_by_one=False,
+        scans=0,
+    )
     hidden_states = einops.rearrange(hidden_states, "b l k d -> (b k) l d")
     return hidden_states
 
+
 def prepare_hidden_states_for_merge(
-    hidden_states: torch.Tensor, 
-    train_scan_type: str = "uni-scan", 
-    test_scan_type: str = "uni-scan", 
-    training: bool = True, 
+    hidden_states: torch.Tensor,
+    train_scan_type: str = "uni-scan",
+    test_scan_type: str = "uni-scan",
+    training: bool = True,
     num_heads: int = 16,
-    layer_idx: Optional[int] = None
+    layer_idx: Optional[int] = None,
 ) -> torch.Tensor:
     """
     Prepare hidden states for merging after different scan types.
-    
+
     Args:
         hidden_states: Input tensor of shape [batch_size, seq_len, hidden_size]
         train_scan_type: Scanning type used during training
@@ -106,13 +120,18 @@ def prepare_hidden_states_for_merge(
         training: Whether currently in training mode
         num_heads: Number of attention heads
         layer_idx: Optional layer index for position-dependent operations
-        
+
     Returns:
         Processed hidden states after merging
     """
-    scan_type = train_scan_type if training else test_scan_type    
+    scan_type = train_scan_type if training else test_scan_type
     # hidden_states shape should be: (BK, L, D), K=2 for bi-scan, K=1 for uni-scan, K=4 for cross-scan
-    if scan_type == "uni-scan" or scan_type == "random-scan" or scan_type == "flip-scan" or scan_type == "learnable-scan":
+    if (
+        scan_type == "uni-scan"
+        or scan_type == "random-scan"
+        or scan_type == "flip-scan"
+        or scan_type == "learnable-scan"
+    ):
         return hidden_states
     elif scan_type == "1d-shift-scan":
         B, L, D = hidden_states.shape
@@ -123,7 +142,9 @@ def prepare_hidden_states_for_merge(
         B, L, D = hidden_states.shape
         # back to 2d
         hw = int(math.sqrt(L))
-        hidden_states = einops.rearrange(hidden_states, "b (h w) d -> b h w d", h=hw, w=hw)
+        hidden_states = einops.rearrange(
+            hidden_states, "b (h w) d -> b h w d", h=hw, w=hw
+        )
         shift = int(math.sqrt(layer_idx))
         hidden_states = torch.roll(hidden_states, shifts=(shift, shift), dims=(1, 2))
         hidden_states = einops.rearrange(hidden_states, "b h w d -> b (h w) d")
@@ -140,27 +161,38 @@ def prepare_hidden_states_for_merge(
         else:
             B, L, D = hidden_states.shape
             hw = int(math.sqrt(L))
-            hidden_states = einops.rearrange(hidden_states, "b (h w) d -> b w h d", h=hw, w=hw)
-        
+            hidden_states = einops.rearrange(
+                hidden_states, "b (h w) d -> b w h d", h=hw, w=hw
+            )
+
         return hidden_states
     elif scan_type == "mh2d-scan":
         return multi_head_2d_scan(hidden_states, num_heads=num_heads, operation="merge")
 
     # cross scan
 
-    B, L, D  = hidden_states.shape
+    B, L, D = hidden_states.shape
     hw = int(math.sqrt(L))
-    hidden_states = einops.rearrange(hidden_states, "(b k) (h w) d -> b h w k d", k=4, h=hw, w=hw)
-    hidden_states = cross_merge_fn(hidden_states, in_channel_first=False, out_channel_first=False, one_by_one=False, scans=0)
+    hidden_states = einops.rearrange(
+        hidden_states, "(b k) (h w) d -> b h w k d", k=4, h=hw, w=hw
+    )
+    hidden_states = cross_merge_fn(
+        hidden_states,
+        in_channel_first=False,
+        out_channel_first=False,
+        one_by_one=False,
+        scans=0,
+    )
     return hidden_states
+
 
 """
 Copied from https://github.com/MoonshotAI/MoBA/blob/master/moba/moba_efficient.py
 Huge thanks to MoonshotAI for their great work!
 """
 
-def _calc_chunks(cu_seqlen, block_size):
 
+def _calc_chunks(cu_seqlen, block_size):
     # batch_sizes[batch_idx] = batch size ( seqlen ) of batch idx
     batch_sizes = cu_seqlen[1:] - cu_seqlen[:-1]
     # batch_num_chunk[batch_idx] = how many chunk in batch idx
@@ -204,10 +236,12 @@ def _calc_chunks(cu_seqlen, block_size):
 
     return cu_chunk
 
+
 """
 A simple mean pooling function, the mean is obtained within a chunk (or block) and the block is calculated by _calc_chunks
 This is used in compressed flash linear attention
 """
+
 
 def compress_seq(seq: torch.Tensor, block_size: int) -> torch.Tensor:
     """
@@ -219,11 +253,14 @@ def compress_seq(seq: torch.Tensor, block_size: int) -> torch.Tensor:
         compressed sequence with shape [B, L/block_size, D]
     """
     B, L, D = seq.shape
-    assert L % block_size == 0, f"Sequence length {L} must be divisible by block_size {block_size}"
-    
+    assert L % block_size == 0, (
+        f"Sequence length {L} must be divisible by block_size {block_size}"
+    )
+
     # Reshape to [B, num_blocks, block_size, D] and compute mean
     num_blocks = L // block_size
     return seq.view(B, num_blocks, block_size, D).mean(dim=2)
+
 
 def decompress_seq(compressed_seq: torch.Tensor, block_size: int) -> torch.Tensor:
     """
@@ -235,15 +272,15 @@ def decompress_seq(compressed_seq: torch.Tensor, block_size: int) -> torch.Tenso
         decompressed sequence with shape [B, L, D]
     """
     B, num_blocks, D = compressed_seq.shape
-    
+
     # First unsqueeze to add the block dimension
     # [B, num_blocks, 1, D]
     expanded = compressed_seq.unsqueeze(2)
-    
+
     # Repeat along the block dimension
     # [B, num_blocks, block_size, D]
     repeated = expanded.expand(-1, -1, block_size, -1)
-    
+
     # Reshape back to original sequence shape
     # [B, L, D]
     return repeated.reshape(B, num_blocks * block_size, D)
