@@ -4,9 +4,9 @@ from typing import Optional
 
 from transformers.configuration_utils import PretrainedConfig
 
-class MoBAVisionConfig(PretrainedConfig):
 
-    model_type = 'moba_vision'
+class MoBAVisionConfig(PretrainedConfig):
+    model_type = "moba_vision"
 
     def __init__(
         self,
@@ -16,7 +16,7 @@ class MoBAVisionConfig(PretrainedConfig):
         num_heads: int = 64,
         num_kv_heads: int = 4,
         window_size: int = 32,
-        rope_theta: Optional[float] = 10000.,
+        rope_theta: Optional[float] = 10000.0,
         max_position_embeddings: int = 2048,
         hidden_act: str = "swish",
         initializer_range: float = 0.02,
@@ -30,7 +30,6 @@ class MoBAVisionConfig(PretrainedConfig):
         block_size: int = 64,
         topk: int = 3,
         gradient_checkpointing: bool = False,
-
         # Vision specific parameters
         image_size: int = 224,
         patch_size: int = 14,
@@ -43,9 +42,9 @@ class MoBAVisionConfig(PretrainedConfig):
         interpolate_pos_encoding: bool = False,
         channel_mixer_dim: int = None,
         encoder_stride=16,
-        train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        **kwargs
+        train_scan_type: str = "uni-scan",  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        test_scan_type: str = None,  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        **kwargs,
     ):
         # Initialize MoBA core parameters
         self.hidden_size = hidden_size
@@ -81,7 +80,7 @@ class MoBAVisionConfig(PretrainedConfig):
         self.layer_norm_eps = layer_norm_eps
         self.interpolate_pos_encoding = interpolate_pos_encoding
         self.train_scan_type = train_scan_type
-        
+
         if test_scan_type is None:
             self.test_scan_type = train_scan_type
         else:
@@ -89,8 +88,10 @@ class MoBAVisionConfig(PretrainedConfig):
         self.encoder_stride = encoder_stride
 
         if channel_mixer_dim is None:
-            self.channel_mixer_dim = 4 * hidden_size # default value set to 4 * hidden_size
+            self.channel_mixer_dim = (
+                4 * hidden_size
+            )  # default value set to 4 * hidden_size
         else:
             self.channel_mixer_dim = channel_mixer_dim
-        
+
         super().__init__(**kwargs)

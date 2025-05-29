@@ -4,9 +4,9 @@ from typing import Optional
 
 from transformers.configuration_utils import PretrainedConfig
 
-class TransformerVisionConfig(PretrainedConfig):
 
-    model_type = 'transformer_vision'
+class TransformerVisionConfig(PretrainedConfig):
+    model_type = "transformer_vision"
 
     def __init__(
         self,
@@ -16,7 +16,7 @@ class TransformerVisionConfig(PretrainedConfig):
         num_heads: int = 32,
         num_kv_heads: int = None,
         window_size: Optional[int] = None,
-        rope_theta: Optional[float] = 10000.,
+        rope_theta: Optional[float] = 10000.0,
         max_position_embeddings: int = 2048,
         hidden_act: str = "swish",
         initializer_range: float = 0.02,
@@ -40,9 +40,9 @@ class TransformerVisionConfig(PretrainedConfig):
         interpolate_pos_encoding: bool = False,
         channel_mixer_dim: int = None,
         encoder_stride=16,
-        train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        **kwargs
+        train_scan_type: str = "uni-scan",  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        test_scan_type: str = None,  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        **kwargs,
     ):
         # Initialize transformer core parameters
         self.hidden_size = hidden_size
@@ -76,7 +76,7 @@ class TransformerVisionConfig(PretrainedConfig):
         self.layer_norm_eps = layer_norm_eps
         self.interpolate_pos_encoding = interpolate_pos_encoding
         self.train_scan_type = train_scan_type
-        
+
         if test_scan_type is None:
             self.test_scan_type = train_scan_type
         else:
@@ -84,15 +84,17 @@ class TransformerVisionConfig(PretrainedConfig):
         self.encoder_stride = encoder_stride
 
         if channel_mixer_dim is None:
-            self.channel_mixer_dim = 4 * hidden_size # default value set to 4 * hidden_size
+            self.channel_mixer_dim = (
+                4 * hidden_size
+            )  # default value set to 4 * hidden_size
         else:
             self.channel_mixer_dim = channel_mixer_dim
-        
+
         super().__init__(**kwargs)
 
-class TransformerVideoConfig(PretrainedConfig):
 
-    model_type = 'transformer_video'
+class TransformerVideoConfig(PretrainedConfig):
+    model_type = "transformer_video"
 
     def __init__(
         self,
@@ -102,7 +104,7 @@ class TransformerVideoConfig(PretrainedConfig):
         num_heads: int = 32,
         num_kv_heads: int = None,
         window_size: Optional[int] = None,
-        rope_theta: Optional[float] = 10000.,
+        rope_theta: Optional[float] = 10000.0,
         max_position_embeddings: int = 2048,
         hidden_act: str = "swish",
         initializer_range: float = 0.02,
@@ -114,7 +116,6 @@ class TransformerVideoConfig(PretrainedConfig):
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
         gradient_checkpointing: bool = False,
-
         # Video specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -126,18 +127,17 @@ class TransformerVideoConfig(PretrainedConfig):
         interpolate_pos_encoding: bool = False,
         encoder_stride=16,
         channel_mixer_dim: int = None,
-        train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        train_scan_type: str = "uni-scan",  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        test_scan_type: str = None,  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
         norm_pix_loss: bool = True,
         num_frames: int = 16,
         tubelet_size: int = 2,
-
         # decoder specific parameters
         decoder_num_heads: int = 6,
         decoder_hidden_size: int = 256,
         decoder_num_hidden_layers: int = 4,
         decoder_channel_mixer_dim: int = None,
-        **kwargs
+        **kwargs,
     ):
         # Initialize transformer core parameters
         self.hidden_size = hidden_size
@@ -170,7 +170,7 @@ class TransformerVideoConfig(PretrainedConfig):
         self.layer_norm_eps = layer_norm_eps
         self.interpolate_pos_encoding = interpolate_pos_encoding
         self.train_scan_type = train_scan_type
-        
+
         if test_scan_type is None:
             self.test_scan_type = train_scan_type
         else:
@@ -186,13 +186,15 @@ class TransformerVideoConfig(PretrainedConfig):
         self.decoder_num_hidden_layers = decoder_num_hidden_layers
 
         if channel_mixer_dim is None:
-            self.channel_mixer_dim = 4 * hidden_size # default value set to 4 * hidden_size
+            self.channel_mixer_dim = (
+                4 * hidden_size
+            )  # default value set to 4 * hidden_size
         else:
             self.channel_mixer_dim = channel_mixer_dim
-        
+
         if decoder_channel_mixer_dim is None:
             self.decoder_channel_mixer_dim = 4 * decoder_hidden_size
         else:
-            self.decoder_channel_mixer_dim = decoder_channel_mixer_dim # default value set to 4 * decoder_hidden_size
+            self.decoder_channel_mixer_dim = decoder_channel_mixer_dim  # default value set to 4 * decoder_hidden_size
 
         super().__init__(**kwargs)

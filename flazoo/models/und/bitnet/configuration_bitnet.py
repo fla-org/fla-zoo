@@ -6,8 +6,7 @@ from transformers.configuration_utils import PretrainedConfig
 
 
 class BitNetVisionConfig(PretrainedConfig):
-
-    model_type = 'bitnet_vision'
+    model_type = "bitnet_vision"
 
     def __init__(
         self,
@@ -17,7 +16,7 @@ class BitNetVisionConfig(PretrainedConfig):
         num_heads: int = 32,
         num_kv_heads: int = None,
         window_size: Optional[int] = None,
-        rope_theta: Optional[float] = 10000.,
+        rope_theta: Optional[float] = 10000.0,
         max_position_embeddings: int = 2048,
         hidden_act: str = "swish",
         initializer_range: float = 0.02,
@@ -29,9 +28,9 @@ class BitNetVisionConfig(PretrainedConfig):
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
         attn: Optional[Dict] = None,
-        attn_type: str = "full_attn", # attention type, default to "full_attn"
+        attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
-         # Vision specific parameters
+        # Vision specific parameters
         image_size: int = 224,
         patch_size: int = 16,
         num_channels: int = 3,
@@ -43,9 +42,9 @@ class BitNetVisionConfig(PretrainedConfig):
         interpolate_pos_encoding: bool = False,
         channel_mixer_dim: int = None,
         encoder_stride=16,
-        train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        **kwargs
+        train_scan_type: str = "uni-scan",  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        test_scan_type: str = None,  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        **kwargs,
     ):
         # Initialize BitNet core parameters
         self.hidden_size = hidden_size
@@ -80,36 +79,41 @@ class BitNetVisionConfig(PretrainedConfig):
         self.layer_norm_eps = layer_norm_eps
         self.interpolate_pos_encoding = interpolate_pos_encoding
         self.train_scan_type = train_scan_type
-        
+
         if test_scan_type is None:
             self.test_scan_type = train_scan_type
         else:
             self.test_scan_type = test_scan_type
         self.encoder_stride = encoder_stride
 
-
         if attn is not None:
             if not isinstance(attn, Dict):
                 raise ValueError("attn must be a dictionary")
-            if 'layers' not in attn:
-                raise ValueError("Layer indices must be provided to initialize hybrid attention layers")
-            if 'num_heads' not in attn:
-                raise ValueError("Number of heads must be provided to initialize hybrid attention layers")
-            attn['num_kv_heads'] = attn.get('num_kv_heads', attn['num_heads'])
-            attn['window_size'] = attn.get('window_size', None)
+            if "layers" not in attn:
+                raise ValueError(
+                    "Layer indices must be provided to initialize hybrid attention layers"
+                )
+            if "num_heads" not in attn:
+                raise ValueError(
+                    "Number of heads must be provided to initialize hybrid attention layers"
+                )
+            attn["num_kv_heads"] = attn.get("num_kv_heads", attn["num_heads"])
+            attn["window_size"] = attn.get("window_size", None)
 
         self.attn = attn
-        
+
         if channel_mixer_dim is None:
-            self.channel_mixer_dim = 4 * hidden_size # default value set to 4 * hidden_size
+            self.channel_mixer_dim = (
+                4 * hidden_size
+            )  # default value set to 4 * hidden_size
         else:
             self.channel_mixer_dim = channel_mixer_dim
-        
+
         super().__init__(**kwargs)
 
-class BitNetVideoConfig(PretrainedConfig):
 
-    model_type = 'bitnet_video'
+class BitNetVideoConfig(PretrainedConfig):
+    model_type = "bitnet_video"
 
     def __init__(
         self,
@@ -119,7 +123,7 @@ class BitNetVideoConfig(PretrainedConfig):
         num_heads: int = 32,
         num_kv_heads: int = None,
         window_size: Optional[int] = None,
-        rope_theta: Optional[float] = 10000.,
+        rope_theta: Optional[float] = 10000.0,
         max_position_embeddings: int = 2048,
         hidden_act: str = "swish",
         initializer_range: float = 0.02,
@@ -131,7 +135,7 @@ class BitNetVideoConfig(PretrainedConfig):
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
         attn: Optional[Dict] = None,
-        attn_type: str = "full_attn", # attention type, default to "full_attn"
+        attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
         # Video specific parameters
         image_size: int = 224,
@@ -144,18 +148,17 @@ class BitNetVideoConfig(PretrainedConfig):
         interpolate_pos_encoding: bool = False,
         encoder_stride=16,
         channel_mixer_dim: int = None,
-        train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        train_scan_type: str = "uni-scan",  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        test_scan_type: str = None,  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
         norm_pix_loss: bool = True,
         num_frames: int = 16,
         tubelet_size: int = 2,
-
         # decoder specific parameters
         decoder_num_heads: int = 6,
         decoder_hidden_size: int = 256,
         decoder_num_hidden_layers: int = 4,
         decoder_channel_mixer_dim: int = None,
-        **kwargs
+        **kwargs,
     ):
         # Initialize BitNet core parameters
         self.hidden_size = hidden_size
@@ -178,7 +181,7 @@ class BitNetVideoConfig(PretrainedConfig):
         self.fuse_norm = fuse_norm
         self.attn_type = attn_type
         self.gradient_checkpointing = gradient_checkpointing
-        
+
         # Initialize video specific parameters
         self.image_size = image_size
         self.patch_size = patch_size
@@ -189,7 +192,7 @@ class BitNetVideoConfig(PretrainedConfig):
         self.layer_norm_eps = layer_norm_eps
         self.interpolate_pos_encoding = interpolate_pos_encoding
         self.train_scan_type = train_scan_type
-        
+
         if test_scan_type is None:
             self.test_scan_type = train_scan_type
         self.encoder_stride = encoder_stride
@@ -202,27 +205,32 @@ class BitNetVideoConfig(PretrainedConfig):
         self.decoder_hidden_size = decoder_hidden_size
         self.decoder_num_hidden_layers = decoder_num_hidden_layers
 
-
         if attn is not None:
             if not isinstance(attn, Dict):
                 raise ValueError("attn must be a dictionary")
-            if 'layers' not in attn:
-                raise ValueError("Layer indices must be provided to initialize hybrid attention layers")
-            if 'num_heads' not in attn:
-                raise ValueError("Number of heads must be provided to initialize hybrid attention layers")
-            attn['num_kv_heads'] = attn.get('num_kv_heads', attn['num_heads'])
-            attn['window_size'] = attn.get('window_size', None)
-        
+            if "layers" not in attn:
+                raise ValueError(
+                    "Layer indices must be provided to initialize hybrid attention layers"
+                )
+            if "num_heads" not in attn:
+                raise ValueError(
+                    "Number of heads must be provided to initialize hybrid attention layers"
+                )
+            attn["num_kv_heads"] = attn.get("num_kv_heads", attn["num_heads"])
+            attn["window_size"] = attn.get("window_size", None)
+
         self.attn = attn
 
         if channel_mixer_dim is None:
-            self.channel_mixer_dim = 4 * hidden_size # default value set to 4 * hidden_size
+            self.channel_mixer_dim = (
+                4 * hidden_size
+            )  # default value set to 4 * hidden_size
         else:
             self.channel_mixer_dim = channel_mixer_dim
-        
+
         if decoder_channel_mixer_dim is None:
             self.decoder_channel_mixer_dim = 4 * decoder_hidden_size
         else:
-            self.decoder_channel_mixer_dim = decoder_channel_mixer_dim # default value set to 4 * decoder_hidden_size
+            self.decoder_channel_mixer_dim = decoder_channel_mixer_dim  # default value set to 4 * decoder_hidden_size
 
         super().__init__(**kwargs)

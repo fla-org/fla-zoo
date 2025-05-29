@@ -11,21 +11,25 @@ import torch.nn as nn
 import torch.utils.checkpoint
 from transformers.activations import ACT2FN
 from transformers.generation import GenerationMixin
-from transformers.modeling_outputs import (ImageClassifierOutput,
-                                           MaskedImageModelingOutput,
-                                           BaseModelOutput,
-                                           BaseModelOutputWithPooling)
+from transformers.modeling_outputs import (
+    ImageClassifierOutput,
+    MaskedImageModelingOutput,
+    BaseModelOutput,
+    BaseModelOutputWithPooling,
+)
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
 from flazoo.models.attentions import NativeSparseAttention
 from .configuration_nsa import NSAVisionConfig
 from fla.models.utils import Cache
-from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
-                         RMSNorm)
+from fla.modules import FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss, RMSNorm
 from fla.modules.activations import swiglu_linear
 from fla.modules.layernorm import rms_norm_linear
-from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
+from flazoo.models.utils import (
+    prepare_hidden_states_for_scan,
+    prepare_hidden_states_for_merge,
+)
 from ..utils import ImageEmbeddings, Pooler
 
 logger = logging.get_logger(__name__)
@@ -41,21 +45,22 @@ class NSAVisionMLP(nn.Module):
             nn.Linear(config.hidden_size, config.channel_mixer_dim),
             nn.GELU(),
             nn.Linear(config.channel_mixer_dim, config.hidden_size),
-            nn.Dropout(config.hidden_dropout_prob)
+            nn.Dropout(config.hidden_dropout_prob),
         )
 
     def forward(self, x):
         return self.net(x)
+
 
 class NSAVisionBlock(nn.Module):
     def __init__(self, config, layer_idx: int):
         super().__init__()
 
         self.layer_idx = layer_idx
-        
+
         if not config.norm_first:
             self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        
+
         self.attn = NativeSparseAttention(
             hidden_size=config.hidden_size,
             num_heads=config.num_heads,
@@ -63,16 +68,16 @@ class NSAVisionBlock(nn.Module):
             window_size=config.window_size,
             block_size=config.block_size,
             block_counts=config.block_counts,
-            layer_idx=layer_idx
+            layer_idx=layer_idx,
         )
-            
+
         if not config.norm_first:
             self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-            
+
         self.channel_mixer = NSAVisionMLP(config)
 
-        self.train_scan_type = 'uni-scan'
-        self.test_scan_type = 'uni-scan'
+        self.train_scan_type = "uni-scan"
+        self.test_scan_type = "uni-scan"
 
     def forward(
         self,
@@ -80,47 +85,53 @@ class NSAVisionBlock(nn.Module):
         past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
-        **kwargs: Unpack[Dict]
+        **kwargs: Unpack[Dict],
     ) -> Union[Tuple[torch.Tensor, Optional[torch.Tensor]], Tuple[torch.Tensor]]:
         residual = hidden_states
 
-        if hasattr(self, 'ln_1'):
+        if hasattr(self, "ln_1"):
             hidden_states = self.ln_1(hidden_states)
 
-        
-        hidden_states = prepare_hidden_states_for_scan(hidden_states, self.train_scan_type, training=self.training)
-        
+        hidden_states = prepare_hidden_states_for_scan(
+            hidden_states, self.train_scan_type, training=self.training
+        )
+
         hidden_states, attentions, past_key_values = self.attn(
             hidden_states=hidden_states,
             past_key_values=past_key_values,
             use_cache=use_cache,
             output_attentions=output_attentions,
-            **kwargs
+            **kwargs,
         )
-        
-        hidden_states = prepare_hidden_states_for_merge(hidden_states, self.train_scan_type)
+
+        hidden_states = prepare_hidden_states_for_merge(
+            hidden_states, self.train_scan_type
+        )
 
         hidden_states = residual + hidden_states
         residual = hidden_states
 
-        if hasattr(self, 'ln_2'):
+        if hasattr(self, "ln_2"):
             hidden_states = self.ln_2(hidden_states)
 
         hidden_states = self.channel_mixer(hidden_states)
-        
+
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states, attentions, past_key_values)
 
         return outputs
 
+
 class NSAVisionPreTrainedModel(PreTrainedModel):
     config_class = NSAVisionConfig
-    
+
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
             module.weight.data = nn.init.trunc_normal_(
-                module.weight.data.to(torch.float32), mean=0.0, std=self.config.initializer_range
+                module.weight.data.to(torch.float32),
+                mean=0.0,
+                std=self.config.initializer_range,
             ).to(module.weight.dtype)
             if module.bias is not None:
                 module.bias.data.zero_()
@@ -139,10 +150,12 @@ class NSAVisionEncoder(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
         self.config = config
-        self.blocks = nn.ModuleList([
-            NSAVisionBlock(config, layer_idx) 
-            for layer_idx in range(config.num_hidden_layers)
-        ])
+        self.blocks = nn.ModuleList(
+            [
+                NSAVisionBlock(config, layer_idx)
+                for layer_idx in range(config.num_hidden_layers)
+            ]
+        )
         self.gradient_checkpointing = False
 
     def forward(
@@ -153,7 +166,7 @@ class NSAVisionEncoder(nn.Module):
         past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
         use_cache: Optional[bool] = None,
         return_dict: bool = True,
-        **kwargs
+        **kwargs,
     ) -> Union[tuple, BaseModelOutput]:
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
@@ -163,13 +176,15 @@ class NSAVisionEncoder(nn.Module):
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
             if self.gradient_checkpointing and self.training:
-                hidden_states, attentions, past_key_values = self._gradient_checkpointing_func(
-                    block.__call__,
-                    hidden_states,
-                    past_key_values=past_key_values,
-                    use_cache=use_cache,
-                    output_attentions=output_attentions,
-                    **kwargs
+                hidden_states, attentions, past_key_values = (
+                    self._gradient_checkpointing_func(
+                        block.__call__,
+                        hidden_states,
+                        past_key_values=past_key_values,
+                        use_cache=use_cache,
+                        output_attentions=output_attentions,
+                        **kwargs,
+                    )
                 )
             else:
                 hidden_states, attentions, past_key_values = block(
@@ -177,7 +192,7 @@ class NSAVisionEncoder(nn.Module):
                     past_key_values=past_key_values,
                     use_cache=use_cache,
                     output_attentions=output_attentions,
-                    **kwargs
+                    **kwargs,
                 )
 
             if output_attentions:
@@ -187,13 +202,18 @@ class NSAVisionEncoder(nn.Module):
             all_hidden_states = all_hidden_states + (hidden_states,)
 
         if not return_dict:
-            return tuple(v for v in [hidden_states, all_hidden_states, all_self_attentions] if v is not None)
-            
+            return tuple(
+                v
+                for v in [hidden_states, all_hidden_states, all_self_attentions]
+                if v is not None
+            )
+
         return BaseModelOutput(
             last_hidden_state=hidden_states,
             hidden_states=all_hidden_states,
             attentions=all_self_attentions,
         )
+
 
 class NSAVisionModel(NSAVisionPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True, use_mask_token=False):
@@ -204,7 +224,7 @@ class NSAVisionModel(NSAVisionPreTrainedModel):
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pooler = Pooler(config) if add_pooling_layer else None
         self.init_weights()
-    
+
     def get_input_embeddings(self):
         return self.embeddings.patch_embeddings
 
@@ -218,19 +238,31 @@ class NSAVisionModel(NSAVisionPreTrainedModel):
         interpolate_pos_encoding: Optional[bool] = None,
         use_cache: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-        **kwargs
+        **kwargs,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
         )
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        output_hidden_states = (
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
+        )
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         if pixel_values is None:
             raise ValueError("You have to specify pixel_values")
-        
-        hidden_states = self.embeddings(pixel_values, bool_masked_pos=bool_masked_pos, interpolate_pos_encoding=interpolate_pos_encoding)
-        
+
+        hidden_states = self.embeddings(
+            pixel_values,
+            bool_masked_pos=bool_masked_pos,
+            interpolate_pos_encoding=interpolate_pos_encoding,
+        )
+
         encoder_outputs = self.encoder(
             hidden_states,
             output_attentions=output_attentions,
@@ -238,15 +270,21 @@ class NSAVisionModel(NSAVisionPreTrainedModel):
             past_key_values=past_key_values,
             use_cache=use_cache,
             return_dict=return_dict,
-            **kwargs
+            **kwargs,
         )
 
         sequence_output = encoder_outputs[0]
         sequence_output = self.layernorm(sequence_output)
-        pooled_output = self.pooler(sequence_output) if self.pooler is not None else None
+        pooled_output = (
+            self.pooler(sequence_output) if self.pooler is not None else None
+        )
 
         if not return_dict:
-            head_outputs = (sequence_output, pooled_output) if pooled_output is not None else (sequence_output,)
+            head_outputs = (
+                (sequence_output, pooled_output)
+                if pooled_output is not None
+                else (sequence_output,)
+            )
             return head_outputs + encoder_outputs[1:]
 
         return BaseModelOutputWithPooling(
@@ -256,11 +294,14 @@ class NSAVisionModel(NSAVisionPreTrainedModel):
             attentions=encoder_outputs.attentions,
         )
 
+
 class NSAForImageClassification(NSAVisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_classes
-        self.backbone = NSAVisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
+        self.backbone = NSAVisionModel(
+            config, add_pooling_layer=True
+        )  # Here we should use mean pooling
         self.classifier = nn.Linear(config.hidden_size, config.num_classes)
         self.init_weights()
 
@@ -273,7 +314,9 @@ class NSAForImageClassification(NSAVisionPreTrainedModel):
         interpolate_pos_encoding: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[tuple, ImageClassifierOutput]:
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         outputs = self.backbone(
             pixel_values,
@@ -306,10 +349,13 @@ class NSAForImageClassification(NSAVisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
+
 class NSAForMaskedImageModeling(NSAVisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
-        self.backbone = NSAVisionModel(config, add_pooling_layer=False, use_mask_token=True) 
+        self.backbone = NSAVisionModel(
+            config, add_pooling_layer=False, use_mask_token=True
+        )
         self.decoder = nn.Sequential(
             nn.Conv2d(
                 in_channels=config.hidden_size,
@@ -330,15 +376,19 @@ class NSAForMaskedImageModeling(NSAVisionPreTrainedModel):
         interpolate_pos_encoding: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[tuple, MaskedImageModelingOutput]:
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
-        if bool_masked_pos is not None and (self.config.patch_size != self.config.encoder_stride):
+        if bool_masked_pos is not None and (
+            self.config.patch_size != self.config.encoder_stride
+        ):
             raise ValueError(
                 "When `bool_masked_pos` is provided, `patch_size` must be equal to `encoder_stride` to ensure that "
                 "the reconstructed image has the same dimensions as the input. "
                 f"Got `patch_size` = {self.config.patch_size} and `encoder_stride` = {self.config.encoder_stride}."
             )
-        
+
         outputs = self.backbone(
             pixel_values,
             bool_masked_pos=bool_masked_pos,
@@ -348,11 +398,12 @@ class NSAForMaskedImageModeling(NSAVisionPreTrainedModel):
             return_dict=return_dict,
         )
 
-
         sequence_output = outputs[0]
         batch_size, sequence_length, num_channels = sequence_output.shape
         height = width = math.floor(sequence_length**0.5)
-        sequence_output = sequence_output.permute(0, 2, 1).reshape(batch_size, num_channels, height, width)
+        sequence_output = sequence_output.permute(0, 2, 1).reshape(
+            batch_size, num_channels, height, width
+        )
 
         # Reconstruct pixel values
         reconstructed_pixel_values = self.decoder(sequence_output)
@@ -367,12 +418,20 @@ class NSAForMaskedImageModeling(NSAVisionPreTrainedModel):
                 .unsqueeze(1)
                 .contiguous()
             )
-            reconstruction_loss = nn.functional.l1_loss(pixel_values, reconstructed_pixel_values, reduction="none")
-            masked_im_loss = (reconstruction_loss * mask).sum() / (mask.sum() + 1e-5) / self.config.num_channels
+            reconstruction_loss = nn.functional.l1_loss(
+                pixel_values, reconstructed_pixel_values, reduction="none"
+            )
+            masked_im_loss = (
+                (reconstruction_loss * mask).sum()
+                / (mask.sum() + 1e-5)
+                / self.config.num_channels
+            )
 
         if not return_dict:
             output = (reconstructed_pixel_values,) + outputs[1:]
-            return ((masked_im_loss,) + output) if masked_im_loss is not None else output
+            return (
+                ((masked_im_loss,) + output) if masked_im_loss is not None else output
+            )
 
         return MaskedImageModelingOutput(
             loss=masked_im_loss,

@@ -10,10 +10,12 @@ import torch
 import torch.nn as nn
 import torch.utils.checkpoint
 from transformers.generation import GenerationMixin
-from transformers.modeling_outputs import (ImageClassifierOutput,
-                                           MaskedImageModelingOutput,
-                                           BaseModelOutput,
-                                           BaseModelOutputWithPooling)
+from transformers.modeling_outputs import (
+    ImageClassifierOutput,
+    MaskedImageModelingOutput,
+    BaseModelOutput,
+    BaseModelOutputWithPooling,
+)
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
@@ -21,20 +23,29 @@ from flazoo.models.attentions import get_attn
 from fla.layers.rwkv7 import RWKV7Attention
 from .configuration_rwkv7 import RWKV7VisionConfig
 from fla.models.utils import Cache
-from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
-                         LayerNorm)
+from fla.modules import FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss, LayerNorm
 from fla.modules.activations import ACT2FN
-from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
+from flazoo.models.utils import (
+    prepare_hidden_states_for_scan,
+    prepare_hidden_states_for_merge,
+)
 from ..utils import ImageEmbeddings, Pooler
+
 if TYPE_CHECKING:
     from transformers.processing_utils import Unpack
 
 from .configuration_rwkv7 import RWKV7VideoConfig
 from transformers.utils.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from ..utils import VideoEmbeddings, VideoDecoderOutput, VideoForPreTrainingOutput, get_sinusoid_encoding_table
+from ..utils import (
+    VideoEmbeddings,
+    VideoDecoderOutput,
+    VideoForPreTrainingOutput,
+    get_sinusoid_encoding_table,
+)
 from copy import deepcopy
 
 logger = logging.get_logger(__name__)
+
 
 class RWKV7VisionMLP(nn.Module):
     def __init__(self, config):
@@ -43,21 +54,22 @@ class RWKV7VisionMLP(nn.Module):
             nn.Linear(config.hidden_size, config.channel_mixer_dim),
             nn.GELU(),
             nn.Linear(config.channel_mixer_dim, config.hidden_size),
-            nn.Dropout(config.hidden_dropout_prob)
+            nn.Dropout(config.hidden_dropout_prob),
         )
 
     def forward(self, x):
         return self.net(x)
+
 
 class RWKV7VisionBlock(nn.Module):
     def __init__(self, config, layer_idx: int):
         super().__init__()
 
         self.layer_idx = layer_idx
-        
+
         self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        
-        if config.attn is not None and layer_idx in config.attn['layers']:
+
+        if config.attn is not None and layer_idx in config.attn["layers"]:
             self.attn = get_attn(config, layer_idx)
         else:
             self.attn = RWKV7Attention(
@@ -73,16 +85,16 @@ class RWKV7VisionBlock(nn.Module):
                 num_hidden_layers=config.num_hidden_layers,
                 fuse_norm=config.fuse_norm,
                 layer_idx=layer_idx,
-                value_dim=config.value_dim[layer_idx]
+                value_dim=config.value_dim[layer_idx],
             )
-            
+
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-            
+
         self.channel_mixer = RWKV7VisionMLP(config)
 
-        if config.attn is not None and layer_idx in config.attn['layers']:
-            self.train_scan_type = 'uni-scan'
-            self.test_scan_type = 'uni-scan'
+        if config.attn is not None and layer_idx in config.attn["layers"]:
+            self.train_scan_type = "uni-scan"
+            self.test_scan_type = "uni-scan"
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
@@ -94,39 +106,50 @@ class RWKV7VisionBlock(nn.Module):
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
         v_first: torch.Tensor = None,
-        **kwargs
+        **kwargs,
     ) -> Union[Tuple[torch.Tensor, Optional[torch.Tensor]], Tuple[torch.Tensor]]:
         residual = hidden_states
 
         # Pre-normalization if enabled
-        if hasattr(self, 'ln_1'):
+        if hasattr(self, "ln_1"):
             hidden_states = self.ln_1(hidden_states)
 
         # Apply attention
-        
-        hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training)
-        
+
+        hidden_states = prepare_hidden_states_for_scan(
+            hidden_states,
+            train_scan_type=self.train_scan_type,
+            test_scan_type=self.test_scan_type,
+            training=self.training,
+        )
+
         hidden_states, attentions, past_key_values, v_first = self.attn(
             hidden_states=hidden_states,
             past_key_values=past_key_values,
             use_cache=use_cache,
             output_attentions=output_attentions,
             v_first=v_first,
-            **kwargs
+            **kwargs,
         )
-        
-        hidden_states = prepare_hidden_states_for_merge(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training, layer_idx=self.layer_idx)
+
+        hidden_states = prepare_hidden_states_for_merge(
+            hidden_states,
+            train_scan_type=self.train_scan_type,
+            test_scan_type=self.test_scan_type,
+            training=self.training,
+            layer_idx=self.layer_idx,
+        )
 
         # First residual connection
         hidden_states = residual + hidden_states
         residual = hidden_states
 
-        # Pre-normalization for MLP if enabled 
-        if hasattr(self, 'ln_2'):
+        # Pre-normalization for MLP if enabled
+        if hasattr(self, "ln_2"):
             hidden_states = self.ln_2(hidden_states)
 
         hidden_states = self.channel_mixer(hidden_states)
-        
+
         # Second residual connection
         hidden_states = residual + hidden_states
 
@@ -134,13 +157,16 @@ class RWKV7VisionBlock(nn.Module):
 
         return outputs
 
+
 class RWKV7VisionPreTrainedModel(PreTrainedModel):
     config_class = RWKV7VisionConfig
-    
+
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
             module.weight.data = nn.init.trunc_normal_(
-                module.weight.data.to(torch.float32), mean=0.0, std=self.config.initializer_range
+                module.weight.data.to(torch.float32),
+                mean=0.0,
+                std=self.config.initializer_range,
             ).to(module.weight.dtype)
             if module.bias is not None:
                 module.bias.data.zero_()
@@ -159,10 +185,12 @@ class RWKV7VisionEncoder(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
         self.config = config
-        self.blocks = nn.ModuleList([
-            RWKV7VisionBlock(config, layer_idx) 
-            for layer_idx in range(config.num_hidden_layers)
-        ])
+        self.blocks = nn.ModuleList(
+            [
+                RWKV7VisionBlock(config, layer_idx)
+                for layer_idx in range(config.num_hidden_layers)
+            ]
+        )
         self.gradient_checkpointing = False
 
     def forward(
@@ -173,7 +201,7 @@ class RWKV7VisionEncoder(nn.Module):
         past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
         use_cache: Optional[bool] = None,
         return_dict: bool = True,
-        **kwargs
+        **kwargs,
     ) -> Union[tuple, BaseModelOutput]:
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
@@ -185,14 +213,16 @@ class RWKV7VisionEncoder(nn.Module):
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
             if self.gradient_checkpointing and self.training:
-                hidden_states, attentions, past_key_values, v_first = self._gradient_checkpointing_func(
-                    block.__call__,
-                    hidden_states,
-                    past_key_values=past_key_values,
-                    use_cache=use_cache,
-                    output_attentions=output_attentions,
-                    v_first=v_first,
-                    **kwargs
+                hidden_states, attentions, past_key_values, v_first = (
+                    self._gradient_checkpointing_func(
+                        block.__call__,
+                        hidden_states,
+                        past_key_values=past_key_values,
+                        use_cache=use_cache,
+                        output_attentions=output_attentions,
+                        v_first=v_first,
+                        **kwargs,
+                    )
                 )
             else:
                 hidden_states, attentions, past_key_values, v_first = block(
@@ -201,7 +231,7 @@ class RWKV7VisionEncoder(nn.Module):
                     use_cache=use_cache,
                     output_attentions=output_attentions,
                     v_first=v_first,
-                    **kwargs
+                    **kwargs,
                 )
 
             if output_attentions:
@@ -211,13 +241,18 @@ class RWKV7VisionEncoder(nn.Module):
             all_hidden_states = all_hidden_states + (hidden_states,)
 
         if not return_dict:
-            return tuple(v for v in [hidden_states, all_hidden_states, all_self_attentions] if v is not None)
-            
+            return tuple(
+                v
+                for v in [hidden_states, all_hidden_states, all_self_attentions]
+                if v is not None
+            )
+
         return BaseModelOutput(
             last_hidden_state=hidden_states,
             hidden_states=all_hidden_states,
             attentions=all_self_attentions,
         )
+
 
 class RWKV7VisionModel(RWKV7VisionPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True, use_mask_token=False):
@@ -228,7 +263,7 @@ class RWKV7VisionModel(RWKV7VisionPreTrainedModel):
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pooler = Pooler(config) if add_pooling_layer else None
         self.init_weights()
-    
+
     def get_input_embeddings(self):
         return self.embeddings.patch_embeddings
 
@@ -242,19 +277,31 @@ class RWKV7VisionModel(RWKV7VisionPreTrainedModel):
         interpolate_pos_encoding: Optional[bool] = None,
         use_cache: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-        **kwargs
+        **kwargs,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
         )
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        output_hidden_states = (
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
+        )
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         if pixel_values is None:
             raise ValueError("You have to specify pixel_values")
-        
-        hidden_states = self.embeddings(pixel_values, bool_masked_pos=bool_masked_pos, interpolate_pos_encoding=interpolate_pos_encoding)
-        
+
+        hidden_states = self.embeddings(
+            pixel_values,
+            bool_masked_pos=bool_masked_pos,
+            interpolate_pos_encoding=interpolate_pos_encoding,
+        )
+
         encoder_outputs = self.encoder(
             hidden_states,
             output_attentions=output_attentions,
@@ -262,15 +309,21 @@ class RWKV7VisionModel(RWKV7VisionPreTrainedModel):
             past_key_values=past_key_values,
             use_cache=use_cache,
             return_dict=return_dict,
-            **kwargs
+            **kwargs,
         )
 
         sequence_output = encoder_outputs[0]
         sequence_output = self.layernorm(sequence_output)
-        pooled_output = self.pooler(sequence_output) if self.pooler is not None else None
+        pooled_output = (
+            self.pooler(sequence_output) if self.pooler is not None else None
+        )
 
         if not return_dict:
-            head_outputs = (sequence_output, pooled_output) if pooled_output is not None else (sequence_output,)
+            head_outputs = (
+                (sequence_output, pooled_output)
+                if pooled_output is not None
+                else (sequence_output,)
+            )
             return head_outputs + encoder_outputs[1:]
 
         return BaseModelOutputWithPooling(
@@ -280,11 +333,14 @@ class RWKV7VisionModel(RWKV7VisionPreTrainedModel):
             attentions=encoder_outputs.attentions,
         )
 
+
 class RWKV7ForImageClassification(RWKV7VisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_classes
-        self.backbone = RWKV7VisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
+        self.backbone = RWKV7VisionModel(
+            config, add_pooling_layer=True
+        )  # Here we should use mean pooling
         self.classifier = nn.Linear(config.hidden_size, config.num_classes)
         self.init_weights()
 
@@ -297,7 +353,9 @@ class RWKV7ForImageClassification(RWKV7VisionPreTrainedModel):
         interpolate_pos_encoding: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[tuple, ImageClassifierOutput]:
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         outputs = self.backbone(
             pixel_values,
@@ -308,7 +366,7 @@ class RWKV7ForImageClassification(RWKV7VisionPreTrainedModel):
         )
 
         pooled_output = outputs.pooler_output
-        logits = self.classifier(pooled_output) # only use mean pooling
+        logits = self.classifier(pooled_output)  # only use mean pooling
 
         loss = None
         if labels is not None:
@@ -330,10 +388,13 @@ class RWKV7ForImageClassification(RWKV7VisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
+
 class RWKV7ForMaskedImageModeling(RWKV7VisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
-        self.backbone = RWKV7VisionModel(config, add_pooling_layer=False, use_mask_token=True) 
+        self.backbone = RWKV7VisionModel(
+            config, add_pooling_layer=False, use_mask_token=True
+        )
         self.decoder = nn.Sequential(
             nn.Conv2d(
                 in_channels=config.hidden_size,
@@ -354,15 +415,19 @@ class RWKV7ForMaskedImageModeling(RWKV7VisionPreTrainedModel):
         interpolate_pos_encoding: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[tuple, MaskedImageModelingOutput]:
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
-        if bool_masked_pos is not None and (self.config.patch_size != self.config.encoder_stride):
+        if bool_masked_pos is not None and (
+            self.config.patch_size != self.config.encoder_stride
+        ):
             raise ValueError(
                 "When `bool_masked_pos` is provided, `patch_size` must be equal to `encoder_stride` to ensure that "
                 "the reconstructed image has the same dimensions as the input. "
                 f"Got `patch_size` = {self.config.patch_size} and `encoder_stride` = {self.config.encoder_stride}."
             )
-        
+
         outputs = self.backbone(
             pixel_values,
             bool_masked_pos=bool_masked_pos,
@@ -372,11 +437,12 @@ class RWKV7ForMaskedImageModeling(RWKV7VisionPreTrainedModel):
             return_dict=return_dict,
         )
 
-
         sequence_output = outputs[0]
         batch_size, sequence_length, num_channels = sequence_output.shape
         height = width = math.floor(sequence_length**0.5)
-        sequence_output = sequence_output.permute(0, 2, 1).reshape(batch_size, num_channels, height, width)
+        sequence_output = sequence_output.permute(0, 2, 1).reshape(
+            batch_size, num_channels, height, width
+        )
 
         # Reconstruct pixel values
         reconstructed_pixel_values = self.decoder(sequence_output)
@@ -391,12 +457,20 @@ class RWKV7ForMaskedImageModeling(RWKV7VisionPreTrainedModel):
                 .unsqueeze(1)
                 .contiguous()
             )
-            reconstruction_loss = nn.functional.l1_loss(pixel_values, reconstructed_pixel_values, reduction="none")
-            masked_im_loss = (reconstruction_loss * mask).sum() / (mask.sum() + 1e-5) / self.config.num_channels
+            reconstruction_loss = nn.functional.l1_loss(
+                pixel_values, reconstructed_pixel_values, reduction="none"
+            )
+            masked_im_loss = (
+                (reconstruction_loss * mask).sum()
+                / (mask.sum() + 1e-5)
+                / self.config.num_channels
+            )
 
         if not return_dict:
             output = (reconstructed_pixel_values,) + outputs[1:]
-            return ((masked_im_loss,) + output) if masked_im_loss is not None else output
+            return (
+                ((masked_im_loss,) + output) if masked_im_loss is not None else output
+            )
 
         return MaskedImageModelingOutput(
             loss=masked_im_loss,
@@ -405,6 +479,7 @@ class RWKV7ForMaskedImageModeling(RWKV7VisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
+
 class RWKV7VideoMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -412,21 +487,22 @@ class RWKV7VideoMLP(nn.Module):
             nn.Linear(config.hidden_size, config.channel_mixer_dim),
             nn.GELU(),
             nn.Linear(config.channel_mixer_dim, config.hidden_size),
-            nn.Dropout(config.hidden_dropout_prob)
+            nn.Dropout(config.hidden_dropout_prob),
         )
 
     def forward(self, x):
         return self.net(x)
+
 
 class RWKV7VideoBlock(nn.Module):
     def __init__(self, config, layer_idx: int):
         super().__init__()
 
         self.layer_idx = layer_idx
-        
+
         self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        
-        if config.attn is not None and layer_idx in config.attn['layers']:
+
+        if config.attn is not None and layer_idx in config.attn["layers"]:
             self.attn = get_attn(config, layer_idx)
         else:
             self.attn = RWKV7Attention(
@@ -442,15 +518,15 @@ class RWKV7VideoBlock(nn.Module):
                 num_hidden_layers=config.num_hidden_layers,
                 fuse_norm=config.fuse_norm,
                 layer_idx=layer_idx,
-                value_dim=config.value_dim[layer_idx]
+                value_dim=config.value_dim[layer_idx],
             )
-            
+
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-            
+
         self.channel_mixer = RWKV7VideoMLP(config)
-        if config.attn is not None and layer_idx in config.attn['layers']:
-            self.train_scan_type = 'uni-scan'
-            self.test_scan_type = 'uni-scan'
+        if config.attn is not None and layer_idx in config.attn["layers"]:
+            self.train_scan_type = "uni-scan"
+            self.test_scan_type = "uni-scan"
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
@@ -462,12 +538,17 @@ class RWKV7VideoBlock(nn.Module):
         use_cache: Optional[bool] = False,
         output_attentions: bool = False,
         v_first: torch.Tensor = None,
-        **kwargs
+        **kwargs,
     ):
         residual = hidden_states
-        
+
         hidden_states = self.ln_1(hidden_states)
-        hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training)
+        hidden_states = prepare_hidden_states_for_scan(
+            hidden_states,
+            train_scan_type=self.train_scan_type,
+            test_scan_type=self.test_scan_type,
+            training=self.training,
+        )
 
         hidden_states, attentions, past_key_values, v_first = self.attn(
             hidden_states=hidden_states,
@@ -475,10 +556,16 @@ class RWKV7VideoBlock(nn.Module):
             use_cache=use_cache,
             output_attentions=output_attentions,
             v_first=v_first,
-            **kwargs
+            **kwargs,
         )
 
-        hidden_states = prepare_hidden_states_for_merge(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training, layer_idx=self.layer_idx)
+        hidden_states = prepare_hidden_states_for_merge(
+            hidden_states,
+            train_scan_type=self.train_scan_type,
+            test_scan_type=self.test_scan_type,
+            training=self.training,
+            layer_idx=self.layer_idx,
+        )
 
         hidden_states = residual + hidden_states
         residual = hidden_states
@@ -493,12 +580,16 @@ class RWKV7VideoBlock(nn.Module):
 
         return outputs
 
+
 class RWKV7VideoEncoder(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
         self.config = config
         self.blocks = nn.ModuleList(
-            [RWKV7VideoBlock(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
+            [
+                RWKV7VideoBlock(config, layer_idx)
+                for layer_idx in range(config.num_hidden_layers)
+            ]
         )
         self.gradient_checkpointing = False
 
@@ -510,7 +601,7 @@ class RWKV7VideoEncoder(nn.Module):
         past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
         use_cache: Optional[bool] = None,
         return_dict=True,
-        **kwargs
+        **kwargs,
     ):
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
@@ -521,16 +612,17 @@ class RWKV7VideoEncoder(nn.Module):
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
-
             if self.gradient_checkpointing and self.training:
-                hidden_states, attentions, _, v_first = self._gradient_checkpointing_func(
-                    block.__call__,
-                    hidden_states,
-                    past_key_values=past_key_values,
-                    use_cache=use_cache,
-                    output_attentions=output_attentions,
-                    v_first=v_first,
-                    **kwargs
+                hidden_states, attentions, _, v_first = (
+                    self._gradient_checkpointing_func(
+                        block.__call__,
+                        hidden_states,
+                        past_key_values=past_key_values,
+                        use_cache=use_cache,
+                        output_attentions=output_attentions,
+                        v_first=v_first,
+                        **kwargs,
+                    )
                 )
             else:
                 hidden_states, attentions, _, v_first = block(
@@ -539,7 +631,7 @@ class RWKV7VideoEncoder(nn.Module):
                     use_cache=use_cache,
                     output_attentions=output_attentions,
                     v_first=v_first,
-                    **kwargs
+                    **kwargs,
                 )
 
             if output_attentions:
@@ -549,13 +641,18 @@ class RWKV7VideoEncoder(nn.Module):
             all_hidden_states = all_hidden_states + (hidden_states,)
 
         if not return_dict:
-            return tuple(v for v in [hidden_states, all_hidden_states, all_self_attentions] if v is not None)
+            return tuple(
+                v
+                for v in [hidden_states, all_hidden_states, all_self_attentions]
+                if v is not None
+            )
 
         return BaseModelOutput(
             last_hidden_state=hidden_states,
             hidden_states=all_hidden_states,
-            attentions=all_self_attentions
+            attentions=all_self_attentions,
         )
+
 
 class RWKV7VideoPreTrainedModel(PreTrainedModel):
     config_class = RWKV7VideoConfig
@@ -572,6 +669,7 @@ class RWKV7VideoPreTrainedModel(PreTrainedModel):
         elif isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
+
 
 class RWKV7VideoModel(RWKV7VideoPreTrainedModel):
     def __init__(self, config):
@@ -593,13 +691,21 @@ class RWKV7VideoModel(RWKV7VideoPreTrainedModel):
         interpolate_pos_encoding: Optional[bool] = None,
         use_cache: Optional[bool] = None,
         return_dict=None,
-        **kwargs
+        **kwargs,
     ):
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
         )
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        output_hidden_states = (
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
+        )
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         embedding_output = self.embeddings(pixel_values, bool_masked_pos)
 
@@ -610,7 +716,7 @@ class RWKV7VideoModel(RWKV7VideoPreTrainedModel):
             return_dict=return_dict,
             past_key_values=past_key_values,
             use_cache=use_cache,
-            **kwargs
+            **kwargs,
         )
 
         sequence_output = encoder_outputs[0]
@@ -624,11 +730,14 @@ class RWKV7VideoModel(RWKV7VideoPreTrainedModel):
             attentions=encoder_outputs.attentions,
         )
 
+
 class RWKV7VideoDecoder(nn.Module):
     def __init__(self, config, num_patches):
         super().__init__()
 
-        decoder_num_labels = config.num_channels * config.tubelet_size * config.patch_size**2
+        decoder_num_labels = (
+            config.num_channels * config.tubelet_size * config.patch_size**2
+        )
 
         # Initialize decoder-specific configuration
         decoder_config = deepcopy(config)
@@ -638,11 +747,18 @@ class RWKV7VideoDecoder(nn.Module):
         decoder_config.channel_mixer_dim = config.decoder_channel_mixer_dim
 
         self.decoder_blocks = nn.ModuleList(
-            [RWKV7VideoBlock(decoder_config, layer_idx) for layer_idx in range(decoder_config.num_hidden_layers)]
+            [
+                RWKV7VideoBlock(decoder_config, layer_idx)
+                for layer_idx in range(decoder_config.num_hidden_layers)
+            ]
         )
 
         self.norm = nn.LayerNorm(config.decoder_hidden_size)
-        self.head = nn.Linear(config.decoder_hidden_size, decoder_num_labels) if decoder_num_labels > 0 else nn.Identity()
+        self.head = (
+            nn.Linear(config.decoder_hidden_size, decoder_num_labels)
+            if decoder_num_labels > 0
+            else nn.Identity()
+        )
 
         self.gradient_checkpointing = False
         self.config = config
@@ -656,7 +772,7 @@ class RWKV7VideoDecoder(nn.Module):
         past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
         use_cache: Optional[bool] = None,
         return_dict=True,
-        **kwargs
+        **kwargs,
     ):
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
@@ -672,7 +788,7 @@ class RWKV7VideoDecoder(nn.Module):
                     output_attentions=output_attentions,
                     past_key_values=past_key_values,
                     use_cache=use_cache,
-                    **kwargs
+                    **kwargs,
                 )
             else:
                 hidden_states, attentions, _ = block(
@@ -680,7 +796,7 @@ class RWKV7VideoDecoder(nn.Module):
                     output_attentions=output_attentions,
                     past_key_values=past_key_values,
                     use_cache=use_cache,
-                    **kwargs
+                    **kwargs,
                 )
 
             if output_attentions:
@@ -696,27 +812,36 @@ class RWKV7VideoDecoder(nn.Module):
         logits = self.head(hidden_states)
 
         if not return_dict:
-            return tuple(v for v in [logits, all_hidden_states, all_self_attentions] if v is not None)
+            return tuple(
+                v
+                for v in [logits, all_hidden_states, all_self_attentions]
+                if v is not None
+            )
 
         return VideoDecoderOutput(
             logits=logits,
             hidden_states=all_hidden_states,
-            attentions=all_self_attentions
+            attentions=all_self_attentions,
         )
+
 
 class RWKV7ForVideoPreTraining(RWKV7VideoPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.config = config
         self.backbone = RWKV7VideoModel(config)
-        
-        self.encoder_to_decoder = nn.Linear(config.hidden_size, config.decoder_hidden_size, bias=False)
+
+        self.encoder_to_decoder = nn.Linear(
+            config.hidden_size, config.decoder_hidden_size, bias=False
+        )
         self.mask_token = nn.Parameter(torch.zeros(1, 1, config.decoder_hidden_size))
         self.position_embeddings = get_sinusoid_encoding_table(
             self.backbone.embeddings.num_patches, config.decoder_hidden_size
         )
 
-        self.decoder = RWKV7VideoDecoder(config, num_patches=self.backbone.embeddings.num_patches)
+        self.decoder = RWKV7VideoDecoder(
+            config, num_patches=self.backbone.embeddings.num_patches
+        )
 
         self.post_init()
 
@@ -728,7 +853,9 @@ class RWKV7ForVideoPreTraining(RWKV7VideoPreTrainedModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[tuple, VideoForPreTrainingOutput]:
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         outputs = self.backbone(
             pixel_values,
@@ -740,16 +867,26 @@ class RWKV7ForVideoPreTraining(RWKV7VideoPreTrainedModel):
 
         sequence_output = outputs[0]
         sequence_output = self.encoder_to_decoder(sequence_output)
-        
+
         batch_size, seq_len, num_channels = sequence_output.shape
 
-        expanded_position_embeddings = self.position_embeddings.expand(batch_size, -1, -1).type_as(pixel_values)
-        expanded_position_embeddings = expanded_position_embeddings.to(pixel_values.device).clone().detach()
-        
-        pos_emb_visible = expanded_position_embeddings[~bool_masked_pos].reshape(batch_size, -1, num_channels)
-        pos_emb_mask = expanded_position_embeddings[bool_masked_pos].reshape(batch_size, -1, num_channels)
+        expanded_position_embeddings = self.position_embeddings.expand(
+            batch_size, -1, -1
+        ).type_as(pixel_values)
+        expanded_position_embeddings = (
+            expanded_position_embeddings.to(pixel_values.device).clone().detach()
+        )
 
-        x_full = torch.cat([sequence_output + pos_emb_visible, self.mask_token + pos_emb_mask], dim=1)
+        pos_emb_visible = expanded_position_embeddings[~bool_masked_pos].reshape(
+            batch_size, -1, num_channels
+        )
+        pos_emb_mask = expanded_position_embeddings[bool_masked_pos].reshape(
+            batch_size, -1, num_channels
+        )
+
+        x_full = torch.cat(
+            [sequence_output + pos_emb_visible, self.mask_token + pos_emb_mask], dim=1
+        )
 
         decoder_outputs = self.decoder(x_full, pos_emb_mask.shape[1])
         logits = decoder_outputs.logits
@@ -765,8 +902,12 @@ class RWKV7ForVideoPreTraining(RWKV7VideoPreTrainedModel):
                 # first, unnormalize the frames
                 device = pixel_values.device
                 dtype = pixel_values.dtype
-                mean = torch.as_tensor(IMAGENET_DEFAULT_MEAN).to(device=device, dtype=dtype)[None, None, :, None, None]
-                std = torch.as_tensor(IMAGENET_DEFAULT_STD).to(device=device, dtype=dtype)[None, None, :, None, None]
+                mean = torch.as_tensor(IMAGENET_DEFAULT_MEAN).to(
+                    device=device, dtype=dtype
+                )[None, None, :, None, None]
+                std = torch.as_tensor(IMAGENET_DEFAULT_STD).to(
+                    device=device, dtype=dtype
+                )[None, None, :, None, None]
                 frames = pixel_values * std + mean  # in [0, 1]
 
             batch_size, time, num_channels, height, width = frames.shape
@@ -844,6 +985,7 @@ class RWKV7ForVideoPreTraining(RWKV7VideoPreTrainedModel):
             attentions=outputs.attentions,
         )
 
+
 class RWKV7ForVideoClassification(RWKV7VideoPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
@@ -853,7 +995,11 @@ class RWKV7ForVideoClassification(RWKV7VideoPreTrainedModel):
 
         # Classifier head
         self.fc_norm = nn.LayerNorm(config.hidden_size)
-        self.classifier = nn.Linear(config.hidden_size, config.num_classes) if config.num_classes > 0 else nn.Identity()
+        self.classifier = (
+            nn.Linear(config.hidden_size, config.num_classes)
+            if config.num_classes > 0
+            else nn.Identity()
+        )
 
         self.post_init()
 
@@ -865,7 +1011,9 @@ class RWKV7ForVideoClassification(RWKV7VideoPreTrainedModel):
         output_hidden_states=None,
         return_dict=None,
     ):
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         outputs = self.backbone(
             pixel_values,

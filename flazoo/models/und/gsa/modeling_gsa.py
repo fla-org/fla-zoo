@@ -11,10 +11,12 @@ import torch.nn as nn
 import torch.utils.checkpoint
 from transformers.activations import ACT2FN
 from transformers.generation import GenerationMixin
-from transformers.modeling_outputs import (ImageClassifierOutput,
-                                           MaskedImageModelingOutput,
-                                           BaseModelOutput,
-                                           BaseModelOutputWithPooling)
+from transformers.modeling_outputs import (
+    ImageClassifierOutput,
+    MaskedImageModelingOutput,
+    BaseModelOutput,
+    BaseModelOutputWithPooling,
+)
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
@@ -22,21 +24,30 @@ from flazoo.models.attentions import get_attn
 from fla.layers.gsa import GatedSlotAttention
 from .configuration_gsa import GSAVisionConfig
 from fla.models.utils import Cache
-from fla.modules import (FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss,
-                         RMSNorm)
+from fla.modules import FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss, RMSNorm
 from fla.modules.activations import swiglu_linear
 from fla.modules.layernorm import rms_norm_linear
-from flazoo.models.utils import prepare_hidden_states_for_scan, prepare_hidden_states_for_merge
+from flazoo.models.utils import (
+    prepare_hidden_states_for_scan,
+    prepare_hidden_states_for_merge,
+)
 from ..utils import ImageEmbeddings, Pooler
+
 if TYPE_CHECKING:
     from transformers.processing_utils import Unpack
 
 from .configuration_gsa import GSAVideoConfig
 from transformers.utils.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from ..utils import VideoEmbeddings, VideoDecoderOutput, VideoForPreTrainingOutput, get_sinusoid_encoding_table
+from ..utils import (
+    VideoEmbeddings,
+    VideoDecoderOutput,
+    VideoForPreTrainingOutput,
+    get_sinusoid_encoding_table,
+)
 from copy import deepcopy
 
 logger = logging.get_logger(__name__)
+
 
 class GSAVisionMLP(nn.Module):
     def __init__(self, config):
@@ -45,22 +56,23 @@ class GSAVisionMLP(nn.Module):
             nn.Linear(config.hidden_size, config.channel_mixer_dim),
             nn.GELU(),
             nn.Linear(config.channel_mixer_dim, config.hidden_size),
-            nn.Dropout(config.hidden_dropout_prob)
+            nn.Dropout(config.hidden_dropout_prob),
         )
 
     def forward(self, x):
         return self.net(x)
+
 
 class GSAVisionBlock(nn.Module):
     def __init__(self, config, layer_idx: int):
         super().__init__()
 
         self.layer_idx = layer_idx
-        
+
         if not config.norm_first:
             self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        
-        if config.attn is not None and layer_idx in config.attn['layers']:
+
+        if config.attn is not None and layer_idx in config.attn["layers"]:
             self.attn = get_attn(config, layer_idx)
         else:
             self.attn = GatedSlotAttention(
@@ -81,21 +93,20 @@ class GSAVisionBlock(nn.Module):
                 norm_first=config.norm_first,
                 norm_eps=config.norm_eps,
                 fuse_norm=config.fuse_norm,
-                layer_idx=layer_idx
+                layer_idx=layer_idx,
             )
-            
+
         if not config.norm_first:
             self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-            
+
         self.channel_mixer = GSAVisionMLP(config)
 
-        if config.attn is not None and layer_idx in config.attn['layers']:
-            self.train_scan_type = 'uni-scan'
-            self.test_scan_type = 'uni-scan'
+        if config.attn is not None and layer_idx in config.attn["layers"]:
+            self.train_scan_type = "uni-scan"
+            self.test_scan_type = "uni-scan"
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
-
 
     def forward(
         self,
@@ -103,38 +114,49 @@ class GSAVisionBlock(nn.Module):
         past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
-        **kwargs: Unpack[Dict]
+        **kwargs: Unpack[Dict],
     ) -> Union[Tuple[torch.Tensor, Optional[torch.Tensor]], Tuple[torch.Tensor]]:
         residual = hidden_states
 
         # Pre-normalization if enabled
-        if hasattr(self, 'ln_1'):
+        if hasattr(self, "ln_1"):
             hidden_states = self.ln_1(hidden_states)
 
         # Apply attention
-        
-        hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training)
-        
+
+        hidden_states = prepare_hidden_states_for_scan(
+            hidden_states,
+            train_scan_type=self.train_scan_type,
+            test_scan_type=self.test_scan_type,
+            training=self.training,
+        )
+
         hidden_states, attentions, past_key_values = self.attn(
             hidden_states=hidden_states,
             past_key_values=past_key_values,
             use_cache=use_cache,
             output_attentions=output_attentions,
-            **kwargs
+            **kwargs,
         )
-        
-        hidden_states = prepare_hidden_states_for_merge(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training, layer_idx=self.layer_idx)
+
+        hidden_states = prepare_hidden_states_for_merge(
+            hidden_states,
+            train_scan_type=self.train_scan_type,
+            test_scan_type=self.test_scan_type,
+            training=self.training,
+            layer_idx=self.layer_idx,
+        )
 
         # First residual connection
         hidden_states = residual + hidden_states
         residual = hidden_states
 
-        # Pre-normalization for MLP if enabled 
-        if hasattr(self, 'ln_2'):
+        # Pre-normalization for MLP if enabled
+        if hasattr(self, "ln_2"):
             hidden_states = self.ln_2(hidden_states)
 
         hidden_states = self.channel_mixer(hidden_states)
-        
+
         # Second residual connection
         hidden_states = residual + hidden_states
 
@@ -142,13 +164,16 @@ class GSAVisionBlock(nn.Module):
 
         return outputs
 
+
 class GSAVisionPreTrainedModel(PreTrainedModel):
     config_class = GSAVisionConfig
-    
+
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
             module.weight.data = nn.init.trunc_normal_(
-                module.weight.data.to(torch.float32), mean=0.0, std=self.config.initializer_range
+                module.weight.data.to(torch.float32),
+                mean=0.0,
+                std=self.config.initializer_range,
             ).to(module.weight.dtype)
             if module.bias is not None:
                 module.bias.data.zero_()
@@ -167,10 +192,12 @@ class GSAVisionEncoder(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
         self.config = config
-        self.blocks = nn.ModuleList([
-            GSAVisionBlock(config, layer_idx) 
-            for layer_idx in range(config.num_hidden_layers)
-        ])
+        self.blocks = nn.ModuleList(
+            [
+                GSAVisionBlock(config, layer_idx)
+                for layer_idx in range(config.num_hidden_layers)
+            ]
+        )
         self.gradient_checkpointing = False
 
     def forward(
@@ -181,7 +208,7 @@ class GSAVisionEncoder(nn.Module):
         past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
         use_cache: Optional[bool] = None,
         return_dict: bool = True,
-        **kwargs
+        **kwargs,
     ) -> Union[tuple, BaseModelOutput]:
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
@@ -191,13 +218,15 @@ class GSAVisionEncoder(nn.Module):
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
             if self.gradient_checkpointing and self.training:
-                hidden_states, attentions, past_key_values = self._gradient_checkpointing_func(
-                    block.__call__,
-                    hidden_states,
-                    past_key_values=past_key_values,
-                    use_cache=use_cache,
-                    output_attentions=output_attentions,
-                    **kwargs
+                hidden_states, attentions, past_key_values = (
+                    self._gradient_checkpointing_func(
+                        block.__call__,
+                        hidden_states,
+                        past_key_values=past_key_values,
+                        use_cache=use_cache,
+                        output_attentions=output_attentions,
+                        **kwargs,
+                    )
                 )
             else:
                 hidden_states, attentions, past_key_values = block(
@@ -205,7 +234,7 @@ class GSAVisionEncoder(nn.Module):
                     past_key_values=past_key_values,
                     use_cache=use_cache,
                     output_attentions=output_attentions,
-                    **kwargs
+                    **kwargs,
                 )
 
             if output_attentions:
@@ -215,13 +244,18 @@ class GSAVisionEncoder(nn.Module):
             all_hidden_states = all_hidden_states + (hidden_states,)
 
         if not return_dict:
-            return tuple(v for v in [hidden_states, all_hidden_states, all_self_attentions] if v is not None)
-            
+            return tuple(
+                v
+                for v in [hidden_states, all_hidden_states, all_self_attentions]
+                if v is not None
+            )
+
         return BaseModelOutput(
             last_hidden_state=hidden_states,
             hidden_states=all_hidden_states,
             attentions=all_self_attentions,
         )
+
 
 class GSAVisionModel(GSAVisionPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True, use_mask_token=False):
@@ -232,7 +266,7 @@ class GSAVisionModel(GSAVisionPreTrainedModel):
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pooler = Pooler(config) if add_pooling_layer else None
         self.init_weights()
-    
+
     def get_input_embeddings(self):
         return self.embeddings.patch_embeddings
 
@@ -246,19 +280,31 @@ class GSAVisionModel(GSAVisionPreTrainedModel):
         interpolate_pos_encoding: Optional[bool] = None,
         use_cache: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-        **kwargs
+        **kwargs,
     ) -> Union[Tuple, BaseModelOutputWithPooling]:
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
         )
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        output_hidden_states = (
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
+        )
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         if pixel_values is None:
             raise ValueError("You have to specify pixel_values")
-        
-        hidden_states = self.embeddings(pixel_values, bool_masked_pos=bool_masked_pos, interpolate_pos_encoding=interpolate_pos_encoding)
-        
+
+        hidden_states = self.embeddings(
+            pixel_values,
+            bool_masked_pos=bool_masked_pos,
+            interpolate_pos_encoding=interpolate_pos_encoding,
+        )
+
         encoder_outputs = self.encoder(
             hidden_states,
             output_attentions=output_attentions,
@@ -266,15 +312,21 @@ class GSAVisionModel(GSAVisionPreTrainedModel):
             past_key_values=past_key_values,
             use_cache=use_cache,
             return_dict=return_dict,
-            **kwargs
+            **kwargs,
         )
 
         sequence_output = encoder_outputs[0]
         sequence_output = self.layernorm(sequence_output)
-        pooled_output = self.pooler(sequence_output) if self.pooler is not None else None
+        pooled_output = (
+            self.pooler(sequence_output) if self.pooler is not None else None
+        )
 
         if not return_dict:
-            head_outputs = (sequence_output, pooled_output) if pooled_output is not None else (sequence_output,)
+            head_outputs = (
+                (sequence_output, pooled_output)
+                if pooled_output is not None
+                else (sequence_output,)
+            )
             return head_outputs + encoder_outputs[1:]
 
         return BaseModelOutputWithPooling(
@@ -284,11 +336,14 @@ class GSAVisionModel(GSAVisionPreTrainedModel):
             attentions=encoder_outputs.attentions,
         )
 
+
 class GSAForImageClassification(GSAVisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_classes
-        self.backbone = GSAVisionModel(config, add_pooling_layer=True) # Here we should use mean pooling
+        self.backbone = GSAVisionModel(
+            config, add_pooling_layer=True
+        )  # Here we should use mean pooling
         self.classifier = nn.Linear(config.hidden_size, config.num_classes)
         self.init_weights()
 
@@ -301,7 +356,9 @@ class GSAForImageClassification(GSAVisionPreTrainedModel):
         interpolate_pos_encoding: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[tuple, ImageClassifierOutput]:
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         outputs = self.backbone(
             pixel_values,
@@ -312,7 +369,7 @@ class GSAForImageClassification(GSAVisionPreTrainedModel):
         )
 
         pooled_output = outputs.pooler_output
-        logits = self.classifier(pooled_output) # only use mean pooling
+        logits = self.classifier(pooled_output)  # only use mean pooling
 
         loss = None
         if labels is not None:
@@ -334,10 +391,13 @@ class GSAForImageClassification(GSAVisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
+
 class GSAForMaskedImageModeling(GSAVisionPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
-        self.backbone = GSAVisionModel(config, add_pooling_layer=False, use_mask_token=True) 
+        self.backbone = GSAVisionModel(
+            config, add_pooling_layer=False, use_mask_token=True
+        )
         self.decoder = nn.Sequential(
             nn.Conv2d(
                 in_channels=config.hidden_size,
@@ -358,15 +418,19 @@ class GSAForMaskedImageModeling(GSAVisionPreTrainedModel):
         interpolate_pos_encoding: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[tuple, MaskedImageModelingOutput]:
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
-        if bool_masked_pos is not None and (self.config.patch_size != self.config.encoder_stride):
+        if bool_masked_pos is not None and (
+            self.config.patch_size != self.config.encoder_stride
+        ):
             raise ValueError(
                 "When `bool_masked_pos` is provided, `patch_size` must be equal to `encoder_stride` to ensure that "
                 "the reconstructed image has the same dimensions as the input. "
                 f"Got `patch_size` = {self.config.patch_size} and `encoder_stride` = {self.config.encoder_stride}."
             )
-        
+
         outputs = self.backbone(
             pixel_values,
             bool_masked_pos=bool_masked_pos,
@@ -376,11 +440,12 @@ class GSAForMaskedImageModeling(GSAVisionPreTrainedModel):
             return_dict=return_dict,
         )
 
-
         sequence_output = outputs[0]
         batch_size, sequence_length, num_channels = sequence_output.shape
         height = width = math.floor(sequence_length**0.5)
-        sequence_output = sequence_output.permute(0, 2, 1).reshape(batch_size, num_channels, height, width)
+        sequence_output = sequence_output.permute(0, 2, 1).reshape(
+            batch_size, num_channels, height, width
+        )
 
         # Reconstruct pixel values
         reconstructed_pixel_values = self.decoder(sequence_output)
@@ -395,12 +460,20 @@ class GSAForMaskedImageModeling(GSAVisionPreTrainedModel):
                 .unsqueeze(1)
                 .contiguous()
             )
-            reconstruction_loss = nn.functional.l1_loss(pixel_values, reconstructed_pixel_values, reduction="none")
-            masked_im_loss = (reconstruction_loss * mask).sum() / (mask.sum() + 1e-5) / self.config.num_channels
+            reconstruction_loss = nn.functional.l1_loss(
+                pixel_values, reconstructed_pixel_values, reduction="none"
+            )
+            masked_im_loss = (
+                (reconstruction_loss * mask).sum()
+                / (mask.sum() + 1e-5)
+                / self.config.num_channels
+            )
 
         if not return_dict:
             output = (reconstructed_pixel_values,) + outputs[1:]
-            return ((masked_im_loss,) + output) if masked_im_loss is not None else output
+            return (
+                ((masked_im_loss,) + output) if masked_im_loss is not None else output
+            )
 
         return MaskedImageModelingOutput(
             loss=masked_im_loss,
@@ -409,6 +482,7 @@ class GSAForMaskedImageModeling(GSAVisionPreTrainedModel):
             attentions=outputs.attentions,
         )
 
+
 class GSAVideoMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -416,21 +490,22 @@ class GSAVideoMLP(nn.Module):
             nn.Linear(config.hidden_size, config.channel_mixer_dim),
             nn.GELU(),
             nn.Linear(config.channel_mixer_dim, config.hidden_size),
-            nn.Dropout(config.hidden_dropout_prob)
+            nn.Dropout(config.hidden_dropout_prob),
         )
 
     def forward(self, x):
         return self.net(x)
+
 
 class GSAVideoBlock(nn.Module):
     def __init__(self, config, layer_idx: int):
         super().__init__()
 
         self.layer_idx = layer_idx
-        
+
         self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        
-        if config.attn is not None and layer_idx in config.attn['layers']:
+
+        if config.attn is not None and layer_idx in config.attn["layers"]:
             self.attn = get_attn(config, layer_idx)
         else:
             self.attn = GatedSlotAttention(
@@ -451,19 +526,18 @@ class GSAVideoBlock(nn.Module):
                 norm_first=config.norm_first,
                 norm_eps=config.norm_eps,
                 fuse_norm=config.fuse_norm,
-                layer_idx=layer_idx
+                layer_idx=layer_idx,
             )
-            
+
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-            
+
         self.channel_mixer = GSAVideoMLP(config)
-        if config.attn is not None and layer_idx in config.attn['layers']:
-            self.train_scan_type = 'uni-scan'
-            self.test_scan_type = 'uni-scan'
+        if config.attn is not None and layer_idx in config.attn["layers"]:
+            self.train_scan_type = "uni-scan"
+            self.test_scan_type = "uni-scan"
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
-
 
     def forward(
         self,
@@ -471,22 +545,33 @@ class GSAVideoBlock(nn.Module):
         past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
         use_cache: Optional[bool] = False,
         output_attentions: bool = False,
-        **kwargs: Unpack[Dict]
+        **kwargs: Unpack[Dict],
     ):
         residual = hidden_states
-        
+
         hidden_states = self.ln_1(hidden_states)
-        hidden_states = prepare_hidden_states_for_scan(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training)
+        hidden_states = prepare_hidden_states_for_scan(
+            hidden_states,
+            train_scan_type=self.train_scan_type,
+            test_scan_type=self.test_scan_type,
+            training=self.training,
+        )
 
         hidden_states, attentions, past_key_values = self.attn(
             hidden_states=hidden_states,
             past_key_values=past_key_values,
             use_cache=use_cache,
             output_attentions=output_attentions,
-            **kwargs
+            **kwargs,
         )
 
-        hidden_states = prepare_hidden_states_for_merge(hidden_states, train_scan_type=self.train_scan_type, test_scan_type=self.test_scan_type, training=self.training, layer_idx=self.layer_idx)
+        hidden_states = prepare_hidden_states_for_merge(
+            hidden_states,
+            train_scan_type=self.train_scan_type,
+            test_scan_type=self.test_scan_type,
+            training=self.training,
+            layer_idx=self.layer_idx,
+        )
 
         hidden_states = residual + hidden_states
         residual = hidden_states
@@ -501,12 +586,16 @@ class GSAVideoBlock(nn.Module):
 
         return outputs
 
+
 class GSAVideoEncoder(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
         self.config = config
         self.blocks = nn.ModuleList(
-            [GSAVideoBlock(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
+            [
+                GSAVideoBlock(config, layer_idx)
+                for layer_idx in range(config.num_hidden_layers)
+            ]
         )
         self.gradient_checkpointing = False
 
@@ -518,7 +607,7 @@ class GSAVideoEncoder(nn.Module):
         past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
         use_cache: Optional[bool] = None,
         return_dict=True,
-        **kwargs
+        **kwargs,
     ):
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
@@ -527,7 +616,6 @@ class GSAVideoEncoder(nn.Module):
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
-
             if self.gradient_checkpointing and self.training:
                 hidden_states, attentions, _ = self._gradient_checkpointing_func(
                     block.__call__,
@@ -535,7 +623,7 @@ class GSAVideoEncoder(nn.Module):
                     past_key_values=past_key_values,
                     use_cache=use_cache,
                     output_attentions=output_attentions,
-                    **kwargs
+                    **kwargs,
                 )
             else:
                 hidden_states, attentions, _ = block(
@@ -543,7 +631,7 @@ class GSAVideoEncoder(nn.Module):
                     past_key_values=past_key_values,
                     use_cache=use_cache,
                     output_attentions=output_attentions,
-                    **kwargs
+                    **kwargs,
                 )
 
             if output_attentions:
@@ -553,13 +641,18 @@ class GSAVideoEncoder(nn.Module):
             all_hidden_states = all_hidden_states + (hidden_states,)
 
         if not return_dict:
-            return tuple(v for v in [hidden_states, all_hidden_states, all_self_attentions] if v is not None)
+            return tuple(
+                v
+                for v in [hidden_states, all_hidden_states, all_self_attentions]
+                if v is not None
+            )
 
         return BaseModelOutput(
             last_hidden_state=hidden_states,
             hidden_states=all_hidden_states,
-            attentions=all_self_attentions
+            attentions=all_self_attentions,
         )
+
 
 class GSAVideoPreTrainedModel(PreTrainedModel):
     config_class = GSAVideoConfig
@@ -576,6 +669,7 @@ class GSAVideoPreTrainedModel(PreTrainedModel):
         elif isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
+
 
 class GSAVideoModel(GSAVideoPreTrainedModel):
     def __init__(self, config):
@@ -597,13 +691,21 @@ class GSAVideoModel(GSAVideoPreTrainedModel):
         interpolate_pos_encoding: Optional[bool] = None,
         use_cache: Optional[bool] = None,
         return_dict=None,
-        **kwargs
+        **kwargs,
     ):
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
         )
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        output_hidden_states = (
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
+        )
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         embedding_output = self.embeddings(pixel_values, bool_masked_pos)
 
@@ -614,7 +716,7 @@ class GSAVideoModel(GSAVideoPreTrainedModel):
             return_dict=return_dict,
             past_key_values=past_key_values,
             use_cache=use_cache,
-            **kwargs
+            **kwargs,
         )
 
         sequence_output = encoder_outputs[0]
@@ -628,11 +730,14 @@ class GSAVideoModel(GSAVideoPreTrainedModel):
             attentions=encoder_outputs.attentions,
         )
 
+
 class GSAVideoDecoder(nn.Module):
     def __init__(self, config, num_patches):
         super().__init__()
 
-        decoder_num_labels = config.num_channels * config.tubelet_size * config.patch_size**2
+        decoder_num_labels = (
+            config.num_channels * config.tubelet_size * config.patch_size**2
+        )
 
         # Initialize decoder-specific configuration
         decoder_config = deepcopy(config)
@@ -642,11 +747,18 @@ class GSAVideoDecoder(nn.Module):
         decoder_config.channel_mixer_dim = config.decoder_channel_mixer_dim
 
         self.decoder_blocks = nn.ModuleList(
-            [GSAVideoBlock(decoder_config, layer_idx) for layer_idx in range(decoder_config.num_hidden_layers)]
+            [
+                GSAVideoBlock(decoder_config, layer_idx)
+                for layer_idx in range(decoder_config.num_hidden_layers)
+            ]
         )
 
         self.norm = nn.LayerNorm(config.decoder_hidden_size)
-        self.head = nn.Linear(config.decoder_hidden_size, decoder_num_labels) if decoder_num_labels > 0 else nn.Identity()
+        self.head = (
+            nn.Linear(config.decoder_hidden_size, decoder_num_labels)
+            if decoder_num_labels > 0
+            else nn.Identity()
+        )
 
         self.gradient_checkpointing = False
         self.config = config
@@ -660,7 +772,7 @@ class GSAVideoDecoder(nn.Module):
         past_key_values: Optional[Union[Cache, List[torch.FloatTensor]]] = None,
         use_cache: Optional[bool] = None,
         return_dict=True,
-        **kwargs
+        **kwargs,
     ):
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
@@ -676,7 +788,7 @@ class GSAVideoDecoder(nn.Module):
                     output_attentions=output_attentions,
                     past_key_values=past_key_values,
                     use_cache=use_cache,
-                    **kwargs
+                    **kwargs,
                 )
             else:
                 hidden_states, attentions, _ = block(
@@ -684,7 +796,7 @@ class GSAVideoDecoder(nn.Module):
                     output_attentions=output_attentions,
                     past_key_values=past_key_values,
                     use_cache=use_cache,
-                    **kwargs
+                    **kwargs,
                 )
 
             if output_attentions:
@@ -700,27 +812,36 @@ class GSAVideoDecoder(nn.Module):
         logits = self.head(hidden_states)
 
         if not return_dict:
-            return tuple(v for v in [logits, all_hidden_states, all_self_attentions] if v is not None)
+            return tuple(
+                v
+                for v in [logits, all_hidden_states, all_self_attentions]
+                if v is not None
+            )
 
         return VideoDecoderOutput(
             logits=logits,
             hidden_states=all_hidden_states,
-            attentions=all_self_attentions
+            attentions=all_self_attentions,
         )
+
 
 class GSAForVideoPreTraining(GSAVideoPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.config = config
         self.backbone = GSAVideoModel(config)
-        
-        self.encoder_to_decoder = nn.Linear(config.hidden_size, config.decoder_hidden_size, bias=False)
+
+        self.encoder_to_decoder = nn.Linear(
+            config.hidden_size, config.decoder_hidden_size, bias=False
+        )
         self.mask_token = nn.Parameter(torch.zeros(1, 1, config.decoder_hidden_size))
         self.position_embeddings = get_sinusoid_encoding_table(
             self.backbone.embeddings.num_patches, config.decoder_hidden_size
         )
 
-        self.decoder = GSAVideoDecoder(config, num_patches=self.backbone.embeddings.num_patches)
+        self.decoder = GSAVideoDecoder(
+            config, num_patches=self.backbone.embeddings.num_patches
+        )
 
         self.post_init()
 
@@ -732,7 +853,9 @@ class GSAForVideoPreTraining(GSAVideoPreTrainedModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[tuple, VideoForPreTrainingOutput]:
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         outputs = self.backbone(
             pixel_values,
@@ -744,16 +867,26 @@ class GSAForVideoPreTraining(GSAVideoPreTrainedModel):
 
         sequence_output = outputs[0]
         sequence_output = self.encoder_to_decoder(sequence_output)
-        
+
         batch_size, seq_len, num_channels = sequence_output.shape
 
-        expanded_position_embeddings = self.position_embeddings.expand(batch_size, -1, -1).type_as(pixel_values)
-        expanded_position_embeddings = expanded_position_embeddings.to(pixel_values.device).clone().detach()
-        
-        pos_emb_visible = expanded_position_embeddings[~bool_masked_pos].reshape(batch_size, -1, num_channels)
-        pos_emb_mask = expanded_position_embeddings[bool_masked_pos].reshape(batch_size, -1, num_channels)
+        expanded_position_embeddings = self.position_embeddings.expand(
+            batch_size, -1, -1
+        ).type_as(pixel_values)
+        expanded_position_embeddings = (
+            expanded_position_embeddings.to(pixel_values.device).clone().detach()
+        )
 
-        x_full = torch.cat([sequence_output + pos_emb_visible, self.mask_token + pos_emb_mask], dim=1)
+        pos_emb_visible = expanded_position_embeddings[~bool_masked_pos].reshape(
+            batch_size, -1, num_channels
+        )
+        pos_emb_mask = expanded_position_embeddings[bool_masked_pos].reshape(
+            batch_size, -1, num_channels
+        )
+
+        x_full = torch.cat(
+            [sequence_output + pos_emb_visible, self.mask_token + pos_emb_mask], dim=1
+        )
 
         decoder_outputs = self.decoder(x_full, pos_emb_mask.shape[1])
         logits = decoder_outputs.logits
@@ -769,8 +902,12 @@ class GSAForVideoPreTraining(GSAVideoPreTrainedModel):
                 # first, unnormalize the frames
                 device = pixel_values.device
                 dtype = pixel_values.dtype
-                mean = torch.as_tensor(IMAGENET_DEFAULT_MEAN).to(device=device, dtype=dtype)[None, None, :, None, None]
-                std = torch.as_tensor(IMAGENET_DEFAULT_STD).to(device=device, dtype=dtype)[None, None, :, None, None]
+                mean = torch.as_tensor(IMAGENET_DEFAULT_MEAN).to(
+                    device=device, dtype=dtype
+                )[None, None, :, None, None]
+                std = torch.as_tensor(IMAGENET_DEFAULT_STD).to(
+                    device=device, dtype=dtype
+                )[None, None, :, None, None]
                 frames = pixel_values * std + mean  # in [0, 1]
 
             batch_size, time, num_channels, height, width = frames.shape
@@ -848,6 +985,7 @@ class GSAForVideoPreTraining(GSAVideoPreTrainedModel):
             attentions=outputs.attentions,
         )
 
+
 class GSAForVideoClassification(GSAVideoPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
@@ -857,7 +995,11 @@ class GSAForVideoClassification(GSAVideoPreTrainedModel):
 
         # Classifier head
         self.fc_norm = nn.LayerNorm(config.hidden_size)
-        self.classifier = nn.Linear(config.hidden_size, config.num_classes) if config.num_classes > 0 else nn.Identity()
+        self.classifier = (
+            nn.Linear(config.hidden_size, config.num_classes)
+            if config.num_classes > 0
+            else nn.Identity()
+        )
 
         self.post_init()
 
@@ -869,7 +1011,9 @@ class GSAForVideoClassification(GSAVideoPreTrainedModel):
         output_hidden_states=None,
         return_dict=None,
     ):
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         outputs = self.backbone(
             pixel_values,

@@ -15,27 +15,43 @@ import numpy as np
 Basic components of a vision model, including the patch embeddings, image embeddings, and pooler. Taken from https://github.com/huggingface/transformers/blob/main/src/transformers/models/vit/modeling_vit.py
 """
 
+
 class PatchEmbeddings(nn.Module):
     """
     Convert image into patch embeddings.
     Adapted from huggingface/transformers ViT implementation.
     """
+
     def __init__(self, config):
         super().__init__()
         image_size, patch_size = config.image_size, config.patch_size
         num_channels, hidden_size = config.num_channels, config.hidden_size
 
-        image_size = image_size if isinstance(image_size, collections.abc.Iterable) else (image_size, image_size)
-        patch_size = patch_size if isinstance(patch_size, collections.abc.Iterable) else (patch_size, patch_size)
-        num_patches = (image_size[1] // patch_size[1]) * (image_size[0] // patch_size[0])
+        image_size = (
+            image_size
+            if isinstance(image_size, collections.abc.Iterable)
+            else (image_size, image_size)
+        )
+        patch_size = (
+            patch_size
+            if isinstance(patch_size, collections.abc.Iterable)
+            else (patch_size, patch_size)
+        )
+        num_patches = (image_size[1] // patch_size[1]) * (
+            image_size[0] // patch_size[0]
+        )
         self.image_size = image_size
         self.patch_size = patch_size
         self.num_channels = num_channels
         self.num_patches = num_patches
 
-        self.projection = nn.Conv2d(num_channels, hidden_size, kernel_size=patch_size, stride=patch_size)
+        self.projection = nn.Conv2d(
+            num_channels, hidden_size, kernel_size=patch_size, stride=patch_size
+        )
 
-    def forward(self, pixel_values: torch.Tensor, interpolate_pos_encoding: bool = False) -> torch.Tensor:
+    def forward(
+        self, pixel_values: torch.Tensor, interpolate_pos_encoding: bool = False
+    ) -> torch.Tensor:
         batch_size, num_channels, height, width = pixel_values.shape
         if num_channels != self.num_channels:
             raise ValueError(
@@ -51,23 +67,33 @@ class PatchEmbeddings(nn.Module):
         embeddings = self.projection(pixel_values).flatten(2).transpose(1, 2)
         return embeddings
 
+
 class ImageEmbeddings(nn.Module):
     """
     Construct the position and patch embeddings.
     Adapted from huggingface/transformers ViT implementation. No cls token is used in this implementation.
     """
+
     def __init__(self, config, use_mask_token: bool = False) -> None:
         super().__init__()
 
-        self.mask_token = nn.Parameter(torch.zeros(1, 1, config.hidden_size)) if use_mask_token else None
+        self.mask_token = (
+            nn.Parameter(torch.zeros(1, 1, config.hidden_size))
+            if use_mask_token
+            else None
+        )
         self.patch_embeddings = PatchEmbeddings(config)
         num_patches = self.patch_embeddings.num_patches
-        self.position_embeddings = nn.Parameter(torch.randn(1, num_patches, config.hidden_size))
+        self.position_embeddings = nn.Parameter(
+            torch.randn(1, num_patches, config.hidden_size)
+        )
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.patch_size = config.patch_size
         self.config = config
 
-    def interpolate_pos_encoding(self, embeddings: torch.Tensor, height: int, width: int) -> torch.Tensor:
+    def interpolate_pos_encoding(
+        self, embeddings: torch.Tensor, height: int, width: int
+    ) -> torch.Tensor:
         """
         This method allows to interpolate the pre-trained position encodings, to be able to use the model on higher resolution
         images. This method is also adapted to support torch.jit tracing.
@@ -78,19 +104,25 @@ class ImageEmbeddings(nn.Module):
         """
 
         num_patches = embeddings.shape[1]
-        num_positions = self.position_embeddings.shape[1] 
+        num_positions = self.position_embeddings.shape[1]
 
-        if not torch.jit.is_tracing() and num_patches == num_positions and height == width:
+        if (
+            not torch.jit.is_tracing()
+            and num_patches == num_positions
+            and height == width
+        ):
             return self.position_embeddings
-        
+
         dim = embeddings.shape[-1]
 
-        new_height = height // self.patch_size 
+        new_height = height // self.patch_size
         new_width = width // self.patch_size
 
         sqrt_num_positions = torch_int(num_positions**0.5)
-        pos_embed = self.position_embeddings.reshape(1, sqrt_num_positions, sqrt_num_positions, dim)
-        
+        pos_embed = self.position_embeddings.reshape(
+            1, sqrt_num_positions, sqrt_num_positions, dim
+        )
+
         pos_embed = pos_embed.permute(0, 3, 1, 2)
 
         pos_embed = nn.functional.interpolate(
@@ -111,7 +143,9 @@ class ImageEmbeddings(nn.Module):
         interpolate_pos_encoding: bool = False,
     ) -> torch.Tensor:
         batch_size, num_channels, height, width = pixel_values.shape
-        embeddings = self.patch_embeddings(pixel_values, interpolate_pos_encoding=interpolate_pos_encoding)
+        embeddings = self.patch_embeddings(
+            pixel_values, interpolate_pos_encoding=interpolate_pos_encoding
+        )
 
         if bool_masked_pos is not None:
             seq_length = embeddings.shape[1]
@@ -122,7 +156,9 @@ class ImageEmbeddings(nn.Module):
 
         # add positional encoding to each token
         if interpolate_pos_encoding:
-            embeddings = embeddings + self.interpolate_pos_encoding(embeddings, height, width)
+            embeddings = embeddings + self.interpolate_pos_encoding(
+                embeddings, height, width
+            )
         else:
             embeddings = embeddings + self.position_embeddings
 
@@ -130,18 +166,20 @@ class ImageEmbeddings(nn.Module):
 
         return embeddings
 
+
 class Pooler(nn.Module):
     """
     Pool the output of a vision model by taking the mean of all tokens.
     Adapted from huggingface/transformers ViT implementation.
     """
+
     def __init__(self, config):
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.activation = nn.Tanh()
 
     def forward(self, hidden_states):
-        pooled_output = hidden_states.mean(dim=1) # always use mean pooling
+        pooled_output = hidden_states.mean(dim=1)  # always use mean pooling
         pooled_output = self.dense(pooled_output)
         pooled_output = self.activation(pooled_output)
         return pooled_output
@@ -151,19 +189,21 @@ class Pooler(nn.Module):
 Video utilities, taken from https://github.com/huggingface/transformers/blob/main/src/transformers/models/videomae/modeling_videomae.py
 """
 
+
 @dataclass
 class VideoDecoderOutput(ModelOutput):
     logits: torch.FloatTensor = None
     hidden_states: Optional[Tuple[torch.FloatTensor]] = None
     attentions: Optional[Tuple[torch.FloatTensor]] = None
 
+
 @dataclass
 class VideoForPreTrainingOutput(ModelOutput):
-
     loss: Optional[torch.FloatTensor] = None
     logits: torch.FloatTensor = None
     hidden_states: Optional[Tuple[torch.FloatTensor]] = None
     attentions: Optional[Tuple[torch.FloatTensor]] = None
+
 
 # sin-cos position encoding
 # https://github.com/jadore801120/attention-is-all-you-need-pytorch/blob/master/transformer/Models.py#L31
@@ -172,13 +212,19 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
     # TODO: make it with torch instead of numpy
     def get_position_angle_vec(position):
-        return [position / np.power(10000, 2 * (hid_j // 2) / d_hid) for hid_j in range(d_hid)]
+        return [
+            position / np.power(10000, 2 * (hid_j // 2) / d_hid)
+            for hid_j in range(d_hid)
+        ]
 
-    sinusoid_table = np.array([get_position_angle_vec(pos_i) for pos_i in range(n_position)])
+    sinusoid_table = np.array(
+        [get_position_angle_vec(pos_i) for pos_i in range(n_position)]
+    )
     sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2])  # dim 2i
     sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  # dim 2i+1
 
     return torch.FloatTensor(sinusoid_table).unsqueeze(0)
+
 
 class VideoEmbeddings(nn.Module):
     """
@@ -192,7 +238,9 @@ class VideoEmbeddings(nn.Module):
         self.patch_embeddings = VideoPatchEmbeddings(config)
         self.num_patches = self.patch_embeddings.num_patches
         # fixed sin-cos embedding
-        self.position_embeddings = get_sinusoid_encoding_table(self.num_patches, config.hidden_size)
+        self.position_embeddings = get_sinusoid_encoding_table(
+            self.num_patches, config.hidden_size
+        )
         self.config = config
 
     def forward(self, pixel_values, bool_masked_pos):
@@ -200,7 +248,13 @@ class VideoEmbeddings(nn.Module):
         embeddings = self.patch_embeddings(pixel_values)
 
         # add position embeddings
-        embeddings = embeddings + self.position_embeddings.type_as(embeddings).to(embeddings.device).clone().detach()
+        embeddings = (
+            embeddings
+            + self.position_embeddings.type_as(embeddings)
+            .to(embeddings.device)
+            .clone()
+            .detach()
+        )
         # only keep visible patches
         # ~bool_masked_pos means visible
         if bool_masked_pos is not None:
@@ -231,13 +285,23 @@ class VideoPatchEmbeddings(nn.Module):
         num_frames = config.num_frames
         tubelet_size = config.tubelet_size
 
-        image_size = image_size if isinstance(image_size, collections.abc.Iterable) else (image_size, image_size)
-        patch_size = patch_size if isinstance(patch_size, collections.abc.Iterable) else (patch_size, patch_size)
+        image_size = (
+            image_size
+            if isinstance(image_size, collections.abc.Iterable)
+            else (image_size, image_size)
+        )
+        patch_size = (
+            patch_size
+            if isinstance(patch_size, collections.abc.Iterable)
+            else (patch_size, patch_size)
+        )
         self.image_size = image_size
         self.patch_size = patch_size
         self.tubelet_size = int(tubelet_size)
         num_patches = (
-            (image_size[1] // patch_size[1]) * (image_size[0] // patch_size[0]) * (num_frames // self.tubelet_size)
+            (image_size[1] // patch_size[1])
+            * (image_size[0] // patch_size[0])
+            * (num_frames // self.tubelet_size)
         )
         self.num_channels = num_channels
         self.num_patches = num_patches

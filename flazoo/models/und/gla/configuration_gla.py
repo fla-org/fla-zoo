@@ -4,9 +4,9 @@ from typing import Dict, Optional
 
 from transformers.configuration_utils import PretrainedConfig
 
-class GLAVisionConfig(PretrainedConfig):
 
-    model_type = 'gla_vision'
+class GLAVisionConfig(PretrainedConfig):
+    model_type = "gla_vision"
 
     def __init__(
         self,
@@ -34,7 +34,7 @@ class GLAVisionConfig(PretrainedConfig):
         initializer_range: float = 0.02,
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
-        attn_type: str = "full_attn", # attention type, default to "full_attn"
+        attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
         # Vision specific parameters
         image_size: int = 224,
@@ -47,9 +47,9 @@ class GLAVisionConfig(PretrainedConfig):
         interpolate_pos_encoding: bool = False,
         channel_mixer_dim: int = None,
         encoder_stride=16,
-        train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        **kwargs
+        train_scan_type: str = "uni-scan",  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        test_scan_type: str = None,  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        **kwargs,
     ):
         # Initialize DeltaNet core parameters
         self.hidden_size = hidden_size
@@ -87,7 +87,7 @@ class GLAVisionConfig(PretrainedConfig):
         self.layer_norm_eps = layer_norm_eps
         self.interpolate_pos_encoding = interpolate_pos_encoding
         self.train_scan_type = train_scan_type
-        
+
         if test_scan_type is None:
             self.test_scan_type = train_scan_type
         else:
@@ -97,12 +97,16 @@ class GLAVisionConfig(PretrainedConfig):
         if attn is not None:
             if not isinstance(attn, Dict):
                 raise ValueError("attn must be a dictionary")
-            if 'layers' not in attn:
-                raise ValueError("Layer indices must be provided to initialize hybrid attention layers")
-            if 'num_heads' not in attn:
-                raise ValueError("Number of heads must be provided to initialize hybrid attention layers")
-            attn['num_kv_heads'] = attn.get('num_kv_heads', attn['num_heads'])
-            attn['window_size'] = attn.get('window_size', None)
+            if "layers" not in attn:
+                raise ValueError(
+                    "Layer indices must be provided to initialize hybrid attention layers"
+                )
+            if "num_heads" not in attn:
+                raise ValueError(
+                    "Number of heads must be provided to initialize hybrid attention layers"
+                )
+            attn["num_kv_heads"] = attn.get("num_kv_heads", attn["num_heads"])
+            attn["window_size"] = attn.get("window_size", None)
 
         self.attn = attn
 
@@ -113,9 +117,9 @@ class GLAVisionConfig(PretrainedConfig):
 
         super().__init__(**kwargs)
 
-class GLAVideoConfig(PretrainedConfig):
 
-    model_type = 'gla_video'
+class GLAVideoConfig(PretrainedConfig):
+    model_type = "gla_video"
 
     def __init__(
         self,
@@ -143,9 +147,8 @@ class GLAVideoConfig(PretrainedConfig):
         initializer_range: float = 0.02,
         fuse_norm: bool = True,
         fuse_cross_entropy: bool = True,
-        attn_type: str = "full_attn", # attention type, default to "full_attn"
+        attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
-
         # Video specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -157,18 +160,17 @@ class GLAVideoConfig(PretrainedConfig):
         interpolate_pos_encoding: bool = False,
         encoder_stride=16,
         channel_mixer_dim: int = None,
-        train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        train_scan_type: str = "uni-scan",  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        test_scan_type: str = None,  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
         norm_pix_loss: bool = True,
         num_frames: int = 16,
         tubelet_size: int = 2,
-
         # decoder specific parameters
         decoder_num_heads: int = 6,
         decoder_hidden_size: int = 256,
         decoder_num_hidden_layers: int = 4,
         decoder_channel_mixer_dim: int = None,
-        **kwargs
+        **kwargs,
     ):
         # Initialize DeltaNet core parameters
         self.hidden_size = hidden_size
@@ -206,7 +208,7 @@ class GLAVideoConfig(PretrainedConfig):
         self.layer_norm_eps = layer_norm_eps
         self.interpolate_pos_encoding = interpolate_pos_encoding
         self.train_scan_type = train_scan_type
-        
+
         if test_scan_type is None:
             self.test_scan_type = train_scan_type
         else:
@@ -221,27 +223,32 @@ class GLAVideoConfig(PretrainedConfig):
         self.decoder_hidden_size = decoder_hidden_size
         self.decoder_num_hidden_layers = decoder_num_hidden_layers
 
-
         if attn is not None:
             if not isinstance(attn, Dict):
                 raise ValueError("attn must be a dictionary")
-            if 'layers' not in attn:
-                raise ValueError("Layer indices must be provided to initialize hybrid attention layers")
-            if 'num_heads' not in attn:
-                raise ValueError("Number of heads must be provided to initialize hybrid attention layers")
-            attn['num_kv_heads'] = attn.get('num_kv_heads', attn['num_heads'])
-            attn['window_size'] = attn.get('window_size', None)
-        
+            if "layers" not in attn:
+                raise ValueError(
+                    "Layer indices must be provided to initialize hybrid attention layers"
+                )
+            if "num_heads" not in attn:
+                raise ValueError(
+                    "Number of heads must be provided to initialize hybrid attention layers"
+                )
+            attn["num_kv_heads"] = attn.get("num_kv_heads", attn["num_heads"])
+            attn["window_size"] = attn.get("window_size", None)
+
         self.attn = attn
 
         if channel_mixer_dim is None:
-            self.channel_mixer_dim = 4 * hidden_size # default value set to 4 * hidden_size
+            self.channel_mixer_dim = (
+                4 * hidden_size
+            )  # default value set to 4 * hidden_size
         else:
             self.channel_mixer_dim = channel_mixer_dim
-        
+
         if decoder_channel_mixer_dim is None:
             self.decoder_channel_mixer_dim = 4 * decoder_hidden_size
         else:
-            self.decoder_channel_mixer_dim = decoder_channel_mixer_dim # default value set to 4 * decoder_hidden_size
+            self.decoder_channel_mixer_dim = decoder_channel_mixer_dim  # default value set to 4 * decoder_hidden_size
 
         super().__init__(**kwargs)

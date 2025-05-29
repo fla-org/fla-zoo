@@ -6,11 +6,11 @@ from transformers.configuration_utils import PretrainedConfig
 
 
 class GatedDeltaNetVisionConfig(PretrainedConfig):
-    model_type = 'gated_deltanet_vision'
+    model_type = "gated_deltanet_vision"
 
     def __init__(
         self,
-        # GatedDeltaNet core parameters  
+        # GatedDeltaNet core parameters
         attn_mode: str = "chunk",
         hidden_size: int = 2048,
         expand_v: int = 1,
@@ -28,9 +28,8 @@ class GatedDeltaNetVisionConfig(PretrainedConfig):
         use_cache: bool = True,
         initializer_range: float = 0.02,
         fuse_cross_entropy: bool = True,
-        attn_type: str = "full_attn", # attention type, default to "full_attn"
+        attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
-        
         # Vision specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -42,9 +41,9 @@ class GatedDeltaNetVisionConfig(PretrainedConfig):
         interpolate_pos_encoding: bool = False,
         channel_mixer_dim: int = None,
         encoder_stride=16,
-        train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        **kwargs
+        train_scan_type: str = "uni-scan",  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        test_scan_type: str = None,  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        **kwargs,
     ):
         # Initialize GatedDeltaNet core parameters
         self.attn_mode = attn_mode
@@ -52,7 +51,7 @@ class GatedDeltaNetVisionConfig(PretrainedConfig):
         self.expand_v = expand_v
         self.head_dim = head_dim
         self.use_gate = use_gate
-        self.use_short_conv = use_short_conv  
+        self.use_short_conv = use_short_conv
         self.conv_size = conv_size
         self.num_heads = num_heads
         self.hidden_act = hidden_act
@@ -60,7 +59,7 @@ class GatedDeltaNetVisionConfig(PretrainedConfig):
         self.norm_first = norm_first
         self.norm_eps = norm_eps
         self.use_cache = use_cache
-        self.initializer_range = initializer_range 
+        self.initializer_range = initializer_range
         self.fuse_cross_entropy = fuse_cross_entropy
         self.attn = attn
         self.max_position_embeddings = max_position_embeddings
@@ -75,9 +74,9 @@ class GatedDeltaNetVisionConfig(PretrainedConfig):
         self.hidden_dropout_prob = hidden_dropout_prob
         self.use_mask_token = use_mask_token
         self.layer_norm_eps = layer_norm_eps
-        self.interpolate_pos_encoding = interpolate_pos_encoding 
+        self.interpolate_pos_encoding = interpolate_pos_encoding
         self.train_scan_type = train_scan_type
-        
+
         if test_scan_type is None:
             self.test_scan_type = train_scan_type
         else:
@@ -87,12 +86,16 @@ class GatedDeltaNetVisionConfig(PretrainedConfig):
         if attn is not None:
             if not isinstance(attn, Dict):
                 raise ValueError("attn must be a dictionary")
-            if 'layers' not in attn:
-                raise ValueError("Layer indices must be provided to initialize hybrid attention layers")
-            if 'num_heads' not in attn:
-                raise ValueError("Number of heads must be provided to initialize hybrid attention layers")
-            attn['num_kv_heads'] = attn.get('num_kv_heads', attn['num_heads'])
-            attn['window_size'] = attn.get('window_size', None)
+            if "layers" not in attn:
+                raise ValueError(
+                    "Layer indices must be provided to initialize hybrid attention layers"
+                )
+            if "num_heads" not in attn:
+                raise ValueError(
+                    "Number of heads must be provided to initialize hybrid attention layers"
+                )
+            attn["num_kv_heads"] = attn.get("num_kv_heads", attn["num_heads"])
+            attn["window_size"] = attn.get("window_size", None)
 
         self.attn = attn
 
@@ -100,15 +103,16 @@ class GatedDeltaNetVisionConfig(PretrainedConfig):
             self.channel_mixer_dim = 4 * hidden_size
         else:
             self.channel_mixer_dim = channel_mixer_dim
-        
+
         super().__init__(**kwargs)
 
+
 class GatedDeltaNetVideoConfig(PretrainedConfig):
-    model_type = 'gated_deltanet_video'
+    model_type = "gated_deltanet_video"
 
     def __init__(
         self,
-        # GatedDeltaNet core parameters  
+        # GatedDeltaNet core parameters
         attn_mode: str = "chunk",
         hidden_size: int = 2048,
         expand_v: int = 1,
@@ -126,9 +130,8 @@ class GatedDeltaNetVideoConfig(PretrainedConfig):
         use_cache: bool = True,
         initializer_range: float = 0.02,
         fuse_cross_entropy: bool = True,
-        attn_type: str = "full_attn", # attention type, default to "full_attn"
+        attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
-        
         # Video specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -140,18 +143,17 @@ class GatedDeltaNetVideoConfig(PretrainedConfig):
         interpolate_pos_encoding: bool = False,
         encoder_stride=16,
         channel_mixer_dim: int = None,
-        train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        train_scan_type: str = "uni-scan",  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        test_scan_type: str = None,  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
         norm_pix_loss: bool = True,
         num_frames: int = 16,
         tubelet_size: int = 2,
-
         # decoder specific parameters
         decoder_num_heads: int = 6,
         decoder_hidden_size: int = 256,
         decoder_num_hidden_layers: int = 4,
         decoder_channel_mixer_dim: int = None,
-        **kwargs
+        **kwargs,
     ):
         # Initialize GatedDeltaNet core parameters
         self.attn_mode = attn_mode
@@ -159,7 +161,7 @@ class GatedDeltaNetVideoConfig(PretrainedConfig):
         self.expand_v = expand_v
         self.head_dim = head_dim
         self.use_gate = use_gate
-        self.use_short_conv = use_short_conv  
+        self.use_short_conv = use_short_conv
         self.conv_size = conv_size
         self.num_heads = num_heads
         self.hidden_act = hidden_act
@@ -167,7 +169,7 @@ class GatedDeltaNetVideoConfig(PretrainedConfig):
         self.norm_first = norm_first
         self.norm_eps = norm_eps
         self.use_cache = use_cache
-        self.initializer_range = initializer_range 
+        self.initializer_range = initializer_range
         self.fuse_cross_entropy = fuse_cross_entropy
         self.attn = attn
         self.max_position_embeddings = max_position_embeddings
@@ -184,7 +186,7 @@ class GatedDeltaNetVideoConfig(PretrainedConfig):
         self.layer_norm_eps = layer_norm_eps
         self.interpolate_pos_encoding = interpolate_pos_encoding
         self.train_scan_type = train_scan_type
-        
+
         if test_scan_type is None:
             self.test_scan_type = train_scan_type
         else:
@@ -199,27 +201,32 @@ class GatedDeltaNetVideoConfig(PretrainedConfig):
         self.decoder_hidden_size = decoder_hidden_size
         self.decoder_num_hidden_layers = decoder_num_hidden_layers
 
-
         if attn is not None:
             if not isinstance(attn, Dict):
                 raise ValueError("attn must be a dictionary")
-            if 'layers' not in attn:
-                raise ValueError("Layer indices must be provided to initialize hybrid attention layers")
-            if 'num_heads' not in attn:
-                raise ValueError("Number of heads must be provided to initialize hybrid attention layers")
-            attn['num_kv_heads'] = attn.get('num_kv_heads', attn['num_heads'])
-            attn['window_size'] = attn.get('window_size', None)
-        
+            if "layers" not in attn:
+                raise ValueError(
+                    "Layer indices must be provided to initialize hybrid attention layers"
+                )
+            if "num_heads" not in attn:
+                raise ValueError(
+                    "Number of heads must be provided to initialize hybrid attention layers"
+                )
+            attn["num_kv_heads"] = attn.get("num_kv_heads", attn["num_heads"])
+            attn["window_size"] = attn.get("window_size", None)
+
         self.attn = attn
 
         if channel_mixer_dim is None:
-            self.channel_mixer_dim = 4 * hidden_size # default value set to 4 * hidden_size
+            self.channel_mixer_dim = (
+                4 * hidden_size
+            )  # default value set to 4 * hidden_size
         else:
             self.channel_mixer_dim = channel_mixer_dim
-        
+
         if decoder_channel_mixer_dim is None:
             self.decoder_channel_mixer_dim = 4 * decoder_hidden_size
         else:
-            self.decoder_channel_mixer_dim = decoder_channel_mixer_dim # default value set to 4 * decoder_hidden_size
+            self.decoder_channel_mixer_dim = decoder_channel_mixer_dim  # default value set to 4 * decoder_hidden_size
 
         super().__init__(**kwargs)

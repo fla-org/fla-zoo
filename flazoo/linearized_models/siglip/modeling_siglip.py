@@ -13,7 +13,11 @@ from torch.nn.init import _calculate_fan_in_and_fan_out
 from transformers.activations import ACT2FN
 from transformers.modeling_attn_mask_utils import _prepare_4d_attention_mask
 from transformers.modeling_layers import GradientCheckpointingLayer
-from transformers.modeling_outputs import BaseModelOutput, BaseModelOutputWithPooling, ImageClassifierOutput
+from transformers.modeling_outputs import (
+    BaseModelOutput,
+    BaseModelOutputWithPooling,
+    ImageClassifierOutput,
+)
 from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
 from ...utils import (
     ModelOutput,
@@ -24,7 +28,11 @@ from ...utils import (
     replace_return_docstrings,
     torch_int,
 )
-from .configuration_siglip import FLASiglipConfig, FLASiglipTextConfig, FLASiglipVisionConfig
+from .configuration_siglip import (
+    FLASiglipConfig,
+    FLASiglipTextConfig,
+    FLASiglipVisionConfig,
+)
 from ..general_fla import GeneralizedFlashLinearAttention
 
 logger = logging.get_logger(__name__)
@@ -71,7 +79,11 @@ def _trunc_normal_(tensor, mean, std, a, b):
 
 
 def trunc_normal_tf_(
-    tensor: torch.Tensor, mean: float = 0.0, std: float = 1.0, a: float = -2.0, b: float = 2.0
+    tensor: torch.Tensor,
+    mean: float = 0.0,
+    std: float = 1.0,
+    a: float = -2.0,
+    b: float = 2.0,
 ) -> torch.Tensor:
     """Fills the input Tensor with values drawn from a truncated
     normal distribution. The values are effectively drawn from the
@@ -222,7 +234,9 @@ class FLASiglipOutput(ModelOutput):
 
     def to_tuple(self) -> Tuple[Any]:
         return tuple(
-            self[k] if k not in ["text_model_output", "vision_model_output"] else getattr(self, k).to_tuple()
+            self[k]
+            if k not in ["text_model_output", "vision_model_output"]
+            else getattr(self, k).to_tuple()
             for k in self.keys()
         )
 
@@ -246,9 +260,15 @@ class FLASiglipVisionEmbeddings(nn.Module):
         self.num_patches = (self.image_size // self.patch_size) ** 2
         self.num_positions = self.num_patches
         self.position_embedding = nn.Embedding(self.num_positions, self.embed_dim)
-        self.register_buffer("position_ids", torch.arange(self.num_positions).expand((1, -1)), persistent=False)
+        self.register_buffer(
+            "position_ids",
+            torch.arange(self.num_positions).expand((1, -1)),
+            persistent=False,
+        )
 
-    def interpolate_pos_encoding(self, embeddings: torch.Tensor, height: int, width: int) -> torch.Tensor:
+    def interpolate_pos_encoding(
+        self, embeddings: torch.Tensor, height: int, width: int
+    ) -> torch.Tensor:
         """
         This method allows to interpolate the pre-trained position encodings, to be able to use the model on higher resolution
         images. This method is also adapted to support torch.jit tracing and no class embeddings.
@@ -262,7 +282,11 @@ class FLASiglipVisionEmbeddings(nn.Module):
         num_positions = self.position_embedding.weight.shape[0]
 
         # always interpolate when tracing to ensure the exported model works for dynamic input shapes
-        if not torch.jit.is_tracing() and num_patches == num_positions and height == width:
+        if (
+            not torch.jit.is_tracing()
+            and num_patches == num_positions
+            and height == width
+        ):
             return self.position_embedding(self.position_ids)
 
         patch_pos_embed = self.position_embedding.weight.unsqueeze(0)
@@ -273,7 +297,9 @@ class FLASiglipVisionEmbeddings(nn.Module):
         new_width = width // self.patch_size
 
         sqrt_num_positions = torch_int(num_positions**0.5)
-        patch_pos_embed = patch_pos_embed.reshape(1, sqrt_num_positions, sqrt_num_positions, dim)
+        patch_pos_embed = patch_pos_embed.reshape(
+            1, sqrt_num_positions, sqrt_num_positions, dim
+        )
         patch_pos_embed = patch_pos_embed.permute(0, 3, 1, 2)
 
         patch_pos_embed = nn.functional.interpolate(
@@ -286,14 +312,20 @@ class FLASiglipVisionEmbeddings(nn.Module):
         patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
         return patch_pos_embed
 
-    def forward(self, pixel_values: torch.FloatTensor, interpolate_pos_encoding=False) -> torch.Tensor:
+    def forward(
+        self, pixel_values: torch.FloatTensor, interpolate_pos_encoding=False
+    ) -> torch.Tensor:
         _, _, height, width = pixel_values.shape
         target_dtype = self.patch_embedding.weight.dtype
-        patch_embeds = self.patch_embedding(pixel_values.to(dtype=target_dtype))  # shape = [*, width, grid, grid]
+        patch_embeds = self.patch_embedding(
+            pixel_values.to(dtype=target_dtype)
+        )  # shape = [*, width, grid, grid]
         embeddings = patch_embeds.flatten(2).transpose(1, 2)
 
         if interpolate_pos_encoding:
-            embeddings = embeddings + self.interpolate_pos_encoding(embeddings, height, width)
+            embeddings = embeddings + self.interpolate_pos_encoding(
+                embeddings, height, width
+            )
         else:
             embeddings = embeddings + self.position_embedding(self.position_ids)
         return embeddings
@@ -306,11 +338,15 @@ class FLASiglipTextEmbeddings(nn.Module):
         embed_dim = config.hidden_size
 
         self.token_embedding = nn.Embedding(config.vocab_size, embed_dim)
-        self.position_embedding = nn.Embedding(config.max_position_embeddings, embed_dim)
+        self.position_embedding = nn.Embedding(
+            config.max_position_embeddings, embed_dim
+        )
 
         # position_ids (1, len position emb) is contiguous in memory and exported when serialized
         self.register_buffer(
-            "position_ids", torch.arange(config.max_position_embeddings).expand((1, -1)), persistent=False
+            "position_ids",
+            torch.arange(config.max_position_embeddings).expand((1, -1)),
+            persistent=False,
         )
 
     def forward(
@@ -319,7 +355,9 @@ class FLASiglipTextEmbeddings(nn.Module):
         position_ids: Optional[torch.LongTensor] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
     ) -> torch.Tensor:
-        seq_length = input_ids.shape[-1] if input_ids is not None else inputs_embeds.shape[-2]
+        seq_length = (
+            input_ids.shape[-1] if input_ids is not None else inputs_embeds.shape[-2]
+        )
         max_position_embedding = self.position_embedding.weight.shape[0]
 
         if seq_length > max_position_embedding:
@@ -354,8 +392,12 @@ def eager_attention_forward(
     if attention_mask is not None:
         attn_weights = attn_weights + attention_mask
 
-    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query.dtype)
-    attn_weights = nn.functional.dropout(attn_weights, p=dropout, training=module.training)
+    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(
+        query.dtype
+    )
+    attn_weights = nn.functional.dropout(
+        attn_weights, p=dropout, training=module.training
+    )
 
     attn_output = torch.matmul(attn_weights, value)
     attn_output = attn_output.transpose(1, 2).contiguous()
@@ -400,9 +442,15 @@ class SiglipAttention(nn.Module):
         keys = self.k_proj(hidden_states)
         values = self.v_proj(hidden_states)
 
-        queries = queries.view(batch_size, seq_length, self.num_heads, self.head_dim).transpose(1, 2)
-        keys = keys.view(batch_size, seq_length, self.num_heads, self.head_dim).transpose(1, 2)
-        values = values.view(batch_size, seq_length, self.num_heads, self.head_dim).transpose(1, 2)
+        queries = queries.view(
+            batch_size, seq_length, self.num_heads, self.head_dim
+        ).transpose(1, 2)
+        keys = keys.view(
+            batch_size, seq_length, self.num_heads, self.head_dim
+        ).transpose(1, 2)
+        values = values.view(
+            batch_size, seq_length, self.num_heads, self.head_dim
+        ).transpose(1, 2)
 
         attention_interface: Callable = eager_attention_forward
         if self.config._attn_implementation != "eager":
@@ -412,7 +460,9 @@ class SiglipAttention(nn.Module):
                     'eager attention. This warning can be removed using the argument `attn_implementation="eager"` when loading the model.'
                 )
             else:
-                attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
+                attention_interface = ALL_ATTENTION_FUNCTIONS[
+                    self.config._attn_implementation
+                ]
 
         attn_output, attn_weights = attention_interface(
             self,
@@ -425,7 +475,9 @@ class SiglipAttention(nn.Module):
             dropout=0.0 if not self.training else self.dropout,
         )
 
-        attn_output = attn_output.reshape(batch_size, seq_length, embed_dim).contiguous()
+        attn_output = attn_output.reshape(
+            batch_size, seq_length, embed_dim
+        ).contiguous()
         attn_output = self.out_proj(attn_output)
 
         if not output_attentions:
@@ -451,12 +503,16 @@ class FLASiglipMLP(nn.Module):
 
 
 class FLASiglipEncoderLayer(GradientCheckpointingLayer):
-    def __init__(self, config: Union[FLASiglipVisionConfig, FLASiglipTextConfig], layer_idx: int):
+    def __init__(
+        self, config: Union[FLASiglipVisionConfig, FLASiglipTextConfig], layer_idx: int
+    ):
         super().__init__()
         self.embed_dim = config.hidden_size
         self.layer_norm1 = nn.LayerNorm(self.embed_dim, eps=config.layer_norm_eps)
-        if config.fla is not None and layer_idx in config.fla['layers']:
-            self.self_attn = GeneralizedFlashLinearAttention(config.fla, layer_idx=layer_idx)
+        if config.fla is not None and layer_idx in config.fla["layers"]:
+            self.self_attn = GeneralizedFlashLinearAttention(
+                config.fla, layer_idx=layer_idx
+            )
         else:
             self.self_attn = SiglipAttention(config)
 
@@ -558,7 +614,8 @@ class FLASiglipPreTrainedModel(PreTrainedModel):
         elif isinstance(module, FLASiglipForImageClassification):
             nn.init.normal_(
                 module.classifier.weight,
-                std=self.config.vision_config.hidden_size**-0.5 * self.config.initializer_factor,
+                std=self.config.vision_config.hidden_size**-0.5
+                * self.config.initializer_factor,
             )
         elif isinstance(module, (nn.Linear, nn.Conv2d)):
             lecun_normal_(module.weight)
@@ -686,7 +743,9 @@ class FLASiglipEncoder(nn.Module):
     def __init__(self, config: FLASiglipConfig):
         super().__init__()
         self.config = config
-        self.layers = nn.ModuleList([FLASiglipEncoderLayer(config) for _ in range(config.num_hidden_layers)])
+        self.layers = nn.ModuleList(
+            [FLASiglipEncoderLayer(config) for _ in range(config.num_hidden_layers)]
+        )
         self.gradient_checkpointing = False
 
     # Ignore copy
@@ -720,9 +779,15 @@ class FLASiglipEncoder(nn.Module):
             return_dict (`bool`, *optional*):
                 Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
         """
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
+        )
         output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
         )
 
         encoder_states = () if output_hidden_states else None
@@ -768,7 +833,9 @@ class FLASiglipTextTransformer(nn.Module):
 
     @can_return_tuple
     @add_start_docstrings_to_model_forward(SIGLIP_TEXT_INPUTS_DOCSTRING)
-    @replace_return_docstrings(output_type=BaseModelOutputWithPooling, config_class=FLASiglipTextConfig)
+    @replace_return_docstrings(
+        output_type=BaseModelOutputWithPooling, config_class=FLASiglipTextConfig
+    )
     def forward(
         self,
         input_ids: Optional[torch.Tensor] = None,
@@ -781,9 +848,15 @@ class FLASiglipTextTransformer(nn.Module):
         Returns:
 
         """
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
+        )
         output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
         )
 
         if input_ids is None:
@@ -798,7 +871,9 @@ class FLASiglipTextTransformer(nn.Module):
         # expand attention_mask
         if attention_mask is not None and not self._use_flash_attention_2:
             # [batch_size, seq_len] -> [batch_size, 1, tgt_seq_len, src_seq_len]
-            attention_mask = _prepare_4d_attention_mask(attention_mask, hidden_states.dtype)
+            attention_mask = _prepare_4d_attention_mask(
+                attention_mask, hidden_states.dtype
+            )
 
         encoder_outputs: BaseModelOutput = self.encoder(
             inputs_embeds=hidden_states,
@@ -843,7 +918,9 @@ class FLASiglipTextModel(FLASiglipPreTrainedModel):
 
     @can_return_tuple
     @add_start_docstrings_to_model_forward(SIGLIP_TEXT_INPUTS_DOCSTRING)
-    @replace_return_docstrings(output_type=BaseModelOutputWithPooling, config_class=FLASiglipTextConfig)
+    @replace_return_docstrings(
+        output_type=BaseModelOutputWithPooling, config_class=FLASiglipTextConfig
+    )
     def forward(
         self,
         input_ids: Optional[torch.Tensor] = None,
@@ -889,13 +966,17 @@ class FLASiglipVisionTransformer(nn.Module):
         self.embeddings = FLASiglipVisionEmbeddings(config)
         self.encoder = FLASiglipEncoder(config)
         self.post_layernorm = nn.LayerNorm(embed_dim, eps=config.layer_norm_eps)
-        self.use_head = True if not hasattr(config, "vision_use_head") else config.vision_use_head
+        self.use_head = (
+            True if not hasattr(config, "vision_use_head") else config.vision_use_head
+        )
         if self.use_head:
             self.head = FLASiglipMultiheadAttentionPoolingHead(config)
 
     @can_return_tuple
     @add_start_docstrings_to_model_forward(SIGLIP_VISION_INPUTS_DOCSTRING)
-    @replace_return_docstrings(output_type=BaseModelOutputWithPooling, config_class=FLASiglipVisionConfig)
+    @replace_return_docstrings(
+        output_type=BaseModelOutputWithPooling, config_class=FLASiglipVisionConfig
+    )
     def forward(
         self,
         pixel_values,
@@ -907,12 +988,20 @@ class FLASiglipVisionTransformer(nn.Module):
         Returns:
 
         """
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
+        )
         output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
         )
 
-        hidden_states = self.embeddings(pixel_values, interpolate_pos_encoding=interpolate_pos_encoding)
+        hidden_states = self.embeddings(
+            pixel_values, interpolate_pos_encoding=interpolate_pos_encoding
+        )
 
         encoder_outputs: BaseModelOutput = self.encoder(
             inputs_embeds=hidden_states,
@@ -940,7 +1029,9 @@ class FLASiglipMultiheadAttentionPoolingHead(nn.Module):
         super().__init__()
 
         self.probe = nn.Parameter(torch.randn(1, 1, config.hidden_size))
-        self.attention = torch.nn.MultiheadAttention(config.hidden_size, config.num_attention_heads, batch_first=True)
+        self.attention = torch.nn.MultiheadAttention(
+            config.hidden_size, config.num_attention_heads, batch_first=True
+        )
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.mlp = FLASiglipMLP(config)
 
@@ -978,7 +1069,9 @@ class FLASiglipVisionModel(FLASiglipPreTrainedModel):
 
     @can_return_tuple
     @add_start_docstrings_to_model_forward(SIGLIP_VISION_INPUTS_DOCSTRING)
-    @replace_return_docstrings(output_type=BaseModelOutputWithPooling, config_class=FLASiglipVisionConfig)
+    @replace_return_docstrings(
+        output_type=BaseModelOutputWithPooling, config_class=FLASiglipVisionConfig
+    )
     def forward(
         self,
         pixel_values,
@@ -1082,9 +1175,15 @@ class FLASiglipModel(FLASiglipPreTrainedModel):
         ...     text_features = model.get_text_features(**inputs)
         ```"""
         # Use SigLIP model's config for some fields (if specified) instead of those of vision & text components.
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
+        )
         output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
         )
 
         text_outputs: BaseModelOutputWithPooling = self.text_model(
@@ -1132,9 +1231,15 @@ class FLASiglipModel(FLASiglipPreTrainedModel):
         ...     image_features = model.get_image_features(**inputs)
         ```"""
         # Use SiglipModel's config for some fields (if specified) instead of those of vision & text components.
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
+        )
         output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
         )
 
         vision_outputs: BaseModelOutputWithPooling = self.vision_model(
@@ -1150,7 +1255,9 @@ class FLASiglipModel(FLASiglipPreTrainedModel):
 
     @can_return_tuple
     @add_start_docstrings_to_model_forward(SIGLIP_INPUTS_DOCSTRING)
-    @replace_return_docstrings(output_type=FLASiglipOutput, config_class=FLASiglipConfig)
+    @replace_return_docstrings(
+        output_type=FLASiglipOutput, config_class=FLASiglipConfig
+    )
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -1192,9 +1299,15 @@ class FLASiglipModel(FLASiglipPreTrainedModel):
         31.9% that image 0 is 'a photo of 2 cats'
         ```"""
         # Use SigLIP model's config for some fields (if specified) instead of those of vision & text components.
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
+        )
         output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
         )
 
         vision_outputs: BaseModelOutputWithPooling = self.vision_model(
@@ -1220,9 +1333,14 @@ class FLASiglipModel(FLASiglipPreTrainedModel):
         text_embeds = text_embeds / text_embeds.norm(p=2, dim=-1, keepdim=True)
 
         # cosine similarity as logits
-        logits_per_text = torch.matmul(text_embeds, image_embeds.t().to(text_embeds.device))
+        logits_per_text = torch.matmul(
+            text_embeds, image_embeds.t().to(text_embeds.device)
+        )
 
-        logit_scale, logit_bias = self.logit_scale.to(text_embeds.device), self.logit_bias.to(text_embeds.device)
+        logit_scale, logit_bias = (
+            self.logit_scale.to(text_embeds.device),
+            self.logit_bias.to(text_embeds.device),
+        )
         logits_per_text = logits_per_text * logit_scale.exp() + logit_bias
 
         logits_per_image = logits_per_text.t()
@@ -1269,7 +1387,9 @@ class FLASiglipForImageClassification(FLASiglipPreTrainedModel):
 
         # Classifier head
         self.classifier = (
-            nn.Linear(config.vision_config.hidden_size, config.num_labels) if config.num_labels > 0 else nn.Identity()
+            nn.Linear(config.vision_config.hidden_size, config.num_labels)
+            if config.num_labels > 0
+            else nn.Identity()
         )
 
         # Initialize weights and apply final processing
@@ -1277,7 +1397,9 @@ class FLASiglipForImageClassification(FLASiglipPreTrainedModel):
 
     @can_return_tuple
     @add_start_docstrings_to_model_forward(SIGLIP_INPUTS_DOCSTRING)
-    @replace_return_docstrings(output_type=ImageClassifierOutput, config_class=_CONFIG_FOR_DOC)
+    @replace_return_docstrings(
+        output_type=ImageClassifierOutput, config_class=_CONFIG_FOR_DOC
+    )
     def forward(
         self,
         pixel_values: Optional[torch.Tensor] = None,
@@ -1319,9 +1441,15 @@ class FLASiglipForImageClassification(FLASiglipPreTrainedModel):
         >>> print("Predicted class:", model.config.id2label[predicted_class_idx])
         Predicted class: LABEL_1
         ```"""
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
+        )
         output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
         )
 
         outputs: BaseModelOutputWithPooling = self.vision_model(
@@ -1345,7 +1473,9 @@ class FLASiglipForImageClassification(FLASiglipPreTrainedModel):
             if self.config.problem_type is None:
                 if self.num_labels == 1:
                     self.config.problem_type = "regression"
-                elif self.num_labels > 1 and (labels.dtype == torch.long or labels.dtype == torch.int):
+                elif self.num_labels > 1 and (
+                    labels.dtype == torch.long or labels.dtype == torch.int
+                ):
                     self.config.problem_type = "single_label_classification"
                 else:
                     self.config.problem_type = "multi_label_classification"

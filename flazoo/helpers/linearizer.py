@@ -1,7 +1,5 @@
 from transformers import AutoModel, AutoConfig
-from flazoo.helpers.initializer import (
-    initialize_custom_mapping
-)
+from flazoo.helpers.initializer import initialize_custom_mapping
 import torch
 from torch import nn
 import logging
@@ -20,41 +18,42 @@ For example, SigLIP2 has some extra components like head.mlp.fc1.weight and head
 
 """
 
+
 def copy_matching_params(model_a, model_b, outlier_list=None, verbose=False):
     """
     Copy parameters from model_b to model_a where parameter names match,
     skipping parameters specified in outlier_list.
-    
+
     Args:
         model_a: Target model whose parameters will be updated
         model_b: Source model whose parameters will be copied
         outlier_list: List of parameter names to skip (exact name matching)
         verbose: Whether to print detailed matching information
-    
+
     Returns:
         tuple: (number of copied parameters, total parameters in model_a)
     """
     copied_params_count = 0
     total_params_count = 0
-    
+
     outliers = set(outlier_list if outlier_list is not None else [])
-    
+
     dict_a = dict(model_a.named_parameters())
     dict_b = dict(model_b.named_parameters())
-    
+
     for name, param_a in model_a.named_parameters():
         total_params_count += param_a.numel()
-        
+
         # Skip if parameter name is in outliers set (exact match)
         if name in outliers:
             if verbose:
                 logging.info(f"Skipped parameter (in outlier list): {name}")
             continue
-        
+
         # Check if parameter name exists in model_b
         if name in dict_b:
             param_b = dict_b[name]
-            
+
             # Check if parameter shapes match
             if param_a.shape == param_b.shape:
                 # Copy parameter data
@@ -64,14 +63,18 @@ def copy_matching_params(model_a, model_b, outlier_list=None, verbose=False):
                     logging.info(f"Copied parameter: {name}, shape: {param_a.shape}")
             else:
                 if verbose:
-                    logging.warning(f"Parameter shape mismatch, skipped: {name}, "
-                                  f"model_a shape: {param_a.shape}, "
-                                  f"model_b shape: {param_b.shape}")
-    
+                    logging.warning(
+                        f"Parameter shape mismatch, skipped: {name}, "
+                        f"model_a shape: {param_a.shape}, "
+                        f"model_b shape: {param_b.shape}"
+                    )
+
     # Print summary
-    logging.info(f"Copied {copied_params_count}/{total_params_count} "
-               f"parameters ({copied_params_count/total_params_count*100:.2f}%)")
-    
+    logging.info(
+        f"Copied {copied_params_count}/{total_params_count} "
+        f"parameters ({copied_params_count / total_params_count * 100:.2f}%)"
+    )
+
     return copied_params_count, total_params_count
 
 
@@ -110,42 +113,50 @@ def init_video_und_from_pure_fla_vision_und(
         "ln_1": "ln_1",
         "ln_2": "ln_2",
         "channel_mixer.net.0": "channel_mixer.net.0",
-        "channel_mixer.net.2": "channel_mixer.net.2"
+        "channel_mixer.net.2": "channel_mixer.net.2",
     }
 
     initialize_custom_mapping(
-        model_a=fla_model,
-        model_b=another_fla_model,
-        param_mapping=param_mapping
+        model_a=fla_model, model_b=another_fla_model, param_mapping=param_mapping
     )
 
     if not train_mlp:
         for n, p in fla_model.named_parameters():
             if "channel_mixer" in n:
                 p.requires_grad_(False)
-    
+
     if init_embedding:
         logging.info("Initializing embedding layers, make sure your shapes match.")
         fla_model.embeddings.patch_embeddings.projection.weight.data.copy_(
-            another_fla_model.embeddings.patch_embeddings.projection.weight.data.unsqueeze(2)
+            another_fla_model.embeddings.patch_embeddings.projection.weight.data.unsqueeze(
+                2
+            )
         )
         fla_model.embeddings.patch_embeddings.projection.bias.data.copy_(
             another_fla_model.embeddings.patch_embeddings.projection.bias.data
         )
         assert torch.equal(
             fla_model.embeddings.patch_embeddings.projection.weight,
-            another_fla_model.embeddings.patch_embeddings.projection.weight.unsqueeze(2)
+            another_fla_model.embeddings.patch_embeddings.projection.weight.unsqueeze(
+                2
+            ),
         )
         assert torch.equal(
             fla_model.embeddings.patch_embeddings.projection.bias,
-            another_fla_model.embeddings.patch_embeddings.projection.bias
+            another_fla_model.embeddings.patch_embeddings.projection.bias,
         )
-    
+
     # init layernorm weight and bias
-    fla_model.layernorm.weight = nn.Parameter(another_fla_model.layernorm.weight.clone())
+    fla_model.layernorm.weight = nn.Parameter(
+        another_fla_model.layernorm.weight.clone()
+    )
     fla_model.layernorm.bias = nn.Parameter(another_fla_model.layernorm.bias.clone())
-    fla_model.pooler.dense.weight = nn.Parameter(another_fla_model.pooler.dense.weight.clone())
-    fla_model.pooler.dense.bias = nn.Parameter(another_fla_model.pooler.dense.bias.clone())
+    fla_model.pooler.dense.weight = nn.Parameter(
+        another_fla_model.pooler.dense.weight.clone()
+    )
+    fla_model.pooler.dense.bias = nn.Parameter(
+        another_fla_model.pooler.dense.bias.clone()
+    )
 
     if not return_pretrained:
         return fla_model
@@ -155,7 +166,7 @@ def init_video_und_from_pure_fla_vision_und(
 
 def init_from_dino2_base_p14(
     fla_model,
-    dino_model: str = 'facebook/dinov2-base',
+    dino_model: str = "facebook/dinov2-base",
     train_mlp: bool = False,
     init_embedding: bool = True,
     return_pretrained: bool = False,
@@ -170,13 +181,13 @@ def init_from_dino2_base_p14(
         train_mlp: Whether to train the MLP layers (default: False)
         init_embedding: Whether to initialize the embedding layers (default: True)
         return_pretrained: Whether to return the pretrained model (default: False)
-        
+
     Returns:
         Initialized FLA model
     """
 
     dino = AutoModel.from_pretrained(dino_model)
-    
+
     # Define parameter mapping
     param_mapping = {
         "attn.q_proj": "attention.attention.query",
@@ -186,14 +197,12 @@ def init_from_dino2_base_p14(
         "ln_1": "norm1",
         "ln_2": "norm2",
         "channel_mixer.net.0": "mlp.fc1",
-        "channel_mixer.net.2": "mlp.fc2"
+        "channel_mixer.net.2": "mlp.fc2",
     }
 
     # Initialize parameters
     initialize_custom_mapping(
-        model_a=fla_model,
-        model_b=dino,
-        param_mapping=param_mapping
+        model_a=fla_model, model_b=dino, param_mapping=param_mapping
     )
 
     # Optionally freeze MLP layers
@@ -210,11 +219,11 @@ def init_from_dino2_base_p14(
 
 
 def init_from_dino2_small_p14(
-        fla_model,
-        dino_model: str = 'facebook/dinov2-small',
-        train_mlp: bool = False,
-        init_embedding: bool = True,
-        return_pretrained: bool = False,
+    fla_model,
+    dino_model: str = "facebook/dinov2-small",
+    train_mlp: bool = False,
+    init_embedding: bool = True,
+    return_pretrained: bool = False,
 ):
     """
     Initialize a FLA model from a DINO model. \n
@@ -241,14 +250,12 @@ def init_from_dino2_small_p14(
         "ln_1": "norm1",
         "ln_2": "norm2",
         "channel_mixer.net.0": "mlp.fc1",
-        "channel_mixer.net.2": "mlp.fc2"
+        "channel_mixer.net.2": "mlp.fc2",
     }
 
     # Initialize parameters
     initialize_custom_mapping(
-        model_a=fla_model,
-        model_b=dino,
-        param_mapping=param_mapping
+        model_a=fla_model, model_b=dino, param_mapping=param_mapping
     )
 
     # Optionally freeze MLP layers
@@ -257,15 +264,16 @@ def init_from_dino2_small_p14(
         for n, p in fla_model.named_parameters():
             if "channel_mixer" in n:
                 p.requires_grad_(False)
-    
+
     if not return_pretrained:
         return fla_model
     else:
         return fla_model, dino
 
+
 def init_from_siglip2_base_p16_224(
     fla_model,
-    siglip_model: str = 'google/siglip2-base-patch16-224',
+    siglip_model: str = "google/siglip2-base-patch16-224",
     train_mlp: bool = False,
     init_embedding: bool = True,
     init_head: bool = True,
@@ -287,7 +295,7 @@ def init_from_siglip2_base_p16_224(
     """
     # Load SigLIP2 model and get vision component
     siglip = AutoModel.from_pretrained(siglip_model).vision_model
-    
+
     # Define parameter mapping from FLA to SigLIP2
     param_mapping = {
         "attn.q_proj": "self_attn.q_proj",
@@ -297,14 +305,12 @@ def init_from_siglip2_base_p16_224(
         "ln_1": "layer_norm1",
         "ln_2": "layer_norm2",
         "channel_mixer.net.0": "mlp.fc1",
-        "channel_mixer.net.2": "mlp.fc2"
+        "channel_mixer.net.2": "mlp.fc2",
     }
 
     # Initialize parameters
     initialize_custom_mapping(
-        model_a=fla_model,
-        model_b=siglip,
-        param_mapping=param_mapping
+        model_a=fla_model, model_b=siglip, param_mapping=param_mapping
     )
 
     if init_embedding:
@@ -315,22 +321,22 @@ def init_from_siglip2_base_p16_224(
         fla_model.embeddings.patch_embeddings.projection.bias.data.copy_(
             siglip.embeddings.patch_embedding.bias.data
         )
-        
+
         fla_model.embeddings.position_embeddings.data.copy_(
             siglip.embeddings.position_embedding.weight.data.unsqueeze(0)
         )
 
         assert torch.equal(
             fla_model.embeddings.patch_embeddings.projection.weight,
-            siglip.embeddings.patch_embedding.weight
+            siglip.embeddings.patch_embedding.weight,
         )
         assert torch.equal(
             fla_model.embeddings.patch_embeddings.projection.bias,
-            siglip.embeddings.patch_embedding.bias
+            siglip.embeddings.patch_embedding.bias,
         )
         assert torch.equal(
             fla_model.embeddings.position_embeddings,
-            siglip.embeddings.position_embedding.weight.unsqueeze(0)
+            siglip.embeddings.position_embedding.weight.unsqueeze(0),
         )
 
     # Optionally freeze MLP layers
@@ -338,27 +344,24 @@ def init_from_siglip2_base_p16_224(
         for n, p in fla_model.named_parameters():
             if "channel_mixer" in n:
                 p.requires_grad_(False)
-    
+
     if init_head:
-        fla_model.classifier.weight.data.copy_(
-            siglip.classifier.weight.data
-        )
+        fla_model.classifier.weight.data.copy_(siglip.classifier.weight.data)
         if siglip.classifier.bias is not None:
-            fla_model.classifier.bias.data.copy_(
-                siglip.classifier.bias.data
-            )
+            fla_model.classifier.bias.data.copy_(siglip.classifier.bias.data)
 
     if not return_pretrained:
         return fla_model
     else:
         return fla_model, siglip
 
+
 def init_from_clip_base_p16_224(
-        fla_model,
-        clip_model: str = 'openai/clip-vit-base-patch16',
-        train_mlp: bool = False,
-        init_embedding: bool = True,
-        return_pretrained: bool = False,
+    fla_model,
+    clip_model: str = "openai/clip-vit-base-patch16",
+    train_mlp: bool = False,
+    init_embedding: bool = True,
+    return_pretrained: bool = False,
 ):
     """
     Initialize a FLA model from a CLIP model.
@@ -384,13 +387,11 @@ def init_from_clip_base_p16_224(
         "ln_1": "layer_norm1",
         "ln_2": "layer_norm2",
         "channel_mixer.net.0": "mlp.fc1",
-        "channel_mixer.net.2": "mlp.fc2"
+        "channel_mixer.net.2": "mlp.fc2",
     }
 
     initialize_custom_mapping(
-        model_a=fla_model,
-        model_b=clip,
-        param_mapping=param_mapping
+        model_a=fla_model, model_b=clip, param_mapping=param_mapping
     )
 
     if init_embedding:
@@ -401,24 +402,26 @@ def init_from_clip_base_p16_224(
         fla_model.embeddings.patch_embeddings.projection.bias.data.copy_(
             clip.embeddings.patch_embedding.bias.data
         )
-        
+
         # Copy position embeddings, skipping the class token position (first token)
         # CLIP shape: (197, 768) -> (196, 768) -> (1, 196, 768)
-        position_embeddings = clip.embeddings.position_embedding.weight.data[1:].unsqueeze(0)
+        position_embeddings = clip.embeddings.position_embedding.weight.data[
+            1:
+        ].unsqueeze(0)
         fla_model.embeddings.position_embeddings.data.copy_(position_embeddings)
 
         # Verify the copying was successful
         assert torch.equal(
             fla_model.embeddings.patch_embeddings.projection.weight,
-            clip.embeddings.patch_embedding.weight
+            clip.embeddings.patch_embedding.weight,
         )
         assert torch.equal(
             fla_model.embeddings.patch_embeddings.projection.bias,
-            clip.embeddings.patch_embedding.bias
+            clip.embeddings.patch_embedding.bias,
         )
         assert torch.equal(
             fla_model.embeddings.position_embeddings,
-            clip.embeddings.position_embedding.weight[1:].unsqueeze(0)
+            clip.embeddings.position_embedding.weight[1:].unsqueeze(0),
         )
 
     # Optionally freeze MLP layers

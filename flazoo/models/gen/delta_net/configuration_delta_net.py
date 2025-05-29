@@ -2,23 +2,25 @@ from typing import Dict, Optional
 
 from transformers.configuration_utils import PretrainedConfig
 
+
 class DeltaNetGen2DConfig(PretrainedConfig):
-    model_type = 'delta_net_gen_2d'
+    model_type = "delta_net_gen_2d"
+
     def __init__(
         self,
         # DeltaNet core parameters
         attn_mode: str = "chunk",
         hidden_size: int = 2048,
         expand_k: int = 1,
-        expand_v: int = 1, 
+        expand_v: int = 1,
         use_gate: bool = False,
         use_short_conv: bool = True,
         conv_size: int = 4,
         use_beta: bool = True,
         use_output_norm: bool = True,
         num_heads: int = 16,
-        qk_norm: str = 'l2',
-        qk_activation: str = 'silu',
+        qk_norm: str = "l2",
+        qk_activation: str = "silu",
         intermediate_size: Optional[int] = None,
         hidden_act: str = "swish",
         num_hidden_layers: int = 12,
@@ -28,9 +30,8 @@ class DeltaNetGen2DConfig(PretrainedConfig):
         use_cache: bool = True,
         initializer_range: float = 0.02,
         fuse_cross_entropy: bool = True,
-
         # Gen2D specific parameters
-        path_type='edm',
+        path_type="edm",
         input_size=32,
         patch_size=2,
         in_channels=4,
@@ -43,14 +44,14 @@ class DeltaNetGen2DConfig(PretrainedConfig):
         z_dims=[768],
         channel_mixer_dim=2048,
         projection_dim=2048,
-        train_scan_type: str = "uni-scan", # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        test_scan_type: str = None, # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
-        **kwargs
+        train_scan_type: str = "uni-scan",  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        test_scan_type: str = None,  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
+        **kwargs,
     ):
         # Initialize DeltaNet core parameters
         self.attn_mode = attn_mode
         self.hidden_size = hidden_size
-        self.expand_k = expand_k 
+        self.expand_k = expand_k
         self.expand_v = expand_v
         self.use_gate = use_gate
         self.use_short_conv = use_short_conv
@@ -85,22 +86,26 @@ class DeltaNetGen2DConfig(PretrainedConfig):
         self.projection_dim = projection_dim
 
         self.train_scan_type = train_scan_type
-        
+
         if test_scan_type is None:
             self.test_scan_type = train_scan_type
         else:
             self.test_scan_type = test_scan_type
-        
+
         if attn is not None:
             if not isinstance(attn, Dict):
                 raise ValueError("attn must be a dictionary")
-            if 'layers' not in attn:
-                raise ValueError("Layer indices must be provided to initialize hybrid attention layers")
-            if 'num_heads' not in attn:
-                raise ValueError("Number of heads must be provided to initialize hybrid attention layers")
-            attn['num_kv_heads'] = attn.get('num_kv_heads', attn['num_heads'])
-            attn['window_size'] = attn.get('window_size', None)
-        
+            if "layers" not in attn:
+                raise ValueError(
+                    "Layer indices must be provided to initialize hybrid attention layers"
+                )
+            if "num_heads" not in attn:
+                raise ValueError(
+                    "Number of heads must be provided to initialize hybrid attention layers"
+                )
+            attn["num_kv_heads"] = attn.get("num_kv_heads", attn["num_heads"])
+            attn["window_size"] = attn.get("window_size", None)
+
         self.attn = attn
-        
+
         super().__init__(**kwargs)
