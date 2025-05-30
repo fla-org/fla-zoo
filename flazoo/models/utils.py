@@ -162,8 +162,8 @@ def prepare_hidden_states_for_merge(
             B, L, D = hidden_states.shape
             hw = int(math.sqrt(L))
             hidden_states = einops.rearrange(
-                hidden_states, "b (h w) d -> b w h d", h=hw, w=hw
-            )
+                hidden_states, "b (h w) d -> b (w h) d", h=hw, w=hw
+            ) 
 
         return hidden_states
     elif scan_type == "mh2d-scan":
