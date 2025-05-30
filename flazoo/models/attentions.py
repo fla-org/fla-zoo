@@ -89,6 +89,7 @@ ATTN_LISTS = [
     "block2d_attn",
     "sw_attn",
     "sta2d_attn",
+    "sta3d_attn",
     "na2d_attn",
 ]
 
