@@ -64,6 +64,50 @@ except ImportError:
 
 WINDOW_SIZE_1D = 256
 
+from fla.layers import (
+    DeltaNet,
+    GatedDeltaNet,
+    ForgettingAttention,
+    ABCAttention,
+    GatedLinearAttention,
+    BitAttention,
+    GatedSlotAttention,
+    HGRNAttention,
+    HGRN2Attention,
+    LightNetAttention,
+    LinearAttention,
+    MultiScaleRetention,
+    RWKV6Attention,
+    RWKV7Attention,
+)
+
+ATTN_LISTS = [
+    "full_attn",
+    "moba",
+    "nsa",
+    "block1d_attn",
+    "block2d_attn",
+    "sw_attn",
+    "sta2d_attn",
+    "na2d_attn",
+]
+
+FLA_ATTN_LISTS = [
+    "deltanet",
+    "gated_deltanet",
+    "fox",
+    "abc",
+    "gla",
+    "bitnet",
+    "gsa",
+    "hgrn",
+    "hgrn2",
+    "lightnet",
+    "linear_attention",
+    "retnet",
+    "rwkv6",
+    "rwkv7",
+]
 
 def sliding_window_1d(b, h, q_idx, kv_idx):
     return (q_idx - kv_idx <= (WINDOW_SIZE_1D // 2)) & (
@@ -1203,6 +1247,7 @@ class SlidingTileAttention3D(nn.Module):
         logging.info(
             f"Using SlidingTileAttention3D with window size ({self.window_size_t}, {self.window_size_h}, {self.window_size_w}) "
             f"and tile size ({self.tile_size_t}, {self.tile_size_h}, {self.tile_size_w})"
+            f" for sequence length {self.seq_len}, with t_dim={self.t_dim}, h_dim={self.h_dim}, w_dim={self.w_dim}"
         )
 
         # Initialize layers
@@ -1666,18 +1711,6 @@ class MoBA(nn.Module):
         return o, attentions, None
 
 
-ATTN_LISTS = [
-    "full_attn",
-    "moba",
-    "nsa",
-    "block1d_attn",
-    "block2d_attn",
-    "sw_attn",
-    "sta2d_attn",
-    "na2d_attn",
-]
-
-
 def get_attn(config, layer_idx):
     """
     This is for full/local/sparse attention, not linear attention
@@ -1748,6 +1781,23 @@ def get_attn(config, layer_idx):
             seq_len=config.attn["seq_len"],
             layer_idx=layer_idx,
         )
+    elif attn_type == "sta3d_attn":
+        return SlidingTileAttention3D(
+            hidden_size=config.hidden_size,
+            num_heads=config.attn["num_heads"],
+            num_kv_heads=config.attn["num_kv_heads"],
+            window_size_t=config.attn["window_size_t"],
+            window_size_h=config.attn["window_size_h"],
+            window_size_w=config.attn["window_size_w"],
+            tile_size_t=config.attn["tile_size_t"],
+            tile_size_h=config.attn["tile_size_h"],
+            tile_size_w=config.attn["tile_size_w"],
+            seq_len=config.attn["seq_len"],
+            t_dim=config.attn["t_dim"],
+            h_dim=config.attn["h_dim"],
+            w_dim=config.attn["w_dim"],
+            layer_idx=layer_idx,
+        )
     elif attn_type == "na2d_attn":
         return Neighborhood2DAttention(
             hidden_size=config.hidden_size,
@@ -1759,3 +1809,37 @@ def get_attn(config, layer_idx):
         )
     else:
         raise ValueError(f"Attention type {attn_type} is not supported")
+
+
+def get_fla_attn(config, layer_idx):
+    """
+    This is for linear attention, not full/local/sparse attention
+    """
+    fla_attn_type = config.fla_attn_type
+    assert fla_attn_type in FLA_ATTN_LISTS, (
+        f"Linear attention type must be one of {FLA_ATTN_LISTS}"
+    )
+
+    if fla_attn_type == "deltanet":
+        return DeltaNet(
+            mode=config.attn_mode,
+            hidden_size=config.hidden_size,
+            expand_k=config.expand_k,
+            expand_v=config.expand_v,
+            num_heads=config.num_heads,
+            use_gate=config.use_gate,
+            use_beta=config.use_beta,
+            use_short_conv=config.use_short_conv,
+            use_output_norm=config.use_output_norm,
+            conv_size=config.conv_size,
+            qk_norm=config.qk_norm,
+            qk_activation=config.qk_activation,
+            norm_first=config.norm_first,
+            norm_eps=config.norm_eps,
+            layer_idx=layer_idx,
+        )
+    else:
+        raise NotImplementedError(
+            f"Linear attention type {fla_attn_type} is not implemented yet"
+        )
+    
