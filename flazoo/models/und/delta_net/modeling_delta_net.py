@@ -71,7 +71,7 @@ class DeltaNetVisionBlock(nn.Module):
 
         self.layer_idx = layer_idx
 
-        self.ln_1 = LayerNorm(config.hidden_size, bias=True, eps=config.layer_norm_eps)
+        self.ln_1 = nn.LayerNorm(config.hidden_size, bias=True, eps=config.layer_norm_eps)
 
         if config.attn is not None and layer_idx in config.attn["layers"]:
             self.attn = get_attn(config, layer_idx)
@@ -105,7 +105,7 @@ class DeltaNetVisionBlock(nn.Module):
         else:
             self.compress_attention = False
 
-        self.ln_2 = LayerNorm(config.hidden_size, bias=True, eps=config.layer_norm_eps)
+        self.ln_2 = nn.LayerNorm(config.hidden_size, bias=True, eps=config.layer_norm_eps)
 
         if config.use_swiglu:
             # use a default ratio of 4
@@ -528,7 +528,7 @@ class DeltaNetVideoBlock(nn.Module):
 
         self.layer_idx = layer_idx
 
-        self.ln_1 = LayerNorm(config.hidden_size, bias=True, eps=config.layer_norm_eps)
+        self.ln_1 = nn.LayerNorm(config.hidden_size, bias=True, eps=config.layer_norm_eps)
 
         if config.attn is not None and layer_idx in config.attn["layers"]:
             self.attn = get_attn(config, layer_idx)
@@ -551,7 +551,7 @@ class DeltaNetVideoBlock(nn.Module):
                 layer_idx=layer_idx,
             )
 
-        self.ln_2 = LayerNorm(config.hidden_size, bias=True, eps=config.layer_norm_eps)
+        self.ln_2 = nn.LayerNorm(config.hidden_size, bias=True, eps=config.layer_norm_eps)
 
         if config.use_swiglu:
             # use a default ratio of 4
