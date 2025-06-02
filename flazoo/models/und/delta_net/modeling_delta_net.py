@@ -192,6 +192,11 @@ class DeltaNetVisionBlock(nn.Module):
 
 class DeltaNetVisionPreTrainedModel(PreTrainedModel):
     config_class = DeltaNetVisionConfig
+    base_model_prefix = "deltanet_vision"
+    main_input_name = "pixel_values"
+    _no_split_modules = ["ImageEmbeddings", "DeltaNetVisionBlock"]
+    supports_gradient_checkpointing = True
+
 
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
