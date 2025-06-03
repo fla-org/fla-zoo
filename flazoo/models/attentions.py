@@ -1075,7 +1075,6 @@ class SlidingTileAttention2D(nn.Module):
             Q_LEN=self.seq_len,
             KV_LEN=self.seq_len,
             device="cuda",
-            _compile=True,
         )
 
     def forward(
@@ -1276,7 +1275,6 @@ class SlidingTileAttention3D(nn.Module):
             Q_LEN=self.seq_len,
             KV_LEN=self.seq_len,
             device="cuda",
-            _compile=True,
         )
 
     def forward(
