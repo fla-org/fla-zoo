@@ -99,6 +99,13 @@ from .moba import (
     MoBAVisionModel,
 )
 
+from .lact import (
+    LaCTVisionConfig,
+    LaCTForImageClassification,
+    LaCTForMaskedImageModeling,
+    LaCTVisionModel,
+)
+
 
 __all__ = [
     "ABCVisionConfig",
@@ -165,4 +172,8 @@ __all__ = [
     "MoBAForImageClassification",
     "MoBAForMaskedImageModeling",
     "MoBAVisionModel",
+    "LaCTVisionConfig",
+    "LaCTForImageClassification",
+    "LaCTForMaskedImageModeling",
+    "LaCTVisionModel",
 ]
