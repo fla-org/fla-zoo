@@ -17,6 +17,7 @@ from .models import (
     TransformerVisionConfig,
     NSAVisionConfig,
     MoBAVisionConfig,
+    LaCTVisionConfig,
     ABCVisionModel,
     ABCForImageClassification,
     ABCForMaskedImageModeling,
@@ -65,6 +66,9 @@ from .models import (
     MoBAVisionModel,
     MoBAForImageClassification,
     MoBAForMaskedImageModeling,
+    LaCTVisionModel,
+    LaCTForImageClassification,
+    LaCTForMaskedImageModeling,
 )
 
 __all__ = [
@@ -132,4 +136,8 @@ __all__ = [
     "MoBAForImageClassification",
     "MoBAForMaskedImageModeling",
     "MoBAVisionModel",
+    "LaCTVisionConfig",
+    "LaCTVisionModel",
+    "LaCTForImageClassification",
+    "LaCTForMaskedImageModeling",
 ]
