@@ -143,8 +143,8 @@ class LaCTVisionBlock(nn.Module):
             num_heads=self.num_heads,
         )
 
-        hidden_states = self.attn(
-            x=hidden_states,
+        hidden_states, attentions, _ = self.attn(
+            hidden_states=hidden_states,
         )
 
         hidden_states = prepare_hidden_states_for_merge(
@@ -168,7 +168,7 @@ class LaCTVisionBlock(nn.Module):
 
         hidden_states = residual + hidden_states
 
-        outputs = (hidden_states, None, past_key_values)
+        outputs = (hidden_states, attentions, past_key_values)
 
         return outputs
 
@@ -565,8 +565,8 @@ class LaCTVideoBlock(nn.Module):
             training=self.training,
         )
 
-        hidden_states = self.attn(
-            x=hidden_states,
+        hidden_states, attentions, _ = self.attn(
+            hidden_states=hidden_states,
         )
 
         hidden_states = prepare_hidden_states_for_merge(
@@ -586,7 +586,7 @@ class LaCTVideoBlock(nn.Module):
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states,)
-        outputs = (hidden_states, None, past_key_values)
+        outputs = (hidden_states, attentions, past_key_values)
 
         return outputs
 

@@ -218,12 +218,12 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
         else:
             self.o_norm = nn.Identity()
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """
         x: [b, l, d]
         """
 
-        qkv = F.silu(self.to_qkv(x), inplace=True)  # SiLU - Linear
+        qkv = F.silu(self.to_qkv(hidden_states), inplace=True)  # SiLU - Linear
 
         # [b * num_heads, l, head_dim]
         q, k, v = rearrange(
@@ -241,7 +241,7 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
         # better to have float32 for lr.
         # For muon, I found that float16 is still very good.
         with torch.autocast(device_type="cuda", enabled=False):
-            lr = self.lr_proj(x)  # [b, l, lr_dim]
+            lr = self.lr_proj(hidden_states)  # [b, l, lr_dim]
 
         lr = torch.nn.functional.softplus(lr.float() + self.base_lr_inv)
 
@@ -251,9 +251,9 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
         )
 
         # [nh, d, d] -> [b * nh, d, d]
-        w0 = self.w0.repeat(x.shape[0], 1, 1)
-        w1 = self.w1.repeat(x.shape[0], 1, 1)
-        w2 = self.w2.repeat(x.shape[0], 1, 1)
+        w0 = self.w0.repeat(hidden_states.shape[0], 1, 1)
+        w1 = self.w1.repeat(hidden_states.shape[0], 1, 1)
+        w2 = self.w2.repeat(hidden_states.shape[0], 1, 1)
 
         # [b * num_heads, l, head_dim]
         output = bidirectional_lact_swiglu(
@@ -262,7 +262,7 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
 
         output = self.o_norm(output)
         output = rearrange(
-            output, "(b h) l d -> b l (h d)", h=self.num_heads, b=x.shape[0]
+            output, "(b h) l d -> b l (h d)", h=self.num_heads, b=hidden_states.shape[0]
         )
         output = self.o_proj(output)
 
