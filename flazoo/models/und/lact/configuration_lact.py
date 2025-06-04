@@ -19,6 +19,7 @@ class LaCTVisionConfig(PretrainedConfig):
         fuse_cross_entropy: bool = True,
         attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
+        use_swiglu: bool = False,
         # Vision specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -40,6 +41,7 @@ class LaCTVisionConfig(PretrainedConfig):
         self.fuse_cross_entropy = fuse_cross_entropy
         self.attn_type = attn_type
         self.gradient_checkpointing = gradient_checkpointing
+        self.use_swiglu = use_swiglu
 
         # Initialize vision specific parameters
         self.image_size = image_size
@@ -94,6 +96,7 @@ class LaCTVideoConfig(PretrainedConfig):
         fuse_cross_entropy: bool = True,
         attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
+        use_swiglu: bool = False,
         # Video specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -123,6 +126,7 @@ class LaCTVideoConfig(PretrainedConfig):
         self.fuse_cross_entropy = fuse_cross_entropy
         self.attn_type = attn_type
         self.gradient_checkpointing = gradient_checkpointing
+        self.use_swiglu = use_swiglu
 
         # Initialize video specific parameters
         self.image_size = image_size
