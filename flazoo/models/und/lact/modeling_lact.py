@@ -143,7 +143,7 @@ class LaCTVisionBlock(nn.Module):
             num_heads=self.num_heads,
         )
 
-        hidden_states, _, _ = self.attn(
+        hidden_states = self.attn(
             x=hidden_states,
         )
 
@@ -168,7 +168,7 @@ class LaCTVisionBlock(nn.Module):
 
         hidden_states = residual + hidden_states
 
-        outputs = (hidden_states, _, past_key_values)
+        outputs = (hidden_states, None, past_key_values)
 
         return outputs
 
@@ -565,7 +565,7 @@ class LaCTVideoBlock(nn.Module):
             training=self.training,
         )
 
-        hidden_states, _, _ = self.attn(
+        hidden_states = self.attn(
             x=hidden_states,
         )
 
@@ -586,7 +586,7 @@ class LaCTVideoBlock(nn.Module):
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states,)
-        outputs = (hidden_states, _, past_key_values)
+        outputs = (hidden_states, None, past_key_values)
 
         return outputs
 
