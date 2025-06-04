@@ -31,6 +31,7 @@
 <!-- * [Citation](#citation) -->
 
 ## News
+- **[2025-06-04]** LaCT [repo](https://github.com/a1600012888/LaCT) and STA [repo](https://github.com/hao-ai-lab/FastVideo) is included.
 - **[2025-04-23]** **A dedicated part of this repo: `flazoo/linearized_models` is created to store the linearized versions of your favorite transformers.**
 
 - **[2025-04-21]** A dedicated part of this repo: `flazoo/helpers` is created to provide some common utils.
