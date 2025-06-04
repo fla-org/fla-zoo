@@ -267,7 +267,7 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
         output = self.o_proj(output)
 
         # [b, l, d]
-        return output
+        return output, None, None
 
 
 
