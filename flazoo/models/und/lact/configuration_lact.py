@@ -20,7 +20,7 @@ class LaCTVisionConfig(PretrainedConfig):
         attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
         use_swiglu: bool = False,
-        use_short_conv: bool = False,
+        use_short_conv: bool = True,
         conv_size: int = 4,
         # Vision specific parameters
         image_size: int = 224,
@@ -101,7 +101,7 @@ class LaCTVideoConfig(PretrainedConfig):
         attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
         use_swiglu: bool = False,
-        use_short_conv: bool = False,
+        use_short_conv: bool = True,
         conv_size: int = 4,
         # Video specific parameters
         image_size: int = 224,
