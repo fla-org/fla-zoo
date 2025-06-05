@@ -352,8 +352,8 @@ def init_from_dino2_small_p14(
 
 def init_from_siglip2_base_p16_224(
     fla_model,
+    custom_siglip_model=None,
     siglip_model: str = "google/siglip2-base-patch16-224",
-    custom_siglip_model: str = None,
     train_mlp: bool = False,
     init_embedding: bool = True,
     init_head: bool = True,
@@ -386,11 +386,9 @@ def init_from_siglip2_base_p16_224(
             siglip = siglip_model
         else:
             # it's a string
-            logging.info(
-                "Overriding the model with custom SigLIP2 model, "
-                "make sure you have the correct model structure."
+            raise ValueError(
+                "You must provide a custom SigLIP2 model or set override_model to True."
             )
-            siglip = AutoModel.from_pretrained(custom_siglip_model).vision_model
 
     # Define parameter mapping from FLA to SigLIP2
     param_mapping = {
