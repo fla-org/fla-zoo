@@ -191,7 +191,9 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
         self.head_dim = head_dim
         self.num_heads = dim // head_dim
 
-        self.to_qkv = nn.Linear(dim, 3 * dim, bias=False)
+        self.q_proj = nn.Linear(dim, dim, bias=False)
+        self.k_proj = nn.Linear(dim, dim, bias=False)
+        self.v_proj = nn.Linear(dim, dim, bias=False)
         self.o_proj = nn.Linear(dim, dim, bias=False)
 
         self.lr_dim = 1   # single scalar learning rate for each head
@@ -223,7 +225,12 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
         x: [b, l, d]
         """
 
-        qkv = F.silu(self.to_qkv(hidden_states), inplace=True)  # SiLU - Linear
+        q = self.q_proj(hidden_states)  # [b, l, d]
+        k = self.k_proj(hidden_states)  # [b, l, d]
+        v = self.v_proj(hidden_states)  # [b, l, d]
+        qkv = torch.cat([q, k, v], dim=-1)  # [b, l, 3 * d]
+
+        qkv = F.silu(qkv, inplace=True)  # SiLU
 
         # [b * num_heads, l, head_dim]
         q, k, v = rearrange(
