@@ -262,7 +262,8 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
             )
         qkv = torch.cat([q, k, v], dim=-1)  # [b, l, 3 * d]
 
-        qkv = F.silu(qkv, inplace=True)  # SiLU
+        if not self.use_short_conv:
+            qkv = F.silu(qkv, inplace=True)  # SiLU
 
         # [b * num_heads, l, head_dim]
         q, k, v = rearrange(
