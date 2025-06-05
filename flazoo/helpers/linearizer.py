@@ -353,10 +353,12 @@ def init_from_dino2_small_p14(
 def init_from_siglip2_base_p16_224(
     fla_model,
     siglip_model: str = "google/siglip2-base-patch16-224",
+    custom_siglip_model: str = None,
     train_mlp: bool = False,
     init_embedding: bool = True,
     init_head: bool = True,
     return_pretrained: bool = False,
+    override_model: bool = False,
 ):
     """
     Initialize a FLA model from a SigLIP2 model.
@@ -373,7 +375,22 @@ def init_from_siglip2_base_p16_224(
         Initialized FLA model
     """
     # Load SigLIP2 model and get vision component
-    siglip = AutoModel.from_pretrained(siglip_model).vision_model
+    if not override_model and custom_siglip_model is None:
+        siglip = AutoModel.from_pretrained(siglip_model).vision_model
+    else:
+        if custom_siglip_model is not None:
+            logging.info(
+                "Overriding the model with custom SigLIP2 model, "
+                "make sure you have the correct model structure."
+            )
+            siglip = siglip_model
+        else:
+            # it's a string
+            logging.info(
+                "Overriding the model with custom SigLIP2 model, "
+                "make sure you have the correct model structure."
+            )
+            siglip = AutoModel.from_pretrained(custom_siglip_model).vision_model
 
     # Define parameter mapping from FLA to SigLIP2
     param_mapping = {
