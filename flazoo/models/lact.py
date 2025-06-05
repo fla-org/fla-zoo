@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.cuda.amp as amp
 from einops import rearrange
-
+from fla.modules import ShortConvolution
 
 @torch.compile()
 def silu_backprop(dy: torch.Tensor, x: torch.Tensor):
@@ -179,6 +179,9 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
         qk_l2_norm: bool = True,  # recommended to be True
         use_muon: bool = True,  # if your seq len > head_dim * 2, recommended to be True
         base_lr: float = 1e-2,
+        use_short_conv: bool = True,
+        conv_size: int = 4,
+        conv_bias: bool = False,
     ):
         super().__init__()
         self.dim = dim
@@ -195,6 +198,26 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
         self.k_proj = nn.Linear(dim, dim, bias=False)
         self.v_proj = nn.Linear(dim, dim, bias=False)
         self.o_proj = nn.Linear(dim, dim, bias=False)
+
+        self.use_short_conv = use_short_conv
+
+        if use_short_conv:
+            self.conv_size = conv_size
+            self.q_conv1d = ShortConvolution(
+                hidden_size=dim,
+                kernel_size=conv_size,
+                activation='silu'
+            )
+            self.k_conv1d = ShortConvolution(
+                hidden_size=dim,
+                kernel_size=conv_size,
+                activation='silu'
+            )
+            self.v_conv1d = ShortConvolution(
+                hidden_size=dim,
+                kernel_size=conv_size,
+                activation='silu'
+            )
 
         self.lr_dim = 1   # single scalar learning rate for each head
         self.lr_proj = nn.Linear(dim, self.lr_dim * 3 * self.num_heads, bias=False)
@@ -228,6 +251,16 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
         q = self.q_proj(hidden_states)  # [b, l, d]
         k = self.k_proj(hidden_states)  # [b, l, d]
         v = self.v_proj(hidden_states)  # [b, l, d]
+        if self.use_short_conv:
+            q, _ = self.q_conv1d(
+                x=q,
+            )
+            k, _ = self.k_conv1d(
+                x=k,
+            )
+            v, _ = self.v_conv1d(
+                x=v,
+            )
         qkv = torch.cat([q, k, v], dim=-1)  # [b, l, 3 * d]
 
         qkv = F.silu(qkv, inplace=True)  # SiLU
