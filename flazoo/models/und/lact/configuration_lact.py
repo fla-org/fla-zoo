@@ -20,6 +20,8 @@ class LaCTVisionConfig(PretrainedConfig):
         attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
         use_swiglu: bool = False,
+        use_short_conv: bool = True,
+        conv_size: int = 4,
         # Vision specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -42,6 +44,8 @@ class LaCTVisionConfig(PretrainedConfig):
         self.attn_type = attn_type
         self.gradient_checkpointing = gradient_checkpointing
         self.use_swiglu = use_swiglu
+        self.use_short_conv = use_short_conv
+        self.conv_size = conv_size
 
         # Initialize vision specific parameters
         self.image_size = image_size
@@ -97,6 +101,8 @@ class LaCTVideoConfig(PretrainedConfig):
         attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
         use_swiglu: bool = False,
+        use_short_conv: bool = True,
+        conv_size: int = 4,
         # Video specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -127,6 +133,8 @@ class LaCTVideoConfig(PretrainedConfig):
         self.attn_type = attn_type
         self.gradient_checkpointing = gradient_checkpointing
         self.use_swiglu = use_swiglu
+        self.use_short_conv = use_short_conv
+        self.conv_size = conv_size
 
         # Initialize video specific parameters
         self.image_size = image_size

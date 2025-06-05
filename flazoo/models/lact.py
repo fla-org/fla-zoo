@@ -181,7 +181,6 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
         base_lr: float = 1e-2,
         use_short_conv: bool = True,
         conv_size: int = 4,
-        conv_bias: bool = False,
     ):
         super().__init__()
         self.dim = dim

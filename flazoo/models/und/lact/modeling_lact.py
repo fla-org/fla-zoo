@@ -78,7 +78,9 @@ class LaCTVisionBlock(nn.Module):
             self.attn = BidirectionalLaCTSwiGLU(
                 dim=config.hidden_size,
                 head_dim=config.hidden_size // config.num_heads,
-                use_muon=False
+                use_muon=False,
+                use_short_conv=config.use_short_conv,
+                conv_size=config.conv_size,
             )
 
         if (
@@ -524,7 +526,9 @@ class LaCTVideoBlock(nn.Module):
             self.attn = BidirectionalLaCTSwiGLU(
                 dim=config.hidden_size,
                 head_dim=config.hidden_size // config.num_heads,
-                use_muon=False
+                use_muon=False,
+                use_short_conv=config.use_short_conv,
+                conv_size=config.conv_size,
             )
 
         self.ln_2 = LayerNorm(config.hidden_size, bias=True, eps=config.layer_norm_eps)
