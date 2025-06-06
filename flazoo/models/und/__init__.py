@@ -106,6 +106,13 @@ from .lact import (
     LaCTVisionModel,
 )
 
+from .mesa_net import (
+    MesaNetVisionConfig,
+    MesaNetForImageClassification,
+    MesaNetForMaskedImageModeling,
+    MesaNetVisionModel,
+)
+
 
 __all__ = [
     "ABCVisionConfig",
@@ -176,4 +183,8 @@ __all__ = [
     "LaCTForImageClassification",
     "LaCTForMaskedImageModeling",
     "LaCTVisionModel",
+    "MesaNetVisionConfig",
+    "MesaNetForImageClassification",
+    "MesaNetForMaskedImageModeling",
+    "MesaNetVisionModel",
 ]
