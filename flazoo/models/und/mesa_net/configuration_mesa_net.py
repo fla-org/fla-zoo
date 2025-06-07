@@ -30,7 +30,7 @@ class MesaNetVisionConfig(PretrainedConfig):
         fuse_norm: bool = True,
         fuse_swiglu: bool = True,
         fuse_cross_entropy: bool = True,
-        max_train_cg_step: int = 30,
+        max_cg_step_training: int = 30,
         max_cg_step_decoding: int = 30,
         attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
@@ -70,7 +70,7 @@ class MesaNetVisionConfig(PretrainedConfig):
         self.fuse_norm = fuse_norm
         self.fuse_swiglu = fuse_swiglu
         self.fuse_cross_entropy = fuse_cross_entropy
-        self.max_train_cg_step = max_train_cg_step
+        self.max_cg_step_training = max_cg_step_training
         self.max_cg_step_decoding = max_cg_step_decoding
         self.attn_type = attn_type
         self.gradient_checkpointing = gradient_checkpointing
@@ -144,7 +144,7 @@ class MesaNetVideoConfig(PretrainedConfig):
         fuse_norm: bool = True,
         fuse_swiglu: bool = True,
         fuse_cross_entropy: bool = True,
-        max_train_cg_step: int = 30,
+        max_cg_step_training: int = 30,
         max_cg_step_decoding: int = 30,
         attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
@@ -192,7 +192,7 @@ class MesaNetVideoConfig(PretrainedConfig):
         self.fuse_norm = fuse_norm
         self.fuse_swiglu = fuse_swiglu
         self.fuse_cross_entropy = fuse_cross_entropy
-        self.max_train_cg_step = max_train_cg_step
+        self.max_cg_step_training = max_cg_step_training
         self.max_cg_step_decoding = max_cg_step_decoding
         self.attn_type = attn_type
         self.gradient_checkpointing = gradient_checkpointing
