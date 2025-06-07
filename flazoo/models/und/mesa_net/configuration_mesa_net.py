@@ -17,7 +17,6 @@ class MesaNetVisionConfig(PretrainedConfig):
         use_gate: bool = False,
         use_short_conv: bool = True,
         conv_size: int = 4,
-        head_dim: int = 128,
         num_heads: int = 16,
         lambda_lower_bound: float = 0.25,
         max_position_embeddings: int = 2048,
@@ -32,6 +31,7 @@ class MesaNetVisionConfig(PretrainedConfig):
         fuse_swiglu: bool = True,
         fuse_cross_entropy: bool = True,
         max_train_cg_step: int = 30,
+        max_cg_step_decoding: int = 30,
         attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
         compress_attention: bool = False,
@@ -58,7 +58,6 @@ class MesaNetVisionConfig(PretrainedConfig):
         self.use_gate = use_gate
         self.use_short_conv = use_short_conv
         self.conv_size = conv_size
-        self.head_dim = head_dim
         self.num_heads = num_heads
         self.lambda_lower_bound = lambda_lower_bound
         self.max_position_embeddings = max_position_embeddings
@@ -72,6 +71,7 @@ class MesaNetVisionConfig(PretrainedConfig):
         self.fuse_swiglu = fuse_swiglu
         self.fuse_cross_entropy = fuse_cross_entropy
         self.max_train_cg_step = max_train_cg_step
+        self.max_cg_step_decoding = max_cg_step_decoding
         self.attn_type = attn_type
         self.gradient_checkpointing = gradient_checkpointing
         self.compress_attention = compress_attention
@@ -131,7 +131,6 @@ class MesaNetVideoConfig(PretrainedConfig):
         use_gate: bool = False,
         use_short_conv: bool = True,
         conv_size: int = 4,
-        head_dim: int = 128,
         num_heads: int = 16,
         lambda_lower_bound: float = 0.25,
         max_position_embeddings: int = 2048,
@@ -146,6 +145,7 @@ class MesaNetVideoConfig(PretrainedConfig):
         fuse_swiglu: bool = True,
         fuse_cross_entropy: bool = True,
         max_train_cg_step: int = 30,
+        max_cg_step_decoding: int = 30,
         attn_type: str = "full_attn",  # attention type, default to "full_attn"
         gradient_checkpointing: bool = False,
         compress_attention: bool = False,
@@ -180,7 +180,6 @@ class MesaNetVideoConfig(PretrainedConfig):
         self.use_gate = use_gate
         self.use_short_conv = use_short_conv
         self.conv_size = conv_size
-        self.head_dim = head_dim
         self.num_heads = num_heads
         self.lambda_lower_bound = lambda_lower_bound
         self.max_position_embeddings = max_position_embeddings
@@ -194,6 +193,7 @@ class MesaNetVideoConfig(PretrainedConfig):
         self.fuse_swiglu = fuse_swiglu
         self.fuse_cross_entropy = fuse_cross_entropy
         self.max_train_cg_step = max_train_cg_step
+        self.max_cg_step_decoding = max_cg_step_decoding
         self.attn_type = attn_type
         self.gradient_checkpointing = gradient_checkpointing
         self.compress_attention = compress_attention
