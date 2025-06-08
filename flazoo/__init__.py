@@ -19,6 +19,7 @@ from .models import (
     MoBAVisionConfig,
     LaCTVisionConfig,
     MesaNetVisionConfig,
+    GatedDeltaProductVisionConfig,
     ABCVisionModel,
     ABCForImageClassification,
     ABCForMaskedImageModeling,
@@ -73,6 +74,9 @@ from .models import (
     MesaNetVisionModel,
     MesaNetForImageClassification,
     MesaNetForMaskedImageModeling,
+    GatedDeltaProductVisionModel,
+    GatedDeltaProductForImageClassification,
+    GatedDeltaProductForMaskedImageModeling,
 )
 
 __all__ = [
@@ -148,4 +152,8 @@ __all__ = [
     "MesaNetVisionModel",
     "MesaNetForImageClassification",
     "MesaNetForMaskedImageModeling",
+    "GatedDeltaProductVisionConfig",
+    "GatedDeltaProductVisionModel",
+    "GatedDeltaProductForImageClassification",
+    "GatedDeltaProductForMaskedImageModeling",
 ]

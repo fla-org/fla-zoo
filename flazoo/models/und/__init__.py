@@ -113,6 +113,12 @@ from .mesa_net import (
     MesaNetVisionModel,
 )
 
+from .gated_deltaproduct import (
+    GatedDeltaProductVisionConfig,
+    GatedDeltaProductForImageClassification,
+    GatedDeltaProductForMaskedImageModeling,
+    GatedDeltaProductVisionModel,
+)
 
 __all__ = [
     "ABCVisionConfig",
@@ -187,4 +193,8 @@ __all__ = [
     "MesaNetForImageClassification",
     "MesaNetForMaskedImageModeling",
     "MesaNetVisionModel",
+    "GatedDeltaProductVisionConfig",
+    "GatedDeltaProductForImageClassification",
+    "GatedDeltaProductForMaskedImageModeling",
+    "GatedDeltaProductVisionModel",
 ]
