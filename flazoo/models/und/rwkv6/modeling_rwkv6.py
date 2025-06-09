@@ -248,6 +248,10 @@ class RWKV6VisionEncoder(nn.Module):
 class RWKV6VisionModel(RWKV6VisionPreTrainedModel):
     def __init__(self, config, add_pooling_layer=True, use_mask_token=False):
         super().__init__(config)
+        logging.warning(
+            "This is not Vision-RWKV, rather a model using FLA impl of RWKV6 token mixers." \
+            "Be careful if what you want is Vision-RWKV"
+        )
         self.config = config
         self.embeddings = ImageEmbeddings(config, use_mask_token=use_mask_token)
         self.encoder = RWKV6VisionEncoder(config)
