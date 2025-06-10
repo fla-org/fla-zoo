@@ -356,7 +356,6 @@ def init_from_siglip2_base_p16_224(
     siglip_model: str = "google/siglip2-base-patch16-224",
     train_mlp: bool = False,
     init_embedding: bool = True,
-    init_head: bool = True,
     return_pretrained: bool = False,
     override_model: bool = False,
 ):
@@ -383,7 +382,7 @@ def init_from_siglip2_base_p16_224(
                 "Overriding the model with custom SigLIP2 model, "
                 "make sure you have the correct model structure."
             )
-            siglip = siglip_model
+            siglip = custom_siglip_model
         else:
             # it's a string
             raise ValueError(
@@ -438,11 +437,6 @@ def init_from_siglip2_base_p16_224(
         for n, p in fla_model.named_parameters():
             if "channel_mixer" in n:
                 p.requires_grad_(False)
-
-    if init_head:
-        fla_model.classifier.weight.data.copy_(siglip.classifier.weight.data)
-        if siglip.classifier.bias is not None:
-            fla_model.classifier.bias.data.copy_(siglip.classifier.bias.data)
 
     if not return_pretrained:
         return fla_model
