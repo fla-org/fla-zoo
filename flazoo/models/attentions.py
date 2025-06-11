@@ -8,7 +8,7 @@ from einops import rearrange
 from typing import Optional, Tuple, Union
 import math
 from torch.nn.attention.flex_attention import _mask_mod_signature
-
+from fla.modules import RotaryEmbedding
 try:
     from moba.moba_efficient import moba_attn_varlen
 except ImportError:
@@ -323,6 +323,8 @@ class FullAttention(nn.Module):
         head_dim: int = None,
         norm_first: bool = False,
         norm_eps: float = 1e-5,
+        use_rope: bool = True,
+        rope_theta: Optional[float] = 10000.,
         layer_idx: int = None,
     ):
         super().__init__()
@@ -341,6 +343,7 @@ class FullAttention(nn.Module):
         self.kv_dim = self.num_kv_heads * self.head_dim
         self.kv_dim = self.num_kv_heads * self.head_dim
         self.norm_first = norm_first
+        self.use_rope = use_rope
         self.layer_idx = layer_idx
 
         # log
@@ -350,6 +353,7 @@ class FullAttention(nn.Module):
 
         if norm_first:
             self.norm = nn.LayerNorm(self.hidden_size, eps=norm_eps)
+
         self.q_proj = nn.Linear(
             self.hidden_size, self.num_heads * self.head_dim, bias=False
         )
@@ -358,6 +362,9 @@ class FullAttention(nn.Module):
         self.o_proj = nn.Linear(
             self.num_heads * self.head_dim, self.hidden_size, bias=False
         )
+
+        if use_rope:
+            self.rotary = RotaryEmbedding(dim=self.head_dim, base=self.rope_theta)
 
     def forward(
         self,
@@ -379,6 +386,9 @@ class FullAttention(nn.Module):
         v = rearrange(
             self.v_proj(hidden_states), "... (h d) -> ... h d", h=self.num_kv_heads
         )
+
+        if self.use_rope:
+            q, k = self.rotary(q, k, seqlen_offset=0, max_seqlen=q_len, cu_seqlens=None)
 
         if flash_attn_func is None:
             raise ImportError(

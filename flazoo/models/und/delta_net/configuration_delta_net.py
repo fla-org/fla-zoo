@@ -37,6 +37,7 @@ class DeltaNetVisionConfig(PretrainedConfig):
         gradient_checkpointing: bool = False,
         compress_attention: bool = False,
         use_swiglu: bool = False,
+        use_rope: bool = True,
         # Vision specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -78,6 +79,7 @@ class DeltaNetVisionConfig(PretrainedConfig):
         self.gradient_checkpointing = gradient_checkpointing
         self.compress_attention = compress_attention
         self.use_swiglu = use_swiglu
+        self.use_rope = use_rope
 
         # Initialize vision specific parameters
         self.image_size = image_size
@@ -109,6 +111,7 @@ class DeltaNetVisionConfig(PretrainedConfig):
                 )
             attn["num_kv_heads"] = attn.get("num_kv_heads", attn["num_heads"])
             attn["window_size"] = attn.get("window_size", None)
+            attn['rope_theta'] = attn.get('rope_theta', 10000.)
 
         self.attn = attn
 
@@ -154,6 +157,7 @@ class DeltaNetVideoConfig(PretrainedConfig):
         gradient_checkpointing: bool = False,
         compress_attention: bool = False,
         use_swiglu: bool = False,
+        use_rope: bool = True,
         # Video specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -203,6 +207,7 @@ class DeltaNetVideoConfig(PretrainedConfig):
         self.gradient_checkpointing = gradient_checkpointing
         self.compress_attention = compress_attention
         self.use_swiglu = use_swiglu
+        self.use_rope = use_rope
 
         # Initialize video specific parameters
         self.image_size = image_size
@@ -242,6 +247,7 @@ class DeltaNetVideoConfig(PretrainedConfig):
                 )
             attn["num_kv_heads"] = attn.get("num_kv_heads", attn["num_heads"])
             attn["window_size"] = attn.get("window_size", None)
+            attn['rope_theta'] = attn.get('rope_theta', 10000.)
 
         self.attn = attn
 
