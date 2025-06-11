@@ -37,7 +37,7 @@ class DeltaNetVisionConfig(PretrainedConfig):
         gradient_checkpointing: bool = False,
         compress_attention: bool = False,
         use_swiglu: bool = False,
-        use_rope: bool = True,
+        use_rope: bool = False,
         # Vision specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -157,7 +157,7 @@ class DeltaNetVideoConfig(PretrainedConfig):
         gradient_checkpointing: bool = False,
         compress_attention: bool = False,
         use_swiglu: bool = False,
-        use_rope: bool = True,
+        use_rope: bool = False,
         # Video specific parameters
         image_size: int = 224,
         patch_size: int = 16,

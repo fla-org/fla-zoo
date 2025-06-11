@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -84,12 +85,9 @@ class ImageEmbeddings(nn.Module):
         )
         self.patch_embeddings = PatchEmbeddings(config)
         num_patches = self.patch_embeddings.num_patches
-        self.use_rope = config.use_rope
-        if not config.use_rope:
-            self.position_embeddings = nn.Parameter(
-                torch.randn(1, num_patches, config.hidden_size)
-            )
-            
+        self.position_embeddings = nn.Parameter(
+            torch.randn(1, num_patches, config.hidden_size)
+        )
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.patch_size = config.patch_size
         self.config = config
@@ -157,14 +155,13 @@ class ImageEmbeddings(nn.Module):
             mask = bool_masked_pos.unsqueeze(-1).type_as(mask_tokens)
             embeddings = embeddings * (1.0 - mask) + mask_tokens * mask
 
-        if not self.use_rope:
-            # add positional encoding to each token
-            if interpolate_pos_encoding:
-                embeddings = embeddings + self.interpolate_pos_encoding(
-                    embeddings, height, width
-                )
-            else:
-                embeddings = embeddings + self.position_embeddings
+        # add positional encoding to each token
+        if interpolate_pos_encoding:
+            embeddings = embeddings + self.interpolate_pos_encoding(
+                embeddings, height, width
+            )
+        else:
+            embeddings = embeddings + self.position_embeddings
 
         embeddings = self.dropout(embeddings)
 
