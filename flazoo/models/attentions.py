@@ -344,6 +344,7 @@ class FullAttention(nn.Module):
         self.kv_dim = self.num_kv_heads * self.head_dim
         self.norm_first = norm_first
         self.use_rope = use_rope
+        self.rope_theta = rope_theta
         self.layer_idx = layer_idx
 
         # log
@@ -364,6 +365,9 @@ class FullAttention(nn.Module):
         )
 
         if use_rope:
+            logging.info(
+                f"Using Rotary Embedding with theta={self.rope_theta} in FullAttention"
+            )
             self.rotary = RotaryEmbedding(dim=self.head_dim, base=self.rope_theta)
 
     def forward(
@@ -1732,6 +1736,8 @@ def get_attn(config, layer_idx):
             hidden_size=config.hidden_size,
             num_heads=config.attn["num_heads"],
             num_kv_heads=config.attn["num_kv_heads"],
+            use_rope=config.use_rope,
+            rope_theta=config.attn["rope_theta"],
             layer_idx=layer_idx,
         )
     elif attn_type == "moba":
