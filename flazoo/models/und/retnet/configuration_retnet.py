@@ -16,7 +16,7 @@ class RetNetVisionConfig(PretrainedConfig):
         attn_mode: str = "chunk",
         hidden_size: int = 2048,
         expand_k: int = 1,
-        expand_v: int = 2,
+        expand_v: int = 1,
         num_hidden_layers: int = 24,
         num_heads: int = 8,
         num_kv_heads: Optional[int] = None,
