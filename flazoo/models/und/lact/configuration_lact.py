@@ -22,6 +22,7 @@ class LaCTVisionConfig(PretrainedConfig):
         use_swiglu: bool = False,
         use_short_conv: bool = True,
         conv_size: int = 4,
+        use_rope: bool = False,
         # Vision specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -46,6 +47,7 @@ class LaCTVisionConfig(PretrainedConfig):
         self.use_swiglu = use_swiglu
         self.use_short_conv = use_short_conv
         self.conv_size = conv_size
+        self.use_rope = use_rope
 
         # Initialize vision specific parameters
         self.image_size = image_size
@@ -103,6 +105,7 @@ class LaCTVideoConfig(PretrainedConfig):
         use_swiglu: bool = False,
         use_short_conv: bool = True,
         conv_size: int = 4,
+        use_rope: bool = False,
         # Video specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -135,6 +138,7 @@ class LaCTVideoConfig(PretrainedConfig):
         self.use_swiglu = use_swiglu
         self.use_short_conv = use_short_conv
         self.conv_size = conv_size
+        self.use_rope = use_rope
 
         # Initialize video specific parameters
         self.image_size = image_size
