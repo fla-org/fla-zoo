@@ -98,7 +98,7 @@ class DeltaNetGen2DBlock(nn.Module):
 
         x = x + gate_attn.unsqueeze(1) * self.attn(
             modulate(self.norm1(x), shift_attn, scale_attn)
-        )
+        )[0]
         x = x + gate_channel_mixer.unsqueeze(1) * self.channel_mixer(
             modulate(self.norm2(x), shift_channel_mixer, scale_channel_mixer)
         )
