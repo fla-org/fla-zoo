@@ -207,7 +207,7 @@ class DeltaNetVisionPreTrainedModel(PreTrainedModel):
             ).to(module.weight.dtype)
             if module.bias is not None:
                 module.bias.data.zero_()
-        elif isinstance(module, nn.LayerNorm):
+        elif isinstance(module, LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
         elif isinstance(module, ImageEmbeddings):
@@ -294,7 +294,7 @@ class DeltaNetVisionModel(DeltaNetVisionPreTrainedModel):
         self.config = config
         self.embeddings = ImageEmbeddings(config, use_mask_token=use_mask_token)
         self.encoder = DeltaNetVisionEncoder(config)
-        self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.layernorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pooler = Pooler(config) if add_pooling_layer else None
         self.init_weights()
 
@@ -704,7 +704,7 @@ class DeltaNetVideoPreTrainedModel(PreTrainedModel):
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
             if module.bias is not None:
                 module.bias.data.zero_()
-        elif isinstance(module, nn.LayerNorm):
+        elif isinstance(module, LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
 
@@ -716,7 +716,7 @@ class DeltaNetVideoModel(DeltaNetVideoPreTrainedModel):
 
         self.embeddings = VideoEmbeddings(config)
         self.encoder = DeltaNetVideoEncoder(config)
-        self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.layernorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pooler = Pooler(config)
 
         self.post_init()
@@ -797,7 +797,7 @@ class DeltaNetVideoDecoder(nn.Module):
             ]
         )
 
-        self.norm = nn.LayerNorm(config.decoder_hidden_size)
+        self.norm = LayerNorm(config.decoder_hidden_size)
         self.head = (
             nn.Linear(config.decoder_hidden_size, decoder_num_labels)
             if decoder_num_labels > 0
