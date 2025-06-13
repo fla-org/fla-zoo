@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 
+#----------------------------------------------------------------------------
+# vision models, i mean image models to be specific
+#----------------------------------------------------------------------------
+
 from .models import (
     ABCVisionConfig,
     BitNetVisionConfig,
@@ -78,6 +82,12 @@ from .models import (
     GatedDeltaProductForImageClassification,
     GatedDeltaProductForMaskedImageModeling,
 )
+
+#----------------------------------------------------------------------------
+# helper functions
+#----------------------------------------------------------------------------
+
+from .helpers import log_model
 
 __all__ = [
     "ABCVisionConfig",
