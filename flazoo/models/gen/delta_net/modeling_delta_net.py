@@ -11,11 +11,15 @@ from fla.layers.delta_net import DeltaNet
 from flazoo.models.attentions import FullAttention
 from ..utils import get_2d_sincos_pos_embed, modulate
 from ..embeddings import Gen2DTimestepEmbedder
-from ..embeddings import Gen2DPatchEmbed, Gen2DLabelEmbedder
+from fla.modules.layernorm import rms_norm_linear, LayerNorm
+from flazoo.models.attentions import get_attn
+from ..embeddings import Gen2DLabelEmbedder
+from timm.layers import PatchEmbed as Gen2DPatchEmbed
 from flazoo.models.utils import (
     prepare_hidden_states_for_scan,
     prepare_hidden_states_for_merge,
 )
+from .configuration_delta_net import DeltaNetGen2DConfig
 
 
 class DeltaNetGen2DMLP(nn.Module):
@@ -50,16 +54,11 @@ class DeltaNetGen2DBlock(nn.Module):
     def __init__(self, config, layer_idx: int):
         super().__init__()
         self.layer_idx = layer_idx
-        self.norm1 = nn.LayerNorm(
+        self.norm1 = LayerNorm(
             config.hidden_size, elementwise_affine=False, eps=config.layer_norm_eps
         )
         if config.attn is not None and layer_idx in config.attn["layers"]:
-            self.attn = FullAttention(
-                hidden_size=config.hidden_size,
-                num_heads=config.attn["num_heads"],
-                num_kv_heads=config.attn["num_kv_heads"],
-                layer_idx=layer_idx,
-            )
+            self.attn = get_attn(config, layer_idx)
         else:
             self.attn = DeltaNet(
                 mode=config.attn_mode,
@@ -79,7 +78,7 @@ class DeltaNetGen2DBlock(nn.Module):
                 layer_idx=layer_idx,
             )
 
-        self.norm2 = nn.LayerNorm(
+        self.norm2 = LayerNorm(
             config.hidden_size, elementwise_affine=False, eps=config.layer_norm_eps
         )
         self.channel_mixer = DeltaNetGen2DMLP(config)
@@ -110,7 +109,7 @@ class DeltaNetGen2DBlock(nn.Module):
 class DeltaNetGen2DFinalLayer(nn.Module):
     def __init__(self, hidden_size, patch_size, out_channels):
         super().__init__()
-        self.norm_final = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
+        self.norm_final = LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         self.linear = nn.Linear(
             hidden_size, patch_size * patch_size * out_channels, bias=True
         )
@@ -124,8 +123,27 @@ class DeltaNetGen2DFinalLayer(nn.Module):
         x = self.linear(x)
         return x
 
+class DeltaNetGen2DPreTrainedModel(PreTrainedModel):
+    config_class =  DeltaNetGen2DConfig
+    base_model_prefix = "deltanet_gen2d"
+    supports_gradient_checkpointing = True
 
-class DeltaNetForGen2D(nn.Module):
+
+    def _init_weights(self, module):
+        if isinstance(module, (nn.Linear, nn.Conv2d)):
+            module.weight.data = nn.init.trunc_normal_(
+                module.weight.data.to(torch.float32),
+                mean=0.0,
+                std=self.config.initializer_range,
+            ).to(module.weight.dtype)
+            if module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+
+
+class DeltaNetForGen2D(DeltaNetGen2DPreTrainedModel):
     def __init__(self, config):
         super().__init__()
         self.config = config

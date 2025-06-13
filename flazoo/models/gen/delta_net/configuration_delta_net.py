@@ -30,6 +30,7 @@ class DeltaNetGen2DConfig(PretrainedConfig):
         use_cache: bool = True,
         initializer_range: float = 0.02,
         fuse_cross_entropy: bool = True,
+        
         # Gen2D specific parameters
         path_type="edm",
         input_size=32,
