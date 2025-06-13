@@ -36,14 +36,14 @@ class DeltaNetGen2DMLP(nn.Module):
 
 
 class DeltaNetGen2DProjectorMLP(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, z_dim=None):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(config.hidden_size, config.projector_dim),
             nn.SiLU(),
-            nn.Linear(config.projector_dim, config.z_dim),
+            nn.Linear(config.projector_dim, config.projector_dim),
             nn.SiLU(),
-            nn.Linear(config.z_dim, config.hidden_size),
+            nn.Linear(config.projector_dim, z_dim),
         )
 
     def forward(self, x):
@@ -179,7 +179,7 @@ class DeltaNetForGen2D(DeltaNetGen2DPreTrainedModel):
         )
 
         self.projectors = nn.ModuleList(
-            [DeltaNetGen2DProjectorMLP(config) for z_dim in config.z_dims]
+            [DeltaNetGen2DProjectorMLP(config, z_dim=z_dim) for z_dim in config.z_dims]
         )
 
         self.final_layer = DeltaNetGen2DFinalLayer(
