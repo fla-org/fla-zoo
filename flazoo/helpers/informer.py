@@ -23,19 +23,18 @@ def _natural_sort_key(s):
 
 
 def log_model(
-    model: nn.Module, log_path: str = "model_info.log"
+    model: nn.Module, log_path: str = None
 ) -> None:
     """
     Get detailed parameter information from a model and save it to a log file in a flat format.
-    This version doesn't show the hierarchical structure but lists all parameters in a table.
 
     Args:
-        model: The PyTorch model to analyze
-        log_path: Path to save the log file
-
-    Returns:
-        None
+        model: The model to analyze
+        log_path: Path to save the log file, defaults to "{model_name}_info.log" in the current directory.
     """
+    if log_path is None:
+        log_path = f"{model.__class__.__name__}_info.log"
+
     os.makedirs(
         os.path.dirname(log_path) if os.path.dirname(log_path) else ".", exist_ok=True
     )
