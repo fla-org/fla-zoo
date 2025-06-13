@@ -145,7 +145,7 @@ class DeltaNetGen2DPreTrainedModel(PreTrainedModel):
 
 class DeltaNetForGen2D(DeltaNetGen2DPreTrainedModel):
     def __init__(self, config):
-        super().__init__()
+        super().__init__(config=config)
         self.config = config
 
         self.path_type = config.path_type
