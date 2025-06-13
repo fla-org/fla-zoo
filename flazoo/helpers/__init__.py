@@ -1,0 +1,1 @@
+from .informer import log_model
