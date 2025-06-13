@@ -45,7 +45,7 @@ class DeltaNetGen2DConfig(PretrainedConfig):
         use_cfg=False,
         z_dims=[768],
         channel_mixer_dim=2048,
-        projection_dim=2048,
+        projector_dim=2048,
         train_scan_type: str = "uni-scan",  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
         test_scan_type: str = None,  # scaning type, "uni-scan" or "bi-scan" or "cross-scan", default to "uni-scan"
         **kwargs,
@@ -86,7 +86,7 @@ class DeltaNetGen2DConfig(PretrainedConfig):
         self.use_cfg = use_cfg
         self.z_dims = z_dims
         self.channel_mixer_dim = channel_mixer_dim
-        self.projection_dim = projection_dim
+        self.projector_dim = projector_dim
 
         self.train_scan_type = train_scan_type
 
