@@ -30,7 +30,8 @@ class DeltaNetGen2DConfig(PretrainedConfig):
         use_cache: bool = True,
         initializer_range: float = 0.02,
         fuse_cross_entropy: bool = True,
-        
+        layer_norm_eps: float = 1e-6,
+
         # Gen2D specific parameters
         path_type="edm",
         input_size=32,
@@ -70,6 +71,7 @@ class DeltaNetGen2DConfig(PretrainedConfig):
         self.use_cache = use_cache
         self.initializer_range = initializer_range
         self.fuse_cross_entropy = fuse_cross_entropy
+        self.layer_norm_eps = layer_norm_eps
 
         # Initialize Gen2D specific parameters
         self.path_type = path_type
