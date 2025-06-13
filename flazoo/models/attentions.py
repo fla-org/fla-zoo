@@ -1737,7 +1737,7 @@ def get_attn(config, layer_idx):
             num_heads=config.attn["num_heads"],
             num_kv_heads=config.attn["num_kv_heads"],
             use_rope=config.use_rope,
-            rope_theta=config.attn["rope_theta"],
+            rope_theta=config.attn["rope_theta"] if config.use_rope else None,
             layer_idx=layer_idx,
         )
     elif attn_type == "moba":
