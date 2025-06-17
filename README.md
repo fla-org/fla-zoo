@@ -52,25 +52,7 @@
 
 ### Understanding Models
 
-| Domain | Status | Docs |
-|--------|--------|---------------|
-| **`vision`** | ✅ Available | [Doc](docs/vision/vision.md) |
-| **`video`** | ✅ Available | 🔜 Coming soon |
-| **`audio`** | 🔜 Coming soon | 🔜 Coming soon |
-
-### Generation Models
-
-| Domain | Status | Docs |
-|--------|--------|---------------|
-| **`c2i`** | 🔜 Coming soon | 🔜 Coming soon |
-| **`t2i`** | 🔜 Coming soon | 🔜 Coming soon |
-| **`t2v`** | 🔜 Coming soon | 🔜 Coming soon |
-
-### Multi-modal Models
-
-| Domain | Status | Docs |
-|--------|--------|---------------|
-| **`vlm`** | 🔜 Coming soon | 🔜 Coming soon |
+Please refer to the documentation 📖.
 
 ## Installation
 
