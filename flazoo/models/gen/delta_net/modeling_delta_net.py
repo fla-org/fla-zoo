@@ -20,7 +20,7 @@ from flazoo.models.utils import (
     prepare_hidden_states_for_merge,
 )
 from .configuration_delta_net import DeltaNetGen2DConfig
-
+import logging
 
 class DeltaNetGen2DMLP(nn.Module):
     def __init__(self, config):
@@ -93,6 +93,12 @@ class DeltaNetGen2DBlock(nn.Module):
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
 
+        # directly log train and test scan types
+        if self.train_scan_type != "uni-scan" or self.test_scan_type != "uni-scan":
+            logging.info(
+                f"DeltaNetGen2DBlock {layer_idx} train_scan_type: {self.train_scan_type}, test_scan_type: {self.test_scan_type}"
+            )
+        
         self.num_heads = config.num_heads
 
     def forward(self, x, c):
