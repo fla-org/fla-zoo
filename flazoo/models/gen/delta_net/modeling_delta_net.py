@@ -86,6 +86,15 @@ class DeltaNetGen2DBlock(nn.Module):
             nn.SiLU(), nn.Linear(config.hidden_size, 6 * config.hidden_size, bias=True)
         )
 
+        if config.attn is not None and layer_idx in config.attn["layers"]:
+            self.train_scan_type = "uni-scan"
+            self.test_scan_type = "uni-scan"
+        else:
+            self.train_scan_type = config.train_scan_type
+            self.test_scan_type = config.test_scan_type
+
+        self.num_heads = config.num_heads
+
     def forward(self, x, c):
         (
             shift_attn,
@@ -96,9 +105,27 @@ class DeltaNetGen2DBlock(nn.Module):
             gate_channel_mixer,
         ) = self.adaLN_modulation(c).chunk(6, dim=-1)
 
-        x = x + gate_attn.unsqueeze(1) * self.attn(
-            modulate(self.norm1(x), shift_attn, scale_attn)
-        )[0]
+        # decouple original code for better extensibility
+        norm1_out = self.norm1(x)
+        modulated_attn_input = modulate(norm1_out, shift_attn, scale_attn)
+        modulated_attn_input = prepare_hidden_states_for_scan(
+            modulated_attn_input,
+            train_scan_type=self.train_scan_type,
+            test_scan_type=self.test_scan_type,
+            training=self.training,
+            num_heads=self.num_heads,
+        )
+        attn_output = self.attn(modulated_attn_input)[0]
+        attn_output = prepare_hidden_states_for_merge(
+            attn_output,
+            train_scan_type=self.train_scan_type,
+            test_scan_type=self.test_scan_type,
+            training=self.training,
+            num_heads=self.num_heads,
+        )
+        gated_attn_output = gate_attn.unsqueeze(1) * attn_output
+        x = x + gated_attn_output
+
         x = x + gate_channel_mixer.unsqueeze(1) * self.channel_mixer(
             modulate(self.norm2(x), shift_channel_mixer, scale_channel_mixer)
         )
