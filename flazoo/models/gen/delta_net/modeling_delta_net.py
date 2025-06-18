@@ -95,8 +95,10 @@ class DeltaNetGen2DBlock(nn.Module):
 
         # directly log train and test scan types
         if self.train_scan_type != "uni-scan" or self.test_scan_type != "uni-scan":
-            logging.info(
-                f"DeltaNetGen2DBlock {layer_idx} train_scan_type: {self.train_scan_type}, test_scan_type: {self.test_scan_type}"
+            import warnings
+            warnings.warn(
+                f"DeltaNetGen2DBlock {layer_idx} train_scan_type: {self.train_scan_type}, test_scan_type: {self.test_scan_type}."
+                " This is not a uni-scan block, which may affect training and inference."
             )
         
         self.num_heads = config.num_heads
