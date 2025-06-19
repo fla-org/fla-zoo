@@ -209,7 +209,8 @@ class DeltaNetVisionPreTrainedModel(PreTrainedModel):
             if module.bias is not None:
                 module.bias.data.zero_()
         elif isinstance(module, LayerNorm):
-            module.bias.data.zero_()
+            if module.bias is not None:
+                module.bias.data.zero_()
             module.weight.data.fill_(1.0)
         elif isinstance(module, ImageEmbeddings):
             if hasattr(module, "position_embeddings"):
