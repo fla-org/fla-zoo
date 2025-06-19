@@ -557,6 +557,311 @@ def multi_head_2d_scan(
     return output
 
 
+@torch.compile
+def multi_head_split_3d_torch(hidden_states: torch.Tensor, num_heads: int, canvas_thw: Tuple[int, int, int] = None):
+    """
+    PyTorch implementation of multi-head 3D scanning
+    - Divides heads into 12 equal groups, each with a different scanning direction:
+      - Groups 1-6: Six permutations of T, H, W dimensions (THW, TWH, HTW, HWT, WTH, WTH)
+      - Groups 7-12: Same six permutations but with sequence reversal (flip)
+
+    Args:
+        hidden_states: Input tensor of shape [batch_size, seq_len, hidden_size]
+        num_heads: Number of attention heads (must have at least 12 heads)
+
+    Returns:
+        Processed hidden states with different 3D scanning patterns
+    """
+    B, L, D = hidden_states.shape
+    head_dim = D // num_heads
+    device = hidden_states.device
+    dtype = hidden_states.dtype
+    
+    # Calculate how many complete groups of 12 we can make
+    complete_groups = (num_heads // 12) * 12
+    heads_per_group = complete_groups // 12
+    dim_per_group = heads_per_group * head_dim
+    
+    # Initialize result tensor
+    result = torch.empty_like(hidden_states)
+    
+    if canvas_thw is not None:
+        T, H, W = canvas_thw
+    else:
+        thw = int(round(L ** (1/3)))
+        T, H, W = thw, thw, thw
+    
+    # Process only the complete groups (ignore remainder)
+    if complete_groups > 0:
+        # Group 1: Original order (T, H, W)
+        result[:, :, :dim_per_group] = hidden_states[:, :, :dim_per_group]
+        
+        # Group 2: T, W, H permutation
+        result[:, :, dim_per_group:2*dim_per_group] = einops.rearrange(
+            hidden_states[:, :, dim_per_group:2*dim_per_group],
+            "b (t h w) d -> b (t w h) d",
+            t=T, h=H, w=W,
+        )
+        
+        # Group 3: H, T, W permutation
+        result[:, :, 2*dim_per_group:3*dim_per_group] = einops.rearrange(
+            hidden_states[:, :, 2*dim_per_group:3*dim_per_group],
+            "b (t h w) d -> b (h t w) d",
+            t=T, h=H, w=W,
+        )
+        
+        # Group 4: H, W, T permutation
+        result[:, :, 3*dim_per_group:4*dim_per_group] = einops.rearrange(
+            hidden_states[:, :, 3*dim_per_group:4*dim_per_group],
+            "b (t h w) d -> b (h w t) d",
+            t=T, h=H, w=W,
+        )
+        
+        # Group 5: W, T, H permutation
+        result[:, :, 4*dim_per_group:5*dim_per_group] = einops.rearrange(
+            hidden_states[:, :, 4*dim_per_group:5*dim_per_group],
+            "b (t h w) d -> b (w t h) d",
+            t=T, h=H, w=W,
+        )
+        
+        # Group 6: W, H, T permutation
+        result[:, :, 5*dim_per_group:6*dim_per_group] = einops.rearrange(
+            hidden_states[:, :, 5*dim_per_group:6*dim_per_group],
+            "b (t h w) d -> b (w h t) d",
+            t=T, h=H, w=W,
+        )
+        
+        # Group 7: Original order (T, H, W) + flip
+        result[:, :, 6*dim_per_group:7*dim_per_group] = torch.flip(
+            hidden_states[:, :, 6*dim_per_group:7*dim_per_group], dims=[1]
+        )
+        
+        # Group 8: T, W, H permutation + flip
+        result[:, :, 7*dim_per_group:8*dim_per_group] = torch.flip(
+            einops.rearrange(
+                hidden_states[:, :, 7*dim_per_group:8*dim_per_group],
+                "b (t h w) d -> b (t w h) d",
+                t=T, h=H, w=W,
+            ), dims=[1]
+        )
+        
+        # Group 9: H, T, W permutation + flip
+        result[:, :, 8*dim_per_group:9*dim_per_group] = torch.flip(
+            einops.rearrange(
+                hidden_states[:, :, 8*dim_per_group:9*dim_per_group],
+                "b (t h w) d -> b (h t w) d",
+                t=T, h=H, w=W,
+            ), dims=[1]
+        )
+        
+        # Group 10: H, W, T permutation + flip
+        result[:, :, 9*dim_per_group:10*dim_per_group] = torch.flip(
+            einops.rearrange(
+                hidden_states[:, :, 9*dim_per_group:10*dim_per_group],
+                "b (t h w) d -> b (h w t) d",
+                t=T, h=H, w=W,
+            ), dims=[1]
+        )
+        
+        # Group 11: W, T, H permutation + flip
+        result[:, :, 10*dim_per_group:11*dim_per_group] = torch.flip(
+            einops.rearrange(
+                hidden_states[:, :, 10*dim_per_group:11*dim_per_group],
+                "b (t h w) d -> b (w t h) d",
+                t=T, h=H, w=W,
+            ), dims=[1]
+        )
+        
+        # Group 12: W, H, T permutation + flip
+        result[:, :, 11*dim_per_group:12*dim_per_group] = torch.flip(
+            einops.rearrange(
+                hidden_states[:, :, 11*dim_per_group:12*dim_per_group],
+                "b (t h w) d -> b (w h t) d",
+                t=T, h=H, w=W,
+            ), dims=[1]
+        )
+    
+    # Handle remaining heads (if any) - keep original order
+    if complete_groups < num_heads:
+        remaining_dim = (num_heads - complete_groups) * head_dim
+        result[:, :, complete_groups*head_dim:] = hidden_states[:, :, complete_groups*head_dim:]
+    
+    return result
+
+
+@torch.compile
+def multi_head_merge_3d_torch(hidden_states: torch.Tensor, num_heads: int, canvas_thw: Tuple[int, int, int] = None):
+    """
+    PyTorch implementation for merging results from multi-head 3D scanning
+    - Restores the original ordering of the hidden states after processing
+    - Each group of heads is merged back to the original sequence order:
+      - Groups 1-6: Reverse the six permutations of T, H, W dimensions
+      - Groups 7-12: Reverse the flips and then the six permutations
+
+    Args:
+        hidden_states: Processed hidden states of shape [batch_size, seq_len, hidden_size]
+        num_heads: Number of attention heads (must have at least 12 heads)
+
+    Returns:
+        Merged hidden states with original ordering restored
+    """
+    B, L, D = hidden_states.shape
+    device = hidden_states.device
+    head_dim = D // num_heads
+    dtype = hidden_states.dtype
+    
+    # Calculate how many complete groups of 12 we can make
+    complete_groups = (num_heads // 12) * 12
+    heads_per_group = complete_groups // 12
+    dim_per_group = heads_per_group * head_dim
+    
+    # Initialize result tensor
+    result = torch.empty_like(hidden_states)
+    
+
+    if canvas_thw is not None:
+        T, H, W = canvas_thw
+    else:
+        thw = int(round(L ** (1/3)))
+        T, H, W = thw, thw, thw
+    
+    # Process only the complete groups (ignore remainder)
+    if complete_groups > 0:
+        # Group 1: Keep original order (T, H, W)
+        result[:, :, :dim_per_group] = hidden_states[:, :, :dim_per_group]
+        
+        # Group 2: Restore from T, W, H permutation
+        result[:, :, dim_per_group:2*dim_per_group] = einops.rearrange(
+            hidden_states[:, :, dim_per_group:2*dim_per_group],
+            "b (t w h) d -> b (t h w) d",
+            t=T, w=W, h=H,
+        )
+        
+        # Group 3: Restore from H, T, W permutation
+        result[:, :, 2*dim_per_group:3*dim_per_group] = einops.rearrange(
+            hidden_states[:, :, 2*dim_per_group:3*dim_per_group],
+            "b (h t w) d -> b (t h w) d",
+            h=H, t=T, w=W,
+        )
+        
+        # Group 4: Restore from H, W, T permutation
+        result[:, :, 3*dim_per_group:4*dim_per_group] = einops.rearrange(
+            hidden_states[:, :, 3*dim_per_group:4*dim_per_group],
+            "b (h w t) d -> b (t h w) d",
+            h=H, w=W, t=T,
+        )
+        
+        # Group 5: Restore from W, T, H permutation
+        result[:, :, 4*dim_per_group:5*dim_per_group] = einops.rearrange(
+            hidden_states[:, :, 4*dim_per_group:5*dim_per_group],
+            "b (w t h) d -> b (t h w) d",
+            w=W, t=T, h=H,
+        )
+        
+        # Group 6: Restore from W, H, T permutation
+        result[:, :, 5*dim_per_group:6*dim_per_group] = einops.rearrange(
+            hidden_states[:, :, 5*dim_per_group:6*dim_per_group],
+            "b (w h t) d -> b (t h w) d",
+            w=W, h=H, t=T,
+        )
+        
+        # Group 7: Restore from original order (T, H, W) + flip
+        result[:, :, 6*dim_per_group:7*dim_per_group] = torch.flip(
+            hidden_states[:, :, 6*dim_per_group:7*dim_per_group], dims=[1]
+        )
+        
+        # Group 8: Restore from T, W, H permutation + flip
+        result[:, :, 7*dim_per_group:8*dim_per_group] = einops.rearrange(
+            torch.flip(hidden_states[:, :, 7*dim_per_group:8*dim_per_group], dims=[1]),
+            "b (t w h) d -> b (t h w) d",
+            t=T, w=W, h=H,
+        )
+        
+        # Group 9: Restore from H, T, W permutation + flip
+        result[:, :, 8*dim_per_group:9*dim_per_group] = einops.rearrange(
+            torch.flip(hidden_states[:, :, 8*dim_per_group:9*dim_per_group], dims=[1]),
+            "b (h t w) d -> b (t h w) d",
+            h=H, t=T, w=W,
+        )
+        
+        # Group 10: Restore from H, W, T permutation + flip
+        result[:, :, 9*dim_per_group:10*dim_per_group] = einops.rearrange(
+            torch.flip(hidden_states[:, :, 9*dim_per_group:10*dim_per_group], dims=[1]),
+            "b (h w t) d -> b (t h w) d",
+            h=H, w=W, t=T,
+        )
+        
+        # Group 11: Restore from W, T, H permutation + flip
+        result[:, :, 10*dim_per_group:11*dim_per_group] = einops.rearrange(
+            torch.flip(hidden_states[:, :, 10*dim_per_group:11*dim_per_group], dims=[1]),
+            "b (w t h) d -> b (t h w) d",
+            w=W, t=T, h=H,
+        )
+        
+        # Group 12: Restore from W, H, T permutation + flip
+        result[:, :, 11*dim_per_group:12*dim_per_group] = einops.rearrange(
+            torch.flip(hidden_states[:, :, 11*dim_per_group:12*dim_per_group], dims=[1]),
+            "b (w h t) d -> b (t h w) d",
+            w=W, h=H, t=T,
+        )
+    
+    # Handle remaining heads (if any) - keep original order
+    if complete_groups < num_heads:
+        remaining_dim = (num_heads - complete_groups) * head_dim
+        result[:, :, complete_groups*head_dim:] = hidden_states[:, :, complete_groups*head_dim:]
+    
+    return result
+
+
+def multi_head_3d_scan(
+    hidden_states: torch.Tensor,
+    num_heads: int,
+    backend: str = "torch",
+    operation: str = "split",
+    canvas_thw: Tuple[int, int, int] = None,
+    **kwargs,
+) -> torch.Tensor:
+    """
+    Universal function for 3D multi-head scanning, supporting different backends and operations.
+
+    Args:
+        hidden_states: Input tensor of shape [batch_size, seq_len, hidden_size]
+        num_heads: Number of attention heads (must have at least 12 heads)
+        backend: Which backend to use, currently supported: "torch", "triton" (if CUDA is available)
+        operation: Which operation to perform, either "split" or "merge"
+        canvas_thw: Optional tuple specifying the dimensions of the 3D canvas (T, H, W)
+        **kwargs: Placeholder for additional parameters specific to the backend or operation
+
+    Raises:
+        ValueError: If the operation is not "split" or "merge"
+
+    Returns:
+        Processed hidden states with different 3D scanning patterns or merged back
+    """
+    # Validate operation parameter
+    valid_operations = ["split", "merge"]
+    if operation not in valid_operations:
+        raise ValueError(
+            f"Operation must be one of {valid_operations}, got {operation}"
+        )
+
+    # Validate backend parameter
+    valid_backends = ["torch", "triton"]
+    if backend not in valid_backends:
+        raise ValueError(f"Backend must be one of {valid_backends}, got {backend}")
+
+    # Handle the triton backend
+    if backend == "triton":
+        raise NotImplementedError("Triton backend is not implemented yet.")
+    # Handle the torch backend
+    else:  # backend == "torch"
+        if operation == "split":
+            output = multi_head_split_3d_torch(hidden_states, num_heads, canvas_thw=canvas_thw)
+        else:  # operation == "merge"
+            output = multi_head_merge_3d_torch(hidden_states, num_heads, canvas_thw=canvas_thw)
+
+    return output
+
 class LearnableScan(nn.Module):
     def __init__(
         self, seq_len: int, temperature: float = 1.0, init_scale: float = 10.0

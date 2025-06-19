@@ -9,6 +9,7 @@ import torch.nn as nn
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 from .scan import cross_scan_fn, cross_merge_fn
 from .scan import multi_head_2d_scan
+from .scan import multi_head_3d_scan
 
 logger = logging.get_logger(__name__)
 
@@ -21,6 +22,7 @@ def prepare_hidden_states_for_scan(
     random_level: str = "sample",
     num_heads: int = 16,
     scan_module: Optional[nn.Module] = None,
+    canvas_thw: Optional[Tuple[int, int, int]] = None,
 ) -> torch.Tensor:
     """
     Prepare hidden states for different scan types.
@@ -83,6 +85,10 @@ def prepare_hidden_states_for_scan(
 
     elif scan_type == "mh2d-scan":
         return multi_head_2d_scan(hidden_states, num_heads=num_heads, operation="split")
+    
+    elif scan_type == "mh3d-scan":
+        assert canvas_thw is not None, "canvas_thw should be provided for mh3d-scan"
+        return multi_head_3d_scan(hidden_states=hidden_states, num_heads=num_heads, canvas_thw=canvas_thw, operation="split")
 
     # cross-scan
     B, L, D = hidden_states.shape
@@ -108,6 +114,7 @@ def prepare_hidden_states_for_merge(
     test_scan_type: str = "uni-scan",
     training: bool = True,
     num_heads: int = 16,
+    canvas_thw: Optional[Tuple[int, int, int]] = None,
     layer_idx: Optional[int] = None,
 ) -> torch.Tensor:
     """
@@ -168,6 +175,10 @@ def prepare_hidden_states_for_merge(
         return hidden_states
     elif scan_type == "mh2d-scan":
         return multi_head_2d_scan(hidden_states, num_heads=num_heads, operation="merge")
+    
+    elif scan_type == "mh3d-scan":
+        assert canvas_thw is not None, "canvas_thw should be provided for mh3d-scan"
+        return multi_head_3d_scan(hidden_states=hidden_states, num_heads=num_heads, canvas_thw=canvas_thw, operation="merge")
 
     # cross scan
 
