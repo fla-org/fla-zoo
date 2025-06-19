@@ -62,11 +62,15 @@ except ImportError:
     )
     flex_attention = None
 
+from lact import BidirectionalLaCTSwiGLU
+
 WINDOW_SIZE_1D = 256
 
 from fla.layers import (
     DeltaNet,
     GatedDeltaNet,
+    MesaNet,
+    GatedDeltaProduct,
     ForgettingAttention,
     ABCAttention,
     GatedLinearAttention,
@@ -95,7 +99,9 @@ ATTN_LISTS = [
 
 FLA_ATTN_LISTS = [
     "deltanet",
+    "mesanet",
     "gated_deltanet",
+    "gated_deltaproduct",
     "fox",
     "abc",
     "gla",
@@ -103,6 +109,7 @@ FLA_ATTN_LISTS = [
     "gsa",
     "hgrn",
     "hgrn2",
+    "lact",
     "lightnet",
     "linear_attention",
     "retnet",
@@ -1855,8 +1862,253 @@ def get_fla_attn(config, layer_idx):
             norm_eps=config.norm_eps,
             layer_idx=layer_idx,
         )
+    
+    elif fla_attn_type == "abc":
+        return ABCAttention(
+                hidden_size=config.hidden_size,
+                expand_k=config.expand_k,
+                expand_v=config.expand_v,
+                num_heads=config.num_heads,
+                num_slots=config.num_slots,
+                use_short_conv=config.use_short_conv,
+                conv_size=config.conv_size,
+                gate_fn=config.hidden_act,
+                elementwise_affine=config.elementwise_affine,
+                norm_eps=config.norm_eps,
+                clamp_min=config.clamp_min,
+                clamp_max=config.clamp_max,
+                fuse_norm=config.fuse_norm,
+                layer_idx=layer_idx,
+            )
+
+    elif fla_attn_type == "bitnet":
+        return BitAttention(
+                hidden_size=config.hidden_size,
+                num_heads=config.num_heads,
+                num_kv_heads=config.num_kv_heads,
+                window_size=config.window_size,
+                rope_theta=config.rope_theta,
+                max_position_embeddings=config.max_position_embeddings,
+                norm_first=config.norm_first,
+                norm_eps=config.norm_eps,
+                layer_idx=layer_idx,
+            )
+    
+    elif fla_attn_type == "gated_deltanet":
+        return GatedDeltaNet(
+                mode=config.attn_mode,
+                hidden_size=config.hidden_size,
+                expand_v=config.expand_v,
+                head_dim=config.head_dim,
+                num_heads=config.num_heads,
+                use_gate=config.use_gate,
+                use_short_conv=config.use_short_conv,
+                conv_size=config.conv_size,
+                norm_first=config.norm_first,
+                norm_eps=config.norm_eps,
+                layer_idx=layer_idx,
+            )
+
+    elif fla_attn_type == "gated_deltaproduct":
+        return GatedDeltaProduct(
+                mode=config.attn_mode,
+                hidden_size=config.hidden_size,
+                expand_v=config.expand_v,
+                head_dim=config.head_dim,
+                num_heads=config.num_heads,
+                use_gate=config.use_gate,
+                use_forget_gate=config.use_forget_gate,
+                use_short_conv=config.use_short_conv,
+                conv_size=config.conv_size,
+                norm_eps=config.norm_eps,
+                allow_neg_eigval=config.allow_neg_eigval,
+                num_householder=config.num_householder,
+                layer_idx=layer_idx
+            )
+
+    elif fla_attn_type == "gla":
+        return GatedLinearAttention(
+                mode=config.attn_mode,
+                hidden_size=config.hidden_size,
+                expand_k=config.expand_k,
+                expand_v=config.expand_v,
+                num_heads=config.num_heads,
+                num_kv_heads=config.num_kv_heads,
+                feature_map=config.feature_map,
+                use_short_conv=config.use_short_conv,
+                conv_size=config.conv_size,
+                use_output_gate=config.use_output_gate,
+                gate_fn=config.hidden_act,
+                elementwise_affine=config.elementwise_affine,
+                norm_eps=config.norm_eps,
+                clamp_min=config.clamp_min,
+                fuse_norm=config.fuse_norm,
+                layer_idx=layer_idx,
+            )
+    
+    elif fla_attn_type == "gsa":
+
+        return GatedSlotAttention(
+                hidden_size=config.hidden_size,
+                expand_k=config.expand_k,
+                expand_v=config.expand_v,
+                num_heads=config.num_heads,
+                num_kv_heads=config.num_kv_heads,
+                num_slots=config.num_slots,
+                use_short_conv=config.use_short_conv,
+                conv_size=config.conv_size,
+                feature_map=config.feature_map,
+                use_output_gate=config.use_output_gate,
+                use_norm=config.use_norm,
+                gate_fn=config.hidden_act,
+                gate_logit_normalizer=config.gate_logit_normalizer,
+                elementwise_affine=config.elementwise_affine,
+                norm_first=config.norm_first,
+                norm_eps=config.norm_eps,
+                fuse_norm=config.fuse_norm,
+                layer_idx=layer_idx,
+            )
+    
+    elif fla_attn_type == "hgrn":
+
+        return HGRNAttention(
+                mode=config.attn_mode,
+                hidden_size=config.hidden_size,
+                expand_ratio=config.expand_ratio,
+                use_short_conv=config.use_short_conv,
+                conv_size=config.conv_size,
+                elementwise_affine=config.elementwise_affine,
+                norm_eps=config.norm_eps,
+                layer_idx=layer_idx,
+            )
+    
+
+    elif fla_attn_type == "hgrn2":
+        return HGRN2Attention(
+                mode=config.attn_mode,
+                hidden_size=config.hidden_size,
+                num_heads=config.num_heads,
+                expand_ratio=config.expand_ratio,
+                use_short_conv=config.use_short_conv,
+                conv_size=config.conv_size,
+                elementwise_affine=config.elementwise_affine,
+                norm_eps=config.norm_eps,
+                layer_idx=layer_idx,
+            )
+    
+    elif fla_attn_type == "lact":
+
+        return BidirectionalLaCTSwiGLU(
+                dim=config.hidden_size,
+                head_dim=config.hidden_size // config.num_heads,
+                use_muon=False,
+                use_short_conv=config.use_short_conv,
+                conv_size=config.conv_size,
+            )
+    
+    elif fla_attn_type == "lightnet":
+        return LightNetAttention(
+                mode=config.attn_mode,
+                hidden_size=config.hidden_size,
+                num_heads=config.num_heads,
+                expand_ratio=config.expand_ratio,
+                use_short_conv=config.use_short_conv,
+                conv_size=config.conv_size,
+                gate_low_rank_dim=config.gate_low_rank_dim,
+                elementwise_affine=config.elementwise_affine,
+                norm_eps=config.norm_eps,
+                layer_idx=layer_idx,
+            )
+    
+    elif fla_attn_type == "linear_attention":
+        return LinearAttention(
+                mode=config.attn_mode,
+                hidden_size=config.hidden_size,
+                expand_k=config.expand_k,
+                expand_v=config.expand_v,
+                num_heads=config.num_heads,
+                num_kv_heads=config.num_kv_heads,
+                feature_map=config.feature_map,
+                tie_feature_map_qk=config.tie_feature_map_qk,
+                norm_q=config.norm_q,
+                norm_k=config.norm_k,
+                do_feature_map_norm=config.norm_feature_map,
+                elementwise_affine=config.elementwise_affine,
+                norm_eps=config.norm_eps,
+                layer_idx=layer_idx,
+            )
+
+    elif fla_attn_type == "mesanet":
+        return MesaNet(
+                mode=config.attn_mode,
+                hidden_size=config.hidden_size,
+                expand_v=config.expand_v,
+                num_heads=config.num_heads,
+                use_gate=config.use_gate,
+                use_short_conv=config.use_short_conv,
+                conv_size=config.conv_size,
+                norm_eps=config.norm_eps,
+                lambda_lower_bound=config.lambda_lower_bound,
+                layer_idx=layer_idx,
+                max_cg_step_training=config.max_cg_step_training,
+                max_cg_step_decoding=config.max_cg_step_decoding
+            )
+    
+    elif fla_attn_type == "retnet":
+        return MultiScaleRetention(
+                mode=config.attn_mode,
+                hidden_size=config.hidden_size,
+                expand_k=config.expand_k,
+                expand_v=config.expand_v,
+                num_heads=config.num_heads,
+                num_kv_heads=config.num_kv_heads,
+                feature_map=config.feature_map,
+                use_output_gate=config.use_output_gate,
+                gate_fn=config.hidden_act,
+                elementwise_affine=config.elementwise_affine,
+                norm_eps=config.norm_eps,
+                fuse_norm=config.fuse_norm,
+                layer_idx=layer_idx,
+            )
+
+    elif fla_attn_type == "rwkv6":
+        warnings.warn(
+            "Note that RWKV is no longer updated in FLA, proceed if you know what you are doing."
+        )
+        return RWKV6Attention(
+                mode=config.attn_mode,
+                hidden_size=config.hidden_size,
+                expand_k=config.expand_k,
+                expand_v=config.expand_v,
+                num_heads=config.num_heads,
+                proj_low_rank_dim=config.proj_low_rank_dim,
+                gate_low_rank_dim=config.gate_low_rank_dim,
+                norm_eps=config.norm_eps,
+                fuse_norm=config.fuse_norm,
+                layer_idx=layer_idx,
+            )
+
+    elif fla_attn_type == "rwkv7":
+        warnings.warn(
+            "Note that RWKV is no longer updated in FLA, proceed if you know what you are doing."
+        )
+        return RWKV7Attention(
+                mode=config.attn_mode,
+                hidden_size=config.hidden_size,
+                head_dim=config.head_dim,
+                num_heads=config.num_heads,
+                decay_low_rank_dim=config.decay_low_rank_dim,
+                gate_low_rank_dim=config.gate_low_rank_dim,
+                a_low_rank_dim=config.a_low_rank_dim,
+                v_low_rank_dim=config.v_low_rank_dim,
+                norm_eps=config.norm_eps,
+                num_hidden_layers=config.num_hidden_layers,
+                fuse_norm=config.fuse_norm,
+                layer_idx=layer_idx,
+                value_dim=config.value_dim[layer_idx],
+            )
     else:
         raise NotImplementedError(
-            f"Linear attention type {fla_attn_type} is not implemented yet"
+            f"FLA attention type {fla_attn_type} is not implemented yet"
         )
     
