@@ -174,6 +174,9 @@ class DeltaNetVideoConfig(PretrainedConfig):
         norm_pix_loss: bool = True,
         num_frames: int = 16,
         tubelet_size: int = 2,
+        t_dim: int = 32,
+        h_dim: int = 16,
+        w_dim: int = 16,
         # decoder specific parameters
         decoder_num_heads: int = 6,
         decoder_hidden_size: int = 256,
@@ -209,6 +212,7 @@ class DeltaNetVideoConfig(PretrainedConfig):
         self.use_swiglu = use_swiglu
         self.use_rope = use_rope
 
+
         # Initialize video specific parameters
         self.image_size = image_size
         self.patch_size = patch_size
@@ -228,6 +232,9 @@ class DeltaNetVideoConfig(PretrainedConfig):
         self.norm_pix_loss = norm_pix_loss
         self.num_frames = num_frames
         self.tubelet_size = tubelet_size
+        self.t_dim = t_dim
+        self.h_dim = h_dim
+        self.w_dim = w_dim
 
         # Initialize decoder specific parameters
         self.decoder_num_heads = decoder_num_heads

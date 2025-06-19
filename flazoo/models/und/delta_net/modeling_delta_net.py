@@ -574,6 +574,9 @@ class DeltaNetVideoBlock(nn.Module):
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
+        
+        if self.train_scan_type == "mh3d-scan" or self.test_scan_type == "mh3d-scan":
+            self.canvas_thw = (config.t_dim, config.h_dim, config.w_dim)
 
         self.num_heads = config.num_heads
 
@@ -588,11 +591,13 @@ class DeltaNetVideoBlock(nn.Module):
         residual = hidden_states
 
         hidden_states = self.ln_1(hidden_states)
+        
         hidden_states = prepare_hidden_states_for_scan(
             hidden_states,
             train_scan_type=self.train_scan_type,
             test_scan_type=self.test_scan_type,
             training=self.training,
+            canvas_thw=self.canvas_thw if hasattr(self, 'canvas_thw') else None,
         )
 
         hidden_states, attentions, past_key_values = self.attn(
@@ -608,6 +613,7 @@ class DeltaNetVideoBlock(nn.Module):
             train_scan_type=self.train_scan_type,
             test_scan_type=self.test_scan_type,
             training=self.training,
+            canvas_thw=self.canvas_thw if hasattr(self, 'canvas_thw') else None,
             layer_idx=self.layer_idx,
         )
 
