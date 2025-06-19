@@ -1029,10 +1029,10 @@ class SlidingTileAttention2D(nn.Module):
         self.window_size_w = window_size_w
         self.tile_size_h = tile_size_h
         self.tile_size_w = tile_size_w
-        
-        # change to warning
+
         if (self.tile_size_h * self.tile_size_w) % 128 != 0:
-            logging.warning(
+            import warnings
+            warnings.warn(
                 f"tile numel {self.tile_size_h * self.tile_size_w} is not divisible by 128, which is required for flex attention, you are using a slow version of STA, which is not ideal."
             )
 
@@ -1224,10 +1224,11 @@ class SlidingTileAttention3D(nn.Module):
         self.tile_size_h = tile_size_h
         self.tile_size_w = tile_size_w
 
-        # Validate tile size for flex attention requirements
-        assert (self.tile_size_t * self.tile_size_h * self.tile_size_w) % 128 == 0, (
-            f"tile numel {self.tile_size_t * self.tile_size_h * self.tile_size_w} is not divisible by 128, which is required for flex attention"
-        )
+        if (self.tile_size_h * self.tile_size_w) % 128 != 0:
+            import warnings
+            warnings.warn(
+                f"tile numel {self.tile_size_h * self.tile_size_w} is not divisible by 128, which is required for flex attention, you are using a slow version of STA, which is not ideal."
+            )
 
         self.seq_len = seq_len
         self.t_dim = t_dim
