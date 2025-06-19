@@ -726,7 +726,7 @@ class DeltaNetVideoModel(DeltaNetVideoPreTrainedModel):
 
         self.embeddings = VideoEmbeddings(config)
         self.encoder = DeltaNetVideoEncoder(config)
-        self.layernorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.layernorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps, bias=True)
         self.pooler = Pooler(config)
 
         self.post_init()
