@@ -18,7 +18,7 @@ from transformers.modeling_outputs import (
     BaseModelOutputWithPooling,
 )
 from transformers.modeling_utils import PreTrainedModel
-from transformers.utils import logging
+import logging
 
 from flazoo.models.attentions import get_attn
 from fla.layers.delta_net import DeltaNet
@@ -577,6 +577,7 @@ class DeltaNetVideoBlock(nn.Module):
         
         if self.train_scan_type == "mh3d-scan" or self.test_scan_type == "mh3d-scan":
             self.canvas_thw = (config.t_dim, config.h_dim, config.w_dim)
+            logging.info(f"Using canvas_thw: {self.canvas_thw} for layer {layer_idx}")
 
         self.num_heads = config.num_heads
 
@@ -591,7 +592,7 @@ class DeltaNetVideoBlock(nn.Module):
         residual = hidden_states
 
         hidden_states = self.ln_1(hidden_states)
-        
+
         hidden_states = prepare_hidden_states_for_scan(
             hidden_states,
             train_scan_type=self.train_scan_type,
