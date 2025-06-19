@@ -63,7 +63,7 @@ except ImportError:
     )
     flex_attention = None
 
-from lact import BidirectionalLaCTSwiGLU
+from .lact import BidirectionalLaCTSwiGLU
 
 WINDOW_SIZE_1D = 256
 
