@@ -807,7 +807,7 @@ class DeltaNetVideoDecoder(nn.Module):
             ]
         )
 
-        self.norm = LayerNorm(config.decoder_hidden_size)
+        self.norm = LayerNorm(config.decoder_hidden_size, bias=True)
         self.head = (
             nn.Linear(config.decoder_hidden_size, decoder_num_labels)
             if decoder_num_labels > 0
@@ -1074,8 +1074,6 @@ class DeltaNetForVideoClassification(DeltaNetVideoPreTrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-
-        sequence_output = outputs[0]
 
         pooled_output = outputs.pooler_output
         logits = self.classifier(pooled_output)
