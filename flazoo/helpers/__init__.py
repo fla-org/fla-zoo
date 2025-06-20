@@ -1,1 +1,1 @@
-from .informer import log_model
+from .informer import log_model, log_model_with_emoji

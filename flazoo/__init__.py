@@ -87,7 +87,7 @@ from .models import (
 # helper functions
 #----------------------------------------------------------------------------
 
-from .helpers import log_model
+from .helpers import log_model, log_model_with_emoji
 
 __all__ = [
     "ABCVisionConfig",
