@@ -7,6 +7,7 @@ from .sta import (
     generate_sta_mask_3d,
     sta_2d_func,
     sta_3d_func,
+    sta_3d_with_text_func
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "generate_sta_mask_3d",
     "sta_2d_func",
     "sta_3d_func",
+    "sta_3d_with_text_func"
 ]
