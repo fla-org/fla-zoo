@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import warnings
-from typing import List, Optional, Tuple, Union, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -19,17 +19,20 @@ from transformers.modeling_outputs import (
 )
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
-from fla.models.utils import Cache
-from fla.layers.abc import ABCAttention
+
 from flazoo.models.attentions import get_attn
-from .configuration_abc import ABCVisionConfig
+from fla.layers.delta_net import DeltaNet
+from .configuration_abc import ABCVisionConfig, ABCVideoConfig
+from fla.models.utils import Cache
 from fla.modules import FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss, RMSNorm
+from fla.modules.activations import swiglu_linear
+from fla.modules import GatedMLP as FLASwiGLU
+from fla.modules.layernorm import rms_norm_linear, LayerNorm
 from flazoo.models.utils import (
     prepare_hidden_states_for_scan,
     prepare_hidden_states_for_merge,
 )
 from ..utils import ImageEmbeddings, Pooler
-from .configuration_abc import ABCVideoConfig
 from transformers.utils.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from ..utils import (
     VideoEmbeddings,
@@ -38,8 +41,11 @@ from ..utils import (
     get_sinusoid_encoding_table,
 )
 from copy import deepcopy
+from flazoo.models.scan import LearnableScan
+from flazoo.models.utils import compress_seq, decompress_seq
 
 logger = logging.get_logger(__name__)
+
 
 if TYPE_CHECKING:
     from transformers.processing_utils import Unpack
@@ -65,31 +71,50 @@ class ABCVisionBlock(nn.Module):
 
         self.layer_idx = layer_idx
 
-        self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.ln_1 = LayerNorm(config.hidden_size, bias=True, eps=config.layer_norm_eps)
 
         if config.attn is not None and layer_idx in config.attn["layers"]:
             self.attn = get_attn(config, layer_idx)
         else:
-            self.attn = ABCAttention(
+            self.attn = DeltaNet(
+                mode=config.attn_mode,
                 hidden_size=config.hidden_size,
                 expand_k=config.expand_k,
                 expand_v=config.expand_v,
                 num_heads=config.num_heads,
-                num_slots=config.num_slots,
+                use_gate=config.use_gate,
+                use_beta=config.use_beta,
                 use_short_conv=config.use_short_conv,
+                use_output_norm=config.use_output_norm,
                 conv_size=config.conv_size,
-                gate_fn=config.hidden_act,
-                elementwise_affine=config.elementwise_affine,
+                qk_norm=config.qk_norm,
+                qk_activation=config.qk_activation,
+                norm_first=config.norm_first,
                 norm_eps=config.norm_eps,
-                clamp_min=config.clamp_min,
-                clamp_max=config.clamp_max,
-                fuse_norm=config.fuse_norm,
                 layer_idx=layer_idx,
             )
 
-        self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        if (
+            config.attn is None or layer_idx not in config.attn["layers"]
+        ) and config.compress_attention:
+            # only compress linear attention, not full attention or local attention
+            # self.attn = CompressedAttentionWrapper(self.attn, block_size=config.block_size, layer_idx=layer_idx)
+            print(f"Compressing attention for layer {layer_idx}")
+            self.compress_attention = True
+            self.block_size = config.attn["block_size"]
+        else:
+            self.compress_attention = False
 
-        self.channel_mixer = ABCVisionMLP(config)
+        self.ln_2 = LayerNorm(config.hidden_size, bias=True, eps=config.layer_norm_eps)
+
+        if config.use_swiglu:
+            # use a default ratio of 4
+            # TODO: support custom ratio or intermediate_size
+            self.channel_mixer = FLASwiGLU(
+                hidden_size=config.hidden_size,
+            )
+        else:
+            self.channel_mixer = ABCVisionMLP(config)
 
         if config.attn is not None and layer_idx in config.attn["layers"]:
             self.train_scan_type = "uni-scan"
@@ -97,6 +122,13 @@ class ABCVisionBlock(nn.Module):
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
+
+        if self.train_scan_type == "learnable-scan":
+            # manually calculate seqlen
+            seq_len = (config.image_size // config.patch_size) ** 2
+            self.scanner = LearnableScan(seq_len=seq_len)
+
+        self.num_heads = config.num_heads
 
     def forward(
         self,
@@ -108,16 +140,20 @@ class ABCVisionBlock(nn.Module):
     ) -> Union[Tuple[torch.Tensor, Optional[torch.Tensor]], Tuple[torch.Tensor]]:
         residual = hidden_states
 
-        # Pre-normalization if enabled
-        if hasattr(self, "ln_1"):
-            hidden_states = self.ln_1(hidden_states)
+        hidden_states = self.ln_1(hidden_states)
 
-        # Apply attention
+        if self.compress_attention:
+            hidden_states = compress_seq(hidden_states, self.block_size)
+
         hidden_states = prepare_hidden_states_for_scan(
             hidden_states,
             train_scan_type=self.train_scan_type,
             test_scan_type=self.test_scan_type,
             training=self.training,
+            scan_module=self.scanner
+            if self.train_scan_type == "learnable-scan"
+            else None,
+            num_heads=self.num_heads,
         )
 
         hidden_states, attentions, past_key_values = self.attn(
@@ -134,19 +170,19 @@ class ABCVisionBlock(nn.Module):
             test_scan_type=self.test_scan_type,
             training=self.training,
             layer_idx=self.layer_idx,
+            num_heads=self.num_heads,
         )
 
-        # First residual connection
+        if self.compress_attention:
+            hidden_states = decompress_seq(hidden_states, self.block_size)
+
         hidden_states = residual + hidden_states
         residual = hidden_states
 
-        # Pre-normalization for MLP if enabled
-        if hasattr(self, "ln_2"):
-            hidden_states = self.ln_2(hidden_states)
+        hidden_states = self.ln_2(hidden_states)
 
         hidden_states = self.channel_mixer(hidden_states)
 
-        # Second residual connection
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states, attentions, past_key_values)
@@ -156,6 +192,11 @@ class ABCVisionBlock(nn.Module):
 
 class ABCVisionPreTrainedModel(PreTrainedModel):
     config_class = ABCVisionConfig
+    base_model_prefix = "abc_vision"
+    main_input_name = "pixel_values"
+    _no_split_modules = ["ImageEmbeddings", "DeltaNetVisionBlock"]
+    supports_gradient_checkpointing = True
+
 
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
@@ -166,15 +207,17 @@ class ABCVisionPreTrainedModel(PreTrainedModel):
             ).to(module.weight.dtype)
             if module.bias is not None:
                 module.bias.data.zero_()
-        elif isinstance(module, nn.LayerNorm):
-            module.bias.data.zero_()
+        elif isinstance(module, LayerNorm):
+            if module.bias is not None:
+                module.bias.data.zero_()
             module.weight.data.fill_(1.0)
         elif isinstance(module, ImageEmbeddings):
-            module.position_embeddings.data = nn.init.trunc_normal_(
-                module.position_embeddings.data.to(torch.float32),
-                mean=0.0,
-                std=self.config.initializer_range,
-            ).to(module.position_embeddings.dtype)
+            if hasattr(module, "position_embeddings"):
+                module.position_embeddings.data = nn.init.trunc_normal_(
+                    module.position_embeddings.data.to(torch.float32),
+                    mean=0.0,
+                    std=self.config.initializer_range,
+                ).to(module.position_embeddings.dtype)
 
 
 class ABCVisionEncoder(nn.Module):
@@ -252,7 +295,7 @@ class ABCVisionModel(ABCVisionPreTrainedModel):
         self.config = config
         self.embeddings = ImageEmbeddings(config, use_mask_token=use_mask_token)
         self.encoder = ABCVisionEncoder(config)
-        self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.layernorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pooler = Pooler(config) if add_pooling_layer else None
         self.init_weights()
 
@@ -358,7 +401,7 @@ class ABCForImageClassification(ABCVisionPreTrainedModel):
         )
 
         pooled_output = outputs.pooler_output
-        logits = self.classifier(pooled_output)  # only use mean pooling
+        logits = self.classifier(pooled_output)
 
         loss = None
         if labels is not None:
@@ -492,37 +535,52 @@ class ABCVideoBlock(nn.Module):
 
         self.layer_idx = layer_idx
 
-        self.ln_1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.ln_1 = LayerNorm(config.hidden_size, bias=True, eps=config.layer_norm_eps)
 
         if config.attn is not None and layer_idx in config.attn["layers"]:
             self.attn = get_attn(config, layer_idx)
         else:
-            self.attn = ABCAttention(
+            self.attn = DeltaNet(
+                mode=config.attn_mode,
                 hidden_size=config.hidden_size,
                 expand_k=config.expand_k,
                 expand_v=config.expand_v,
                 num_heads=config.num_heads,
-                num_slots=config.num_slots,
+                use_gate=config.use_gate,
+                use_beta=config.use_beta,
                 use_short_conv=config.use_short_conv,
+                use_output_norm=config.use_output_norm,
                 conv_size=config.conv_size,
-                gate_fn=config.hidden_act,
-                elementwise_affine=config.elementwise_affine,
+                qk_norm=config.qk_norm,
+                qk_activation=config.qk_activation,
+                norm_first=config.norm_first,
                 norm_eps=config.norm_eps,
-                clamp_min=config.clamp_min,
-                clamp_max=config.clamp_max,
-                fuse_norm=config.fuse_norm,
                 layer_idx=layer_idx,
             )
 
-        self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.ln_2 = LayerNorm(config.hidden_size, bias=True, eps=config.layer_norm_eps)
 
-        self.channel_mixer = ABCVideoMLP(config)
+        if config.use_swiglu:
+            # use a default ratio of 4
+            # TODO: support custom ratio or intermediate_size
+            self.channel_mixer = FLASwiGLU(
+                hidden_size=config.hidden_size,
+            )
+        else:
+            self.channel_mixer = ABCVideoMLP(config)
+
         if config.attn is not None and layer_idx in config.attn["layers"]:
             self.train_scan_type = "uni-scan"
             self.test_scan_type = "uni-scan"
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
+        
+        if self.train_scan_type == "mh3d-scan" or self.test_scan_type == "mh3d-scan":
+            self.canvas_thw = (config.t_dim, config.h_dim, config.w_dim)
+            logger.info(f"Using canvas_thw: {self.canvas_thw} for layer {layer_idx}")
+
+        self.num_heads = config.num_heads
 
     def forward(
         self,
@@ -535,11 +593,13 @@ class ABCVideoBlock(nn.Module):
         residual = hidden_states
 
         hidden_states = self.ln_1(hidden_states)
+
         hidden_states = prepare_hidden_states_for_scan(
             hidden_states,
             train_scan_type=self.train_scan_type,
             test_scan_type=self.test_scan_type,
             training=self.training,
+            canvas_thw=self.canvas_thw if hasattr(self, 'canvas_thw') else None,
         )
 
         hidden_states, attentions, past_key_values = self.attn(
@@ -555,6 +615,7 @@ class ABCVideoBlock(nn.Module):
             train_scan_type=self.train_scan_type,
             test_scan_type=self.test_scan_type,
             training=self.training,
+            canvas_thw=self.canvas_thw if hasattr(self, 'canvas_thw') else None,
             layer_idx=self.layer_idx,
         )
 
@@ -651,8 +712,9 @@ class ABCVideoPreTrainedModel(PreTrainedModel):
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
             if module.bias is not None:
                 module.bias.data.zero_()
-        elif isinstance(module, nn.LayerNorm):
-            module.bias.data.zero_()
+        elif isinstance(module, LayerNorm):
+            if module.bias is not None:
+                module.bias.data.zero_()
             module.weight.data.fill_(1.0)
 
 
@@ -663,6 +725,8 @@ class ABCVideoModel(ABCVideoPreTrainedModel):
 
         self.embeddings = VideoEmbeddings(config)
         self.encoder = ABCVideoEncoder(config)
+        self.layernorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps, bias=True)
+        self.pooler = Pooler(config)
 
         self.post_init()
 
@@ -706,11 +770,15 @@ class ABCVideoModel(ABCVideoPreTrainedModel):
 
         sequence_output = encoder_outputs[0]
 
+        sequence_output = self.layernorm(sequence_output)
+        pooled_output = self.pooler(sequence_output)
+
         if not return_dict:
             return (sequence_output,) + encoder_outputs[1:]
 
-        return BaseModelOutput(
+        return BaseModelOutputWithPooling(
             last_hidden_state=sequence_output,
+            pooler_output=pooled_output,
             hidden_states=encoder_outputs.hidden_states,
             attentions=encoder_outputs.attentions,
         )
@@ -738,7 +806,7 @@ class ABCVideoDecoder(nn.Module):
             ]
         )
 
-        self.norm = nn.LayerNorm(config.decoder_hidden_size)
+        self.norm = LayerNorm(config.decoder_hidden_size, bias=True)
         self.head = (
             nn.Linear(config.decoder_hidden_size, decoder_num_labels)
             if decoder_num_labels > 0
@@ -979,7 +1047,6 @@ class ABCForVideoClassification(ABCVideoPreTrainedModel):
         self.backbone = ABCVideoModel(config)
 
         # Classifier head
-        self.fc_norm = nn.LayerNorm(config.hidden_size)
         self.classifier = (
             nn.Linear(config.hidden_size, config.num_classes)
             if config.num_classes > 0
@@ -1007,14 +1074,8 @@ class ABCForVideoClassification(ABCVideoPreTrainedModel):
             return_dict=return_dict,
         )
 
-        sequence_output = outputs[0]
-
-        if self.fc_norm is not None:
-            sequence_output = self.fc_norm(sequence_output.mean(1))
-        else:
-            sequence_output = sequence_output[:, 0]
-
-        logits = self.classifier(sequence_output)
+        pooled_output = outputs.pooler_output
+        logits = self.classifier(pooled_output)
 
         loss = None
         if labels is not None:

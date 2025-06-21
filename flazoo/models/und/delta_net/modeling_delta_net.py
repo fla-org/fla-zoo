@@ -26,7 +26,7 @@ from .configuration_delta_net import DeltaNetVisionConfig
 from fla.models.utils import Cache
 from fla.modules import FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss, RMSNorm
 from fla.modules.activations import swiglu_linear
-from fla.modules import GatedMLP as DeltaNetSwiGLU
+from fla.modules import GatedMLP as FLASwiGLU
 from fla.modules.layernorm import rms_norm_linear, LayerNorm
 from flazoo.models.utils import (
     prepare_hidden_states_for_scan,
@@ -111,7 +111,7 @@ class DeltaNetVisionBlock(nn.Module):
         if config.use_swiglu:
             # use a default ratio of 4
             # TODO: support custom ratio or intermediate_size
-            self.channel_mixer = DeltaNetSwiGLU(
+            self.channel_mixer = FLASwiGLU(
                 hidden_size=config.hidden_size,
             )
         else:
@@ -296,7 +296,7 @@ class DeltaNetVisionModel(DeltaNetVisionPreTrainedModel):
         self.config = config
         self.embeddings = ImageEmbeddings(config, use_mask_token=use_mask_token)
         self.encoder = DeltaNetVisionEncoder(config)
-        self.layernorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.layernorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps, bias=True)
         self.pooler = Pooler(config) if add_pooling_layer else None
         self.init_weights()
 
@@ -564,7 +564,7 @@ class DeltaNetVideoBlock(nn.Module):
         if config.use_swiglu:
             # use a default ratio of 4
             # TODO: support custom ratio or intermediate_size
-            self.channel_mixer = DeltaNetSwiGLU(
+            self.channel_mixer = FLASwiGLU(
                 hidden_size=config.hidden_size,
             )
         else:
