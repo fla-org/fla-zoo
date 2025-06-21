@@ -7,9 +7,9 @@ from transformers.utils import logging
 import warnings
 import torch.nn as nn
 from typing import TYPE_CHECKING, Optional, Tuple, Union
-from .scan import cross_scan_fn, cross_merge_fn
-from .scan import multi_head_2d_scan
-from .scan import multi_head_3d_scan
+from ..helpers.scanner import cross_scan_fn, cross_merge_fn
+from ..helpers.scanner import multi_head_2d_scan
+from ..helpers.scanner import multi_head_3d_scan
 
 logger = logging.get_logger(__name__)
 

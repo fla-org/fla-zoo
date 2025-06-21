@@ -42,7 +42,7 @@ from ..utils import (
 )
 from copy import deepcopy
 from .configuration_delta_net import DeltaNetVideoConfig
-from flazoo.models.scan import LearnableScan
+from flazoo.helpers.scanner import LearnableScan
 from flazoo.models.utils import compress_seq, decompress_seq
 
 logger = logging.get_logger(__name__)

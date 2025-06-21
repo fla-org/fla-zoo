@@ -40,7 +40,7 @@ from ..utils import (
     get_sinusoid_encoding_table,
 )
 from copy import deepcopy
-from flazoo.models.scan import LearnableScan
+from flazoo.helpers.scanner import LearnableScan
 from flazoo.models.utils import compress_seq, decompress_seq
 
 logger = logging.get_logger(__name__)
