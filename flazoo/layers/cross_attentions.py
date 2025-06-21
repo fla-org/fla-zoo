@@ -1,15 +1,271 @@
 # -*- coding: utf-8 -*-
 
-"""
-This file implements token mixer layers that support input of the following format:
+from diffusers.models.attention_processor import Attention
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from einops import rearrange
+from typing import Dict, Optional, Unpack
+from fla.modules import ShortConvolution, RMSNorm, FusedRMSNormGated
+from fla.models.utils import Cache
+from fla.ops import (
+    fused_recurrent_delta_rule,
+    chunk_delta_rule
+)
+from flazoo.ops import (
+    generate_sta_mask_3d,
+    sta_3d_func
+)
 
-            hidden_states (`torch.Tensor`):
-                The hidden states of the query.
-            encoder_hidden_states (`torch.Tensor`, *optional*):
-                The hidden states of the encoder.
-            attention_mask (`torch.Tensor`, *optional*):
-                The attention mask to use. If `None`, no mask is applied.
-            **cross_attention_kwargs:
-                Additional keyword arguments to pass along to the cross attention.
+def elu_p1(x):
+    return (F.elu(x, 1., False) + 1.).to(x)
 
-"""
+def sum_norm(x):
+    return (x / x.sum(-1, keepdim=True)).to(x)
+
+class DeltaNetCrossAttentionHF(Attention):
+    """
+    A simplified DeltaNet layer handling cross attention API compatable with HuggingFace's Diffusers library.
+    """
+    def __init__(
+        self,
+        fla_config: Dict = None,
+        layer_idx: int = 0,
+        *args,
+        **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        
+        self.layer_idx = layer_idx
+        
+        # some specific parameters for the DeltaNet layer
+        self.train_scan_type = getattr(fla_config, 'train_scan_type', 'uni-scan')
+        self.test_scan_type = getattr(fla_config, 'test_scan_type', 'uni-scan')
+        self.mode = getattr(fla_config, 'mode', 'chunk')
+        self.use_beta = getattr(fla_config, 'use_beta', True)
+        self.use_short_conv = getattr(fla_config, 'use_short_conv', True)
+        self.conv_size = getattr(fla_config, 'conv_size', 4)
+        self.conv_bias = getattr(fla_config, 'conv_bias', False)
+        self.qk_activation = getattr(fla_config, 'qk_activation', 'silu')
+        self.qk_norm = getattr(fla_config, 'qk_norm', 'l2')
+        self.use_gate = getattr(fla_config, 'use_gate', False)
+        self.norm_eps = getattr(fla_config, 'norm_eps', 1e-6)
+        self.allow_neg_eigval = getattr(fla_config, 'allow_neg_eigval', False)
+    
+        
+        if self.use_beta:
+            self.b_proj = nn.Linear(self.query_dim, self.heads, bias=False)
+        
+        if self.use_short_conv:
+            self.q_conv1d = ShortConvolution(
+                hidden_size=self.inner_dim,
+                kernel_size=self.conv_size,
+                bias=self.conv_bias,
+                activation='silu' if self.qk_activation == 'silu' else None
+            )
+            
+            self.k_conv1d = ShortConvolution(
+                hidden_size=self.inner_dim,
+                kernel_size=self.conv_size,
+                bias=self.conv_bias,
+                activation='silu' if self.qk_activation == 'silu' else None
+            )
+            
+            self.v_conv1d = ShortConvolution(
+                hidden_size=self.inner_dim,
+                kernel_size=self.conv_size,
+                bias=self.conv_bias,
+                activation='silu'
+            )
+        
+        if self.use_gate:
+            self.g_proj = nn.Linear(self.query_dim, self.cross_attention_dim, bias=False)
+            self.o_norm = FusedRMSNormGated(self.head_v_dim, eps=self.norm_eps)
+        else:
+            self.o_norm = RMSNorm(self.head_v_dim, eps=self.norm_eps)
+        
+    def op_forward_func(
+        self,
+        q: torch.Tensor,
+        k: torch.Tensor,
+        v: torch.Tensor,
+        hidden_states: Optional[torch.Tensor] = None, # used to calculate extra params
+        attention_mask: Optional[torch.Tensor] = None,
+        past_key_values: Optional[Cache] = None,
+        use_cache: Optional[bool] = False,
+        **kwargs: Unpack[Dict]
+    ):
+        if attention_mask is not None:
+            assert len(attention_mask.shape) == 2, (
+                "Expected attention_mask as a 0-1 matrix with shape [batch_size, seq_len] "
+                "for padding purposes (0 indicating padding). "
+                "Arbitrary attention masks of shape [batch_size, seq_len, seq_len] are not allowed."
+            )
+
+        batch_size, q_len, _ = q.shape
+
+        last_state = None
+
+        cu_seqlens = kwargs.get('cu_seqlens', None)
+        mode = 'fused_recurrent' if q_len <= 64 else self.mode
+
+        if self.use_short_conv:
+            conv_state_q, conv_state_k, conv_state_v = None, None, None
+            if last_state is not None:
+                conv_state_q, conv_state_k, conv_state_v = last_state['conv_state']
+            q, conv_state_q = self.q_conv1d(
+                x=q,
+                cache=conv_state_q,
+                output_final_state=use_cache,
+                cu_seqlens=cu_seqlens
+            )
+            k, conv_state_k = self.k_conv1d(
+                x=k,
+                cache=conv_state_k,
+                output_final_state=use_cache,
+                cu_seqlens=cu_seqlens
+            )
+            v, conv_state_v = self.v_conv1d(
+                x=v,
+                cache=conv_state_v,
+                output_final_state=use_cache,
+                cu_seqlens=cu_seqlens
+            )
+        else:
+            if self.qk_activation == 'silu':
+                q, k = F.silu(q), F.silu(k)
+            v = F.silu(v)
+
+        q, k = map(lambda x: rearrange(x, '... (h d) -> ... h d', h=self.heads), (q, k))
+        v = rearrange(v, '... (h d) -> ... h d', h=self.heads) # TODO: support different kv heads in the future
+        if self.qk_activation != 'silu':
+            if self.qk_activation == 'relu':
+                q, k = q.relu(), k.relu()
+            elif self.qk_activation == 'elu':
+                q, k = elu_p1(q), elu_p1(k)
+            elif self.qk_activation != 'identity':
+                raise NotImplementedError
+            
+        if self.qk_norm == 'sum':
+            q = sum_norm(q).to(q)
+            k = sum_norm(k).to(k)
+
+        if self.use_beta:
+            beta = self.b_proj(hidden_states).sigmoid()
+        else:
+            beta = torch.ones_like(q[..., 0])
+
+        if self.allow_neg_eigval:
+            beta = beta * 2.
+
+        recurrent_state = last_state['recurrent_state'] if last_state is not None else None
+        if mode == 'fused_recurrent':
+            o, recurrent_state = fused_recurrent_delta_rule(
+                q=q,
+                k=k,
+                v=v,
+                beta=beta,
+                initial_state=recurrent_state,
+                output_final_state=use_cache,
+                cu_seqlens=cu_seqlens,
+                use_qk_l2norm_in_kernel=True if self.qk_norm == 'l2' else False
+            )
+        elif mode == 'chunk':
+            o, recurrent_state = chunk_delta_rule(
+                q=q,
+                k=k,
+                v=v,
+                beta=beta,
+                initial_state=recurrent_state,
+                output_final_state=use_cache,
+                cu_seqlens=cu_seqlens,
+                use_qk_l2norm_in_kernel=True if self.qk_norm == 'l2' else False
+            )
+        else:
+            raise NotImplementedError(f"Not supported mode `{mode}`.")
+
+        if past_key_values is not None:
+            past_key_values.update(
+                recurrent_state=recurrent_state,
+                conv_state=(conv_state_q, conv_state_k, conv_state_v) if self.use_short_conv else None,
+                layer_idx=self.layer_idx,
+                offset=q_len
+            )
+
+        if self.use_gate:
+            g = rearrange(self.g_proj(hidden_states), '... (h d) -> ... h d', d=self.head_v_dim)
+            o = self.o_norm(o, g)
+        else:
+            o = self.o_norm(o)
+        o = rearrange(o, 'b t h d -> b t (h d)')
+
+            
+    
+class STA3DCrossAttentionHF(Attention):
+    """
+    A simplified STA3D layer handling cross attention API compatable with HuggingFace's Diffusers library.
+    """
+    def __init__(
+        self,
+        fla_config: Dict = None,
+        layer_idx: int = 0,
+        *args,
+        **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        
+        assert fla_config.attn is not None, "fla_config.attn must be provided for STA3DCrossAttentionHF."
+        attn_config = fla_config.attn
+
+        self.layer_idx = layer_idx
+        self.window_size_t = getattr(attn_config, 'window_size_t', 24)
+        self.window_size_h = getattr(attn_config, 'window_size_h', 24)
+        self.window_size_w = getattr(attn_config, 'window_size_w', 24)
+        self.tile_size_t = getattr(attn_config, 'tile_size_t', 8)
+        self.tile_size_h = getattr(attn_config, 'tile_size_h', 8)
+        self.tile_size_w = getattr(attn_config, 'tile_size_w', 8)
+        self.t_dim = getattr(attn_config, 't_dim', 32)
+        self.h_dim = getattr(attn_config, 'h_dim', 32)
+        self.w_dim = getattr(attn_config, 'w_dim', 32)
+        self.text_seq_len = getattr(attn_config, 'text_seq_len', 512)
+
+        self.vision_seq_len = self.t_dim * self.h_dim * self.w_dim
+
+        self.seq_len = self.vision_seq_len + self.text_seq_len
+
+        self.block_mask = generate_sta_mask_3d(
+            canvas_thw=(self.t_dim, self.h_dim, self.w_dim),
+            kernel_thw=(self.window_size_t, self.window_size_h, self.window_size_w),
+            tile_thw=(self.tile_size_t, self.tile_size_h, self.tile_size_w),    
+            total_seq_len=self.seq_len,
+            is_training=self.training,
+        )
+    
+    def op_forward_func(
+        self,
+        q: torch.Tensor,
+        k: torch.Tensor,
+        v: torch.Tensor,
+        hidden_states: Optional[torch.Tensor] = None, # used to calculate extra params
+        attention_mask: Optional[torch.Tensor] = None,
+        past_key_values: Optional[Cache] = None,
+        use_cache: Optional[bool] = False,
+        **kwargs: Unpack[Dict]
+    ):
+
+        return sta_3d_func(
+            q=q,
+            k=k,
+            v=v,
+            t_dim= self.t_dim,
+            h_dim= self.h_dim,
+            w_dim= self.w_dim,
+            tile_size_t=self.tile_size_t,
+            tile_size_h=self.tile_size_h,
+            tile_size_w=self.tile_size_w,
+            block_mask=self.block_mask,
+            num_heads=self.heads,
+            num_kv_heads= self.heads, # TODO: support different kv heads in the future
+        )
+        
+        return o

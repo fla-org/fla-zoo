@@ -10,6 +10,11 @@ from .lact import BidirectionalLaCTSwiGLU
 
 from .attentions import get_attn, get_fla_attn
 
+from .cross_attentions import (
+    DeltaNetCrossAttentionHF,
+    STA3DCrossAttentionHF,
+)
+
 __all__ = [
     "SlidingTileAttention2D",
     "FullAttention",
@@ -17,4 +22,6 @@ __all__ = [
     "BidirectionalLaCTSwiGLU",
     "get_attn",
     "get_fla_attn",
+    "DeltaNetCrossAttentionHF",
+    "STA3DCrossAttentionHF",
 ]
