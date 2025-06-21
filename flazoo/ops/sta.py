@@ -351,11 +351,88 @@ def sta_3d_func(
     tile_size_h: IntTensor,
     tile_size_w: IntTensor,
     block_mask: BlockMask,
-    text_seq_len: IntTensor,
     num_heads: IntTensor,
     num_kv_heads: IntTensor = None,
 ) -> torch.Tensor:
     """Forward pass for 3D STA
+    Args:
+        q (torch.Tensor): Query tensor of shape (B, L, D).
+        k (torch.Tensor): Key tensor of shape (B, L, D).
+        v (torch.Tensor): Value tensor of shape (B, L, D).
+        t_dim (IntTensor): Time dimension.
+        h_dim (IntTensor): Height dimension.
+        w_dim (IntTensor): Width dimension.
+        tile_size_t (IntTensor): Time tile size.
+        tile_size_h (IntTensor): Height tile size.
+        tile_size_w (IntTensor): Width tile size.
+        block_mask (BlockMask): Block mask for Flex Attention.
+        num_heads (IntTensor): Number of heads for query.
+        num_kv_heads (IntTensor): Number of heads for key and value.
+    """
+
+    def tile(x: torch.Tensor, num_of_heads: IntTensor) -> torch.Tensor:
+        return rearrange(
+            x,
+            "b (ntt tt nth th ntw tw) (h d) -> b h (ntt nth ntw tt th tw) d",
+            h=num_of_heads,
+            ntt=t_dim // tile_size_t,
+            ntw=w_dim // tile_size_w,
+            nth=h_dim // tile_size_h,
+            tt=tile_size_t,
+            tw=tile_size_w,
+            th=tile_size_h,
+        )
+    
+    def untile(x: torch.Tensor, num_of_heads: IntTensor) -> torch.Tensor:
+        return rearrange(
+            x,
+            "b h (ntt nth ntw tt th tw) d -> b (ntt tt nth th ntw tw) (h d)",
+            h=num_of_heads,
+            ntt=t_dim // tile_size_t,
+            ntw=w_dim // tile_size_w,
+            nth=h_dim // tile_size_h,
+            tt=tile_size_t,
+            tw=tile_size_w,
+            th=tile_size_h,
+        )
+    
+
+    q = tile(q, num_heads)
+    k = tile(k, num_kv_heads)
+    v = tile(v, num_kv_heads)
+
+    if flex_attention is None:
+        raise ImportError(
+            "Please install Flex Attention via `pip install torch` first"
+        )
+
+    o = flex_attention(
+        q,
+        k,
+        v,
+        block_mask=block_mask,
+    )
+
+    o = untile(o, num_heads)
+
+    return o
+
+def sta_3d_with_text_func(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    t_dim: IntTensor,
+    h_dim: IntTensor,
+    w_dim: IntTensor,
+    tile_size_t: IntTensor,
+    tile_size_h: IntTensor,
+    tile_size_w: IntTensor,
+    block_mask: BlockMask,
+    text_seq_len: IntTensor,
+    num_heads: IntTensor,
+    num_kv_heads: IntTensor = None,
+) -> torch.Tensor:
+    """Forward pass for 3D STA with text.
     Args:
         q (torch.Tensor): Query tensor of shape (B, L, D).
         k (torch.Tensor): Key tensor of shape (B, L, D).
