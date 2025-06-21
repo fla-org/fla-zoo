@@ -351,6 +351,7 @@ def sta_3d_func(
     tile_size_h: IntTensor,
     tile_size_w: IntTensor,
     block_mask: BlockMask,
+    text_seq_len: IntTensor,
     num_heads: IntTensor,
     num_kv_heads: IntTensor = None,
 ) -> torch.Tensor:
@@ -366,43 +367,55 @@ def sta_3d_func(
         tile_size_h (IntTensor): Height tile size.
         tile_size_w (IntTensor): Width tile size.
         block_mask (BlockMask): Block mask for Flex Attention.
+        text_seq_len (IntTensor): Length of the text sequence.
+        num_heads (IntTensor): Number of heads for query.
+        num_kv_heads (IntTensor): Number of heads for key and value.
     """
 
-    q = rearrange(
-        q,
-        "b (ntt tt nth th ntw tw) (h d) -> b h (ntt nth ntw tt th tw) d",
-        h=num_heads,
-        ntt=t_dim // tile_size_t,
-        ntw=w_dim // tile_size_w,
-        nth=h_dim // tile_size_h,
-        tt=tile_size_t,
-        tw=tile_size_w,
-        th=tile_size_h,
-    )
+    def split_heads(x: torch.Tensor, num_of_heads: IntTensor) -> torch.Tensor:
+        return rearrange(
+            x,
+            "b L (h d) -> b h L d",
+            h=num_of_heads,
+        )
 
-    k = rearrange(
-        k,
-        "b (ntt tt nth th ntw tw) (h d) -> b h (ntt nth ntw tt th tw) d",
-        h=num_kv_heads,
-        ntt=t_dim // tile_size_t,
-        ntw=w_dim // tile_size_w,
-        nth=h_dim // tile_size_h,
-        tt=tile_size_t,
-        tw=tile_size_w,
-        th=tile_size_h,
-    )
+    def merge_heads(x: torch.Tensor) -> torch.Tensor:
+        return rearrange(
+            x,
+            "b h L d -> b L (h d)",
+        )
 
-    v = rearrange(
-        v,
-        "b (ntt tt nth th ntw tw) (h d) -> b h (ntt nth ntw tt th tw) d",
-        h=num_kv_heads,
-        ntt=t_dim // tile_size_t,
-        ntw=w_dim // tile_size_w,
-        nth=h_dim // tile_size_h,
-        tt=tile_size_t,
-        tw=tile_size_w,
-        th=tile_size_h,
-    )
+    def tile(x: torch.Tensor, num_of_heads: IntTensor) -> torch.Tensor:
+        return rearrange(
+            x,
+            "b (ntt tt nth th ntw tw) (h d) -> b h (ntt nth ntw tt th tw) d",
+            h=num_of_heads,
+            ntt=t_dim // tile_size_t,
+            ntw=w_dim // tile_size_w,
+            nth=h_dim // tile_size_h,
+            tt=tile_size_t,
+            tw=tile_size_w,
+            th=tile_size_h,
+        )
+    
+    def untile(x: torch.Tensor, num_of_heads: IntTensor) -> torch.Tensor:
+        return rearrange(
+            x,
+            "b h (ntt nth ntw tt th tw) d -> b (ntt tt nth th ntw tw) (h d)",
+            h=num_of_heads,
+            ntt=t_dim // tile_size_t,
+            ntw=w_dim // tile_size_w,
+            nth=h_dim // tile_size_h,
+            tt=tile_size_t,
+            tw=tile_size_w,
+            th=tile_size_h,
+        )
+    
+    vision_seq_len = q.shape[1] - text_seq_len
+
+    q = torch.concat((tile(q[:, :vision_seq_len, :], num_heads), split_heads(q[:, vision_seq_len:, :], num_heads)), dim=2)
+    k = torch.concat((tile(k[:, :vision_seq_len, :], num_kv_heads), split_heads(k[:, vision_seq_len:, :], num_kv_heads)), dim=2)
+    v = torch.concat((tile(v[:, :vision_seq_len, :], num_kv_heads), split_heads(v[:, vision_seq_len:, :], num_kv_heads)), dim=2)
 
     if flex_attention is None:
         raise ImportError(
@@ -416,16 +429,12 @@ def sta_3d_func(
         block_mask=block_mask,
     )
 
-    o = rearrange(
-        o,
-        "b h (ntt nth ntw tt th tw) d -> b (ntt tt nth th ntw tw) (h d)",
-        h=num_heads,
-        ntt=t_dim // tile_size_t,
-        ntw=w_dim // tile_size_w,
-        nth=h_dim // tile_size_h,
-        tt=tile_size_t,
-        tw=tile_size_w,
-        th=tile_size_h,
+    o = torch.concat(
+        (
+            untile(o[:, :, :vision_seq_len, :], num_heads),  
+            merge_heads(o[:, :, vision_seq_len:, :]),        
+        ),
+        dim=1, 
     )
 
     return o
