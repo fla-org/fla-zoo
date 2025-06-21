@@ -14,7 +14,7 @@ from fla.ops import (
 )
 from flazoo.ops import (
     generate_sta_mask_3d,
-    sta_3d_func
+    sta_3d_with_text_func
 )
 
 def elu_p1(x):
@@ -238,6 +238,7 @@ class SlidingTileCrossAttentionHF3D(Attention):
             kernel_thw=(self.window_size_t, self.window_size_h, self.window_size_w),
             tile_thw=(self.tile_size_t, self.tile_size_h, self.tile_size_w),    
             total_seq_len=self.seq_len,
+            text_seq_len=self.text_seq_len,
             is_training=self.training,
         )
     
@@ -252,8 +253,10 @@ class SlidingTileCrossAttentionHF3D(Attention):
         use_cache: Optional[bool] = False,
         **kwargs: Unpack[Dict]
     ):
+        # Note that q, k, v here maybe includes both text and vision tokens.
+        # we assume q, k, v is of shape [B, L, D]
 
-        return sta_3d_func(
+        return sta_3d_with_text_func(
             q=q,
             k=k,
             v=v,
@@ -264,6 +267,7 @@ class SlidingTileCrossAttentionHF3D(Attention):
             tile_size_h=self.tile_size_h,
             tile_size_w=self.tile_size_w,
             block_mask=self.block_mask,
+            text_seq_len=self.text_seq_len,
             num_heads=self.heads,
             num_kv_heads= self.heads, # TODO: support different kv heads in the future
         )
