@@ -201,7 +201,7 @@ class DeltaNetCrossAttentionHF(Attention):
 
             
     
-class STA3DCrossAttentionHF(Attention):
+class SlidingTileCrossAttentionHF3D(Attention):
     """
     A simplified STA3D layer handling cross attention API compatable with HuggingFace's Diffusers library.
     """

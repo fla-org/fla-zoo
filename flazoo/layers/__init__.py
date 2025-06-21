@@ -12,7 +12,7 @@ from .attentions import get_attn, get_fla_attn
 
 from .cross_attentions import (
     DeltaNetCrossAttentionHF,
-    STA3DCrossAttentionHF,
+    SlidingTileCrossAttentionHF3D,
 )
 
 __all__ = [
@@ -23,5 +23,5 @@ __all__ = [
     "get_attn",
     "get_fla_attn",
     "DeltaNetCrossAttentionHF",
-    "STA3DCrossAttentionHF",
+    "SlidingTileCrossAttentionHF3D",
 ]
