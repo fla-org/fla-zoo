@@ -19,7 +19,7 @@ from transformers.modeling_outputs import (
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
-from flazoo.models.attentions import get_attn
+from flazoo.layers.attentions import get_attn
 from fla.layers.rwkv6 import LerpLinear, RWKV6Attention
 from .configuration_rwkv6 import RWKV6VisionConfig
 from fla.models.utils import Cache

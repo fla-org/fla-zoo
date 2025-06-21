@@ -8,11 +8,11 @@ import numpy as np
 from transformers.modeling_outputs import BaseModelOutput
 from transformers.modeling_utils import PreTrainedModel
 from fla.layers.delta_net import DeltaNet
-from flazoo.models.attentions import FullAttention
+from flazoo.layers.attentions import FullAttention
 from ..utils import get_2d_sincos_pos_embed, modulate
 from ..embeddings import Gen2DTimestepEmbedder
 from fla.modules.layernorm import rms_norm_linear, LayerNorm
-from flazoo.models.attentions import get_attn
+from flazoo.layers.attentions import get_attn
 from ..embeddings import Gen2DLabelEmbedder
 from timm.layers import PatchEmbed as Gen2DPatchEmbed
 from flazoo.models.utils import (

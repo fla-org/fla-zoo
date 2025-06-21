@@ -20,7 +20,7 @@ from transformers.modeling_outputs import (
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
-from flazoo.models.attentions import get_attn
+from flazoo.layers.attentions import get_attn
 from fla.layers.linear_attn import LinearAttention
 from .configuration_linear_attn import LinearAttentionVisionConfig
 from fla.models.utils import Cache

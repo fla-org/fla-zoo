@@ -17,7 +17,7 @@ from transformers.modeling_outputs import (
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
-from flazoo.models.attentions import get_attn
+from flazoo.layers.attentions import get_attn
 from .configs import FLAVisionConfig, FLAVideoConfig
 from fla.models.utils import Cache
 from fla.modules import FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss, RMSNorm
@@ -39,7 +39,7 @@ from flazoo.models.und.utils import (
 from copy import deepcopy
 from flazoo.models.scan import LearnableScan
 from flazoo.models.utils import compress_seq, decompress_seq
-from flazoo.models.attentions import get_fla_attn
+from flazoo.layers.attentions import get_fla_attn
 logger = logging.get_logger(__name__)
 
 

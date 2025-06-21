@@ -20,7 +20,7 @@ from transformers.modeling_outputs import (
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 from fla.layers.gated_deltaproduct import GatedDeltaProduct
-from flazoo.models.attentions import get_attn
+from flazoo.layers.attentions import get_attn
 from .configuration_gated_deltaproduct import GatedDeltaProductVisionConfig, GatedDeltaProductVideoConfig
 from fla.models.utils import Cache
 from fla.modules import FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss, RMSNorm

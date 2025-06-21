@@ -20,7 +20,7 @@ from transformers.modeling_outputs import (
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
-from flazoo.models.attentions import get_attn
+from flazoo.layers.attentions import get_attn
 from fla.layers.hgrn2 import HGRN2Attention
 from .configuration_hgrn2 import HGRN2VisionConfig
 from fla.models.utils import Cache

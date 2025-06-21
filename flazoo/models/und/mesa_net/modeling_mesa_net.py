@@ -20,7 +20,7 @@ from transformers.modeling_outputs import (
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 from fla.layers.mesa_net import MesaNet
-from flazoo.models.attentions import get_attn
+from flazoo.layers.attentions import get_attn
 from .configuration_mesa_net import MesaNetVisionConfig, MesaNetVideoConfig
 from fla.models.utils import Cache
 from fla.modules import FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss, RMSNorm

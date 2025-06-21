@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import torch
-from torch import IntTensor, BoolTensor
 import warnings
 import torch.nn as nn
 from einops import rearrange
 from typing import Optional, Tuple, Union
 import math
-from torch.nn.attention.flex_attention import _mask_mod_signature
 from fla.modules import RotaryEmbedding
 
 try:
@@ -20,7 +18,6 @@ except ImportError:
     moba_attn_varlen = None
 try:
     from flash_attn import flash_attn_func, flash_attn_varlen_func
-    from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input
 except ImportError:
     warnings.warn(
         "Flash Attention is not installed. Please install it via `pip install flash-attn --no-build-isolation`",
@@ -37,10 +34,9 @@ except ImportError:
     )
     na2d = None
 try:
-    from native_sparse_attention.ops.parallel import (
+    from native_sparse_attention.ops.parallel import ( 
         parallel_nsa,
-        parallel_nsa_compression,
-    )
+    ) 
 except ImportError:
     warnings.warn(
         "Native Sparse Attention is not installed. Please check the package installation.",
@@ -49,7 +45,7 @@ except ImportError:
     parallel_nsa = None
     parallel_nsa_compression = None
 
-from .utils import _calc_chunks
+from ..models.utils import _calc_chunks
 
 try:
     from torch.nn.attention.flex_attention import flex_attention
@@ -64,6 +60,7 @@ except ImportError:
     flex_attention = None
 
 from .lact import BidirectionalLaCTSwiGLU
+from ..ops import generate_sta_mask_2d, generate_sta_mask_3d, sta_2d_func, sta_3d_func
 
 WINDOW_SIZE_1D = 256
 
@@ -123,198 +120,6 @@ def sliding_window_1d(b, h, q_idx, kv_idx):
     return (q_idx - kv_idx <= (WINDOW_SIZE_1D // 2)) & (
         q_idx - kv_idx >= -(WINDOW_SIZE_1D // 2)
     )
-
-
-def generate_sta_mask_2d(
-    canvas_hw: Tuple[int, int],
-    kernel_hw: Tuple[int, int],
-    tile_hw: Tuple[int, int],
-    text_seq_len: int = 0,
-) -> _mask_mod_signature:
-    """Generates a 2D STA mask with a given kernel size.
-
-    Args:
-        canvas_hw (Tuple[int, int]): The shape of the canvas (height, width).
-        kernel_hw (Tuple[int, int]): The shape of the kernel (height, width).
-        tile_hw (Tuple[int, int]): The shape of the tile (height, width).
-        text_seq_len (int): The length of the text sequence for masking.
-    """
-    canvas_h, canvas_w = canvas_hw
-    kernel_h, kernel_w = kernel_hw
-    tile_h, tile_w = tile_hw
-    tile_numel = tile_h * tile_w
-    assert canvas_h % tile_h == 0, (
-        f"Canvas height {canvas_h} is not divisible by tile height {tile_h}"
-    )
-    assert canvas_w % tile_w == 0, (
-        f"Canvas width {canvas_w} is not divisible by tile width {tile_w}"
-    )
-    assert kernel_h % tile_h == 0, (
-        f"Kernel height {kernel_h} is not divisible by tile height {tile_h}"
-    )
-    assert kernel_w % tile_w == 0, (
-        f"Kernel width {kernel_w} is not divisible by tile width {tile_w}"
-    )
-    canvas_tile_h, canvas_tile_w = canvas_h // tile_h, canvas_w // tile_w
-    kernel_tile_h, kernel_tile_w = kernel_h // tile_h, kernel_w // tile_w
-    vision_seq_len = canvas_h * canvas_w
-
-    def get_h_w_idx_tiled(idx: IntTensor) -> Tuple[IntTensor, IntTensor]:
-        tile_id = idx // tile_numel
-        tile_h_idx = tile_id // canvas_tile_w
-        tile_w_idx = tile_id % canvas_tile_w
-        return tile_h_idx, tile_w_idx
-
-    def get_border(kernel_size: IntTensor) -> Tuple[IntTensor, IntTensor]:
-        left_border = kernel_size // 2
-        right_border = kernel_size // 2 + (kernel_size % 2 - 1)
-        return left_border, right_border
-
-    def sta_mask_mod_2d(
-        b: IntTensor,
-        h: IntTensor,
-        q_idx: IntTensor,
-        kv_idx: IntTensor,
-    ) -> BoolTensor:
-        q_tile_h, q_tile_w = get_h_w_idx_tiled(q_idx)
-        kv_tile_h, kv_tile_w = get_h_w_idx_tiled(kv_idx)
-        left_border_h, right_border_h = get_border(kernel_tile_h)
-        left_border_w, right_border_w = get_border(kernel_tile_w)
-        kernel_center_h = q_tile_h.clamp(
-            left_border_h, (canvas_tile_h - 1) - right_border_h
-        )
-        kernel_center_w = q_tile_w.clamp(
-            left_border_w, (canvas_tile_w - 1) - right_border_w
-        )
-        h_mask = (kv_tile_h >= kernel_center_h - left_border_h) & (
-            kv_tile_h <= kernel_center_h + right_border_h
-        )
-        w_mask = (kv_tile_w >= kernel_center_w - left_border_w) & (
-            kv_tile_w <= kernel_center_w + right_border_w
-        )
-        vision_mask = (q_idx < vision_seq_len) & (kv_idx < vision_seq_len)
-        vision_to_text_mask = (
-            (q_idx < vision_seq_len)
-            & (kv_idx >= vision_seq_len)
-            & (kv_idx < vision_seq_len + text_seq_len)
-        )
-        text_to_all_mask = (q_idx >= vision_seq_len) & (
-            kv_idx < vision_seq_len + text_seq_len
-        )
-        return (vision_mask & h_mask & w_mask) | vision_to_text_mask | text_to_all_mask
-
-    sta_mask_mod_2d.__name__ = (
-        f"sta_2d_c{canvas_h}x{canvas_w}_k{kernel_h}x{kernel_w}_t{tile_h}x{tile_w}"
-    )
-    return sta_mask_mod_2d
-
-
-def generate_sta_mask_3d(
-    canvas_twh: Tuple[int, int, int],
-    kernel_twh: Tuple[int, int, int],
-    tile_twh: Tuple[int, int, int],
-    text_seq_len: int = 0,
-) -> _mask_mod_signature:
-    """Generates a 3D STA mask with a given kernel size.
-
-    Args:
-        canvas_twh (Tuple[int, int, int]): The shape of the canvas (time, height, width).
-        kernel_twh (Tuple[int, int, int]): The shape of the kernel (time, height, width).
-        tile_twh (Tuple[int, int, int]): The shape of the tile (time, height, width).
-        text_seq_len (int): The length of the text sequence for masking.
-    """
-    canvas_t, canvas_h, canvas_w = canvas_twh
-    kernel_t, kernel_h, kernel_w = kernel_twh
-    tile_t, tile_h, tile_w = tile_twh
-    tile_numel = tile_t * tile_h * tile_w
-    assert canvas_t % tile_t == 0, (
-        f"Canvas time {canvas_t} is not divisible by tile time {tile_t}"
-    )
-    assert canvas_h % tile_h == 0, (
-        f"Canvas height {canvas_h} is not divisible by tile height {tile_h}"
-    )
-    assert canvas_w % tile_w == 0, (
-        f"Canvas width {canvas_w} is not divisible by tile width {tile_w}"
-    )
-    assert kernel_t % tile_t == 0, (
-        f"Kernel time {kernel_t} is not divisible by tile time {tile_t}"
-    )
-    assert kernel_h % tile_h == 0, (
-        f"Kernel height {kernel_h} is not divisible by tile height {tile_h}"
-    )
-    assert kernel_w % tile_w == 0, (
-        f"Kernel width {kernel_w} is not divisible by tile width {tile_w}"
-    )
-    canvas_tile_t, canvas_tile_h, canvas_tile_w = (
-        canvas_t // tile_t,
-        canvas_h // tile_h,
-        canvas_w // tile_w,
-    )
-    kernel_tile_t, kernel_tile_h, kernel_tile_w = (
-        kernel_t // tile_t,
-        kernel_h // tile_h,
-        kernel_w // tile_w,
-    )
-    vision_seq_len = canvas_t * canvas_h * canvas_w
-
-    def get_t_h_w_idx_tiled(idx: IntTensor) -> Tuple[IntTensor, IntTensor, IntTensor]:
-        tile_id = idx // tile_numel
-        tile_t_idx = tile_id // (canvas_tile_h * canvas_tile_w)
-        tile_h_idx = (tile_id % (canvas_tile_h * canvas_tile_w)) // canvas_tile_w
-        tile_w_idx = tile_id % canvas_tile_w
-        return tile_t_idx, tile_h_idx, tile_w_idx
-
-    def get_border(kernel_size: IntTensor) -> Tuple[IntTensor, IntTensor]:
-        left_border = kernel_size // 2
-        right_border = kernel_size // 2 + (kernel_size % 2 - 1)
-        return left_border, right_border
-
-    def sta_mask_mod_3d(
-        b: IntTensor,
-        h: IntTensor,
-        q_idx: IntTensor,
-        kv_idx: IntTensor,
-    ) -> BoolTensor:
-        q_tile_t, q_tile_h, q_tile_w = get_t_h_w_idx_tiled(q_idx)
-        kv_tile_t, kv_tile_h, kv_tile_w = get_t_h_w_idx_tiled(kv_idx)
-        left_border_t, right_border_t = get_border(kernel_tile_t)
-        left_border_h, right_border_h = get_border(kernel_tile_h)
-        left_border_w, right_border_w = get_border(kernel_tile_w)
-        kernel_center_t = q_tile_t.clamp(
-            left_border_t, (canvas_tile_t - 1) - right_border_t
-        )
-        kernel_center_h = q_tile_h.clamp(
-            left_border_h, (canvas_tile_h - 1) - right_border_h
-        )
-        kernel_center_w = q_tile_w.clamp(
-            left_border_w, (canvas_tile_w - 1) - right_border_w
-        )
-        t_mask = (kv_tile_t >= kernel_center_t - left_border_t) & (
-            kv_tile_t <= kernel_center_t + right_border_t
-        )
-        h_mask = (kv_tile_h >= kernel_center_h - left_border_h) & (
-            kv_tile_h <= kernel_center_h + right_border_h
-        )
-        w_mask = (kv_tile_w >= kernel_center_w - left_border_w) & (
-            kv_tile_w <= kernel_center_w + right_border_w
-        )
-        vision_mask = (q_idx < vision_seq_len) & (kv_idx < vision_seq_len)
-        vision_to_text_mask = (
-            (q_idx < vision_seq_len)
-            & (kv_idx >= vision_seq_len)
-            & (kv_idx < vision_seq_len + text_seq_len)
-        )
-        text_to_all_mask = (q_idx >= vision_seq_len) & (
-            kv_idx < vision_seq_len + text_seq_len
-        )
-        return (
-            (vision_mask & t_mask & w_mask & h_mask)
-            | vision_to_text_mask
-            | text_to_all_mask
-        )
-
-    sta_mask_mod_3d.__name__ = f"sta_3d_c{canvas_t}x{canvas_h}x{canvas_w}_k{kernel_t}x{kernel_h}x{kernel_w}_t{tile_t}x{tile_h}x{tile_w}"
-    return sta_mask_mod_3d
 
 
 """
@@ -1086,20 +891,12 @@ class SlidingTileAttention2D(nn.Module):
             self.num_heads * self.head_dim, self.hidden_size, bias=False
         )
 
-        # Create block mask for 2D sliding tile attention
-        sta2d_mask = generate_sta_mask_2d(
+        self.block_mask = generate_sta_mask_2d(
             canvas_hw=(self.h_dim, self.w_dim),
             kernel_hw=(self.window_size_h, self.window_size_w),
             tile_hw=(self.tile_size_h, self.tile_size_w),
-        )
-
-        self.block_mask = create_block_mask(
-            mask_mod=sta2d_mask,
-            B=None,
-            H=None,
-            Q_LEN=self.seq_len,
-            KV_LEN=self.seq_len,
-            device="cuda",
+            total_seq_len= self.seq_len,
+            is_training=self.training,
         )
 
     def forward(
@@ -1122,56 +919,23 @@ class SlidingTileAttention2D(nn.Module):
         if self.norm_first:
             hidden_states = self.norm(hidden_states)
 
-        q = rearrange(
-            self.q_proj(hidden_states),
-            "b (nth th ntw tw) (h d) -> b h (nth ntw th tw) d",
-            h=self.num_heads,
-            nth=h_dim // self.tile_size_h,
-            ntw=w_dim // self.tile_size_w,
-            th=self.tile_size_h,
-            tw=self.tile_size_w,
-        )
+        q = self.q_proj(hidden_states)
 
-        k = rearrange(
-            self.k_proj(hidden_states),
-            "b (nth th ntw tw) (h d) -> b h (nth ntw th tw) d",
-            h=self.num_kv_heads,
-            nth=h_dim // self.tile_size_h,
-            ntw=w_dim // self.tile_size_w,
-            th=self.tile_size_h,
-            tw=self.tile_size_w,
-        )
+        k = self.k_proj(hidden_states)
 
-        v = rearrange(
-            self.v_proj(hidden_states),
-            "b (nth th ntw tw) (h d) -> b h (nth ntw th tw) d",
-            h=self.num_kv_heads,
-            nth=h_dim // self.tile_size_h,
-            ntw=w_dim // self.tile_size_w,
-            th=self.tile_size_h,
-            tw=self.tile_size_w,
-        )
+        v = self.v_proj(hidden_states)
 
-        if flex_attention is None:
-            raise ImportError(
-                "Please install Flex Attention via `pip install torch` first"
-            )
-
-        o = flex_attention(
-            q,
-            k,
-            v,
+        o = sta_2d_func(
+            q=q,
+            k=k,
+            v=v,
+            h_dim=h_dim,
+            w_dim=w_dim,
+            tile_size_h=self.tile_size_h,
+            tile_size_w=self.tile_size_w,
             block_mask=self.block_mask,
-        )
-
-        o = rearrange(
-            o,
-            "b h (nth ntw th tw) d -> b (nth th ntw tw) (h d)",
-            h=self.num_heads,
-            nth=h_dim // self.tile_size_h,
-            ntw=w_dim // self.tile_size_w,
-            th=self.tile_size_h,
-            tw=self.tile_size_w,
+            num_heads=self.num_heads,
+            num_kv_heads=self.num_kv_heads,
         )
 
         o = self.o_proj(o)
@@ -1289,19 +1053,12 @@ class SlidingTileAttention3D(nn.Module):
             self.num_heads * self.head_dim, self.hidden_size, bias=False
         )
 
-        sta3d_mask = generate_sta_mask_3d(
-            canvas_twh=(self.t_dim, self.h_dim, self.w_dim),
-            kernel_twh=(self.window_size_t, self.window_size_h, self.window_size_w),
-            tile_twh=(self.tile_size_t, self.tile_size_h, self.tile_size_w),
-        )
-
-        self.block_mask = create_block_mask(
-            mask_mod=sta3d_mask,
-            B=None,
-            H=None,
-            Q_LEN=self.seq_len,
-            KV_LEN=self.seq_len,
-            device="cuda",
+        self.block_mask = generate_sta_mask_3d(
+            canvas_thw=(self.t_dim, self.h_dim, self.w_dim),
+            kernel_thw=(self.window_size_t, self.window_size_h, self.window_size_w),
+            tile_thw=(self.tile_size_t, self.tile_size_h, self.tile_size_w),    
+            total_seq_len=self.seq_len,
+            is_training=self.training,
         )
 
     def forward(
@@ -1326,64 +1083,23 @@ class SlidingTileAttention3D(nn.Module):
         if self.norm_first:
             hidden_states = self.norm(hidden_states)
 
-        q = rearrange(
-            self.q_proj(hidden_states),
-            "b (ntt tt nth th ntw tw) (h d) -> b h (ntt nth ntw tt th tw) d",
-            h=self.num_heads,
-            ntt=t_dim // self.tile_size_t,
-            ntw=w_dim // self.tile_size_w,
-            nth=h_dim // self.tile_size_h,
-            tt=self.tile_size_t,
-            tw=self.tile_size_w,
-            th=self.tile_size_h,
-        )
+        q = self.q_proj(hidden_states)
+        k = self.k_proj(hidden_states)
+        v = self.v_proj(hidden_states)
 
-        k = rearrange(
-            self.k_proj(hidden_states),
-            "b (ntt tt nth th ntw tw) (h d) -> b h (ntt nth ntw tt th tw) d",
-            h=self.num_kv_heads,
-            ntt=t_dim // self.tile_size_t,
-            ntw=w_dim // self.tile_size_w,
-            nth=h_dim // self.tile_size_h,
-            tt=self.tile_size_t,
-            tw=self.tile_size_w,
-            th=self.tile_size_h,
-        )
-
-        v = rearrange(
-            self.v_proj(hidden_states),
-            "b (ntt tt nth th ntw tw) (h d) -> b h (ntt nth ntw tt th tw) d",
-            h=self.num_kv_heads,
-            ntt=t_dim // self.tile_size_t,
-            ntw=w_dim // self.tile_size_w,
-            nth=h_dim // self.tile_size_h,
-            tt=self.tile_size_t,
-            tw=self.tile_size_w,
-            th=self.tile_size_h,
-        )
-
-        if flex_attention is None:
-            raise ImportError(
-                "Please install Flex Attention via `pip install torch` first"
-            )
-
-        o = flex_attention(
-            q,
-            k,
-            v,
+        o = sta_3d_func(
+            q=q,
+            k=k,
+            v=v,
+            t_dim=t_dim,
+            h_dim=h_dim,
+            w_dim=w_dim,
+            tile_size_t=self.tile_size_t,
+            tile_size_h=self.tile_size_h,
+            tile_size_w=self.tile_size_w,
             block_mask=self.block_mask,
-        )
-
-        o = rearrange(
-            o,
-            "b h (ntt nth ntw tt th tw) d -> b (ntt tt nth th ntw tw) (h d)",
-            h=self.num_heads,
-            ntt=t_dim // self.tile_size_t,
-            ntw=w_dim // self.tile_size_w,
-            nth=h_dim // self.tile_size_h,
-            tt=self.tile_size_t,
-            tw=self.tile_size_w,
-            th=self.tile_size_h,
+            num_heads=self.num_heads,
+            num_kv_heads=self.num_kv_heads,
         )
 
         o = self.o_proj(o)

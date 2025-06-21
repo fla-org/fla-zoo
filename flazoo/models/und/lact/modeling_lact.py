@@ -20,13 +20,13 @@ from transformers.modeling_outputs import (
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 
-from flazoo.models.attentions import get_attn
+from flazoo.layers.attentions import get_attn
 from .configuration_lact import LaCTVisionConfig, LaCTVideoConfig
 from fla.models.utils import Cache
 from fla.modules import FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss, RMSNorm
 from fla.modules.activations import swiglu_linear
 from fla.modules import GatedMLP as LaCTSwiGLU
-from flazoo.models.lact import BidirectionalLaCTSwiGLU
+from flazoo.layers.lact import BidirectionalLaCTSwiGLU
 from fla.modules.layernorm import rms_norm_linear, LayerNorm
 from flazoo.models.utils import (
     prepare_hidden_states_for_scan,

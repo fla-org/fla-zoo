@@ -19,8 +19,8 @@ from transformers.modeling_outputs import (
 )
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
-from flazoo.models.attentions import FullAttention
-from flazoo.models.attentions import NativeSparseAttention
+from flazoo.layers.attentions import FullAttention
+from flazoo.layers.attentions import NativeSparseAttention
 from .configuration_transformer import TransformerVisionConfig
 from fla.models.utils import Cache
 from fla.modules import FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss, RMSNorm
