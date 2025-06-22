@@ -399,6 +399,7 @@ class ENAWanTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, FromOr
         inner_dim = num_attention_heads * attention_head_dim
         out_channels = out_channels or in_channels
 
+
         # 1. Patch & position embedding
         self.rope = ENAWanRotaryPosEmbed(attention_head_dim, patch_size, rope_max_seq_len)
         self.patch_embedding = nn.Conv3d(in_channels, inner_dim, kernel_size=patch_size, stride=patch_size)
