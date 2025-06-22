@@ -39,7 +39,7 @@ class DeltaNetCrossAttentionHF(Attention):
         
         self.layer_idx = layer_idx
 
-        device = self.to_q.device
+        device = self.to_q.weight.device
         
         # some specific parameters for the DeltaNet layer
         self.train_scan_type = fla_config.get('train_scan_type', 'uni-scan')
