@@ -207,6 +207,8 @@ class DeltaNetCrossAttentionHF(Attention):
             o = self.o_norm(o)
         o = rearrange(o, 'b t h d -> b t (h d)')
 
+        return o
+
             
     
 class SlidingTileCrossAttentionHF3D(Attention):
