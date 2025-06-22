@@ -52,7 +52,7 @@ class DeltaNetCrossAttentionHF(Attention):
         self.use_gate = getattr(fla_config, 'use_gate', False)
         self.norm_eps = getattr(fla_config, 'norm_eps', 1e-6)
         self.allow_neg_eigval = getattr(fla_config, 'allow_neg_eigval', False)
-    
+        self.head_v_dim = self.query_dim // self.heads
         
         if self.use_beta:
             self.b_proj = nn.Linear(self.query_dim, self.heads, bias=False)
