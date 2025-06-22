@@ -40,18 +40,18 @@ class DeltaNetCrossAttentionHF(Attention):
         self.layer_idx = layer_idx
         
         # some specific parameters for the DeltaNet layer
-        self.train_scan_type = getattr(fla_config, 'train_scan_type', 'uni-scan')
-        self.test_scan_type = getattr(fla_config, 'test_scan_type', 'uni-scan')
-        self.mode = getattr(fla_config, 'mode', 'chunk')
-        self.use_beta = getattr(fla_config, 'use_beta', True)
-        self.use_short_conv = getattr(fla_config, 'use_short_conv', True)
-        self.conv_size = getattr(fla_config, 'conv_size', 4)
-        self.conv_bias = getattr(fla_config, 'conv_bias', False)
-        self.qk_activation = getattr(fla_config, 'qk_activation', 'silu')
-        self.qk_norm = getattr(fla_config, 'qk_norm', 'l2')
-        self.use_gate = getattr(fla_config, 'use_gate', False)
-        self.norm_eps = getattr(fla_config, 'norm_eps', 1e-6)
-        self.allow_neg_eigval = getattr(fla_config, 'allow_neg_eigval', False)
+        self.train_scan_type = fla_config.get('train_scan_type', 'uni-scan')
+        self.test_scan_type = fla_config.get('test_scan_type', 'uni-scan')
+        self.mode = fla_config.get('mode', 'chunk')
+        self.use_beta = fla_config.get('use_beta', True)
+        self.use_short_conv = fla_config.get('use_short_conv', True)
+        self.conv_size = fla_config.get('conv_size', 4)
+        self.conv_bias = fla_config.get('conv_bias', False)
+        self.qk_activation = fla_config.get('qk_activation', 'silu')
+        self.qk_norm = fla_config.get('qk_norm', 'l2')
+        self.use_gate = fla_config.get('use_gate', False)
+        self.norm_eps = fla_config.get('norm_eps', 1e-6)
+        self.allow_neg_eigval = fla_config.get('allow_neg_eigval', False)
         self.head_v_dim = self.query_dim // self.heads
         
         if self.use_beta:
@@ -219,16 +219,16 @@ class SlidingTileCrossAttentionHF3D(Attention):
         attn_config = fla_config["attn"]
 
         self.layer_idx = layer_idx
-        self.window_size_t = getattr(attn_config, 'window_size_t', 24)
-        self.window_size_h = getattr(attn_config, 'window_size_h', 24)
-        self.window_size_w = getattr(attn_config, 'window_size_w', 24)
-        self.tile_size_t = getattr(attn_config, 'tile_size_t', 8)
-        self.tile_size_h = getattr(attn_config, 'tile_size_h', 8)
-        self.tile_size_w = getattr(attn_config, 'tile_size_w', 8)
-        self.t_dim = getattr(attn_config, 't_dim', 32)
-        self.h_dim = getattr(attn_config, 'h_dim', 32)
-        self.w_dim = getattr(attn_config, 'w_dim', 32)
-        self.text_seq_len = getattr(attn_config, 'text_seq_len', 512)
+        self.window_size_t = attn_config.get('window_size_t', 24)
+        self.window_size_h = attn_config.get('window_size_h', 24)
+        self.window_size_w = attn_config.get('window_size_w', 24)
+        self.tile_size_t = attn_config.get('tile_size_t', 8)
+        self.tile_size_h = attn_config.get('tile_size_h', 8)
+        self.tile_size_w = attn_config.get('tile_size_w', 8)
+        self.t_dim = attn_config.get('t_dim', 32)
+        self.h_dim = attn_config.get('h_dim', 32)
+        self.w_dim = attn_config.get('w_dim', 32)
+        self.text_seq_len = attn_config.get('text_seq_len', 512)
 
         self.vision_seq_len = self.t_dim * self.h_dim * self.w_dim
 
