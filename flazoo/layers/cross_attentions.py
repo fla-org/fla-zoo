@@ -215,8 +215,8 @@ class SlidingTileCrossAttentionHF3D(Attention):
     ):
         super().__init__(*args, **kwargs)
         
-        assert fla_config.attn is not None, "fla_config.attn must be provided for STA3DCrossAttentionHF."
-        attn_config = fla_config.attn
+        assert fla_config["attn"] is not None, "fla_config.attn must be provided for STA3DCrossAttentionHF."
+        attn_config = fla_config["attn"]
 
         self.layer_idx = layer_idx
         self.window_size_t = getattr(attn_config, 'window_size_t', 24)
