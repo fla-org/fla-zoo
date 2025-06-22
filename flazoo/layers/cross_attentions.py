@@ -16,7 +16,7 @@ from flazoo.ops import (
     generate_sta_mask_3d,
     sta_3d_with_text_func
 )
-import logging
+import warnings
 
 def elu_p1(x):
     return (F.elu(x, 1., False) + 1.).to(x)
@@ -237,7 +237,10 @@ class SlidingTileCrossAttentionHF3D(Attention):
         import os
 
         compile = os.environ.get('COMPILE_BLOCK_MASK', 'False').lower() in ('true', '1', 'yes')
-        logging.info(f"compile set to {compile} for block mask generation")
+        warnings.warn(
+            f"Using compile={compile} for block mask generation. "
+            "Set COMPILE_BLOCK_MASK environment variable to 'True' to enable compilation."
+        )
 
         self.block_mask = generate_sta_mask_3d(
             canvas_thw=(self.t_dim, self.h_dim, self.w_dim),

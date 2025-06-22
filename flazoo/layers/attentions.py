@@ -894,7 +894,10 @@ class SlidingTileAttention2D(nn.Module):
         import os
 
         compile = os.environ.get('COMPILE_BLOCK_MASK', 'False').lower() in ('true', '1', 'yes')
-        logging.info(f"compile set to {compile} for block mask generation")
+        warnings.warn(
+            f"Using compile={compile} for block mask generation. "
+            "Set COMPILE_BLOCK_MASK environment variable to 'True' to enable compilation."
+        )
 
         self.block_mask = generate_sta_mask_2d(
             canvas_hw=(self.h_dim, self.w_dim),
@@ -1061,7 +1064,10 @@ class SlidingTileAttention3D(nn.Module):
         import os
 
         compile = os.environ.get('COMPILE_BLOCK_MASK', 'False').lower() in ('true', '1', 'yes')
-        logging.info(f"compile set to {compile} for block mask generation")
+        warnings.warn(
+            f"Using compile={compile} for block mask generation. "
+            "Set COMPILE_BLOCK_MASK environment variable to 'True' to enable compilation."
+        )
 
         self.block_mask = generate_sta_mask_3d(
             canvas_thw=(self.t_dim, self.h_dim, self.w_dim),
