@@ -273,6 +273,10 @@ class SlidingTileCrossAttentionHF3D(Attention):
     ):
         # Note that q, k, v here maybe includes both text and vision tokens.
         # we assume q, k, v is of shape [B, L, D]
+        auto_dtype = hidden_states.dtype
+        q = q.to(auto_dtype)
+        k = k.to(auto_dtype)
+        v = v.to(auto_dtype)
 
         return sta_3d_with_text_func(
             q=q,
