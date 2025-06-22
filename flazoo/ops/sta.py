@@ -6,6 +6,7 @@ from einops import rearrange
 from typing import Tuple
 from torch import IntTensor, BoolTensor
 
+flex_attention = torch.compile(flex_attention)
 
 def generate_sta_mask_mod_2d(
     canvas_hw: Tuple[int, int],
