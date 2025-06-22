@@ -104,6 +104,7 @@ class DeltaNetCrossAttentionHF(Attention):
             )
 
         batch_size, q_len, _ = q.shape
+        auto_dtype = hidden_states.dtype
 
         last_state = None
 
@@ -158,6 +159,12 @@ class DeltaNetCrossAttentionHF(Attention):
 
         if self.allow_neg_eigval:
             beta = beta * 2.
+        
+        # cast all tensors to the same dtype
+        q = q.to(auto_dtype)
+        k = k.to(auto_dtype)
+        v = v.to(auto_dtype)
+        beta = beta.to(auto_dtype)
 
         recurrent_state = last_state['recurrent_state'] if last_state is not None else None
         if mode == 'fused_recurrent':
