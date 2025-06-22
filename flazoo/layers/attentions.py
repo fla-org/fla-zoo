@@ -891,12 +891,17 @@ class SlidingTileAttention2D(nn.Module):
             self.num_heads * self.head_dim, self.hidden_size, bias=False
         )
 
+        import os
+
+        compile = os.environ.get('COMPILE_BLOCK_MASK', 'False').lower() in ('true', '1', 'yes')
+        logging.info(f"compile set to {compile} for block mask generation")
+
         self.block_mask = generate_sta_mask_2d(
             canvas_hw=(self.h_dim, self.w_dim),
             kernel_hw=(self.window_size_h, self.window_size_w),
             tile_hw=(self.tile_size_h, self.tile_size_w),
             total_seq_len= self.seq_len,
-            is_training=self.training,
+            compile=compile,
         )
 
     def forward(
@@ -1053,12 +1058,17 @@ class SlidingTileAttention3D(nn.Module):
             self.num_heads * self.head_dim, self.hidden_size, bias=False
         )
 
+        import os
+
+        compile = os.environ.get('COMPILE_BLOCK_MASK', 'False').lower() in ('true', '1', 'yes')
+        logging.info(f"compile set to {compile} for block mask generation")
+
         self.block_mask = generate_sta_mask_3d(
             canvas_thw=(self.t_dim, self.h_dim, self.w_dim),
             kernel_thw=(self.window_size_t, self.window_size_h, self.window_size_w),
             tile_thw=(self.tile_size_t, self.tile_size_h, self.tile_size_w),    
             total_seq_len=self.seq_len,
-            is_training=self.training,
+            compile=compile,
         )
 
     def forward(
