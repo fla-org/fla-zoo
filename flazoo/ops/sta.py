@@ -204,7 +204,7 @@ def generate_sta_mask_2d(
     tile_hw: Tuple[int, int],
     text_seq_len: int = 0,
     total_seq_len: int = None,
-    is_training: bool = True,
+    compile: bool = False,
 
 ) -> BlockMask:
     
@@ -225,7 +225,7 @@ def generate_sta_mask_2d(
         Q_LEN=total_seq_len,
         KV_LEN=total_seq_len,
         device="cuda" if torch.cuda.is_available() else "cpu",
-        _compile=is_training
+        _compile=compile
     )
 
     return block_mask
@@ -236,7 +236,7 @@ def generate_sta_mask_3d(
     tile_thw: Tuple[int, int, int],
     text_seq_len: int = 0,
     total_seq_len: int = None,
-    is_training: bool = True,
+    compile: bool = False,
 ) -> BlockMask:
     
     if total_seq_len is None:
@@ -256,7 +256,7 @@ def generate_sta_mask_3d(
         Q_LEN=total_seq_len,
         KV_LEN=total_seq_len,
         device="cuda" if torch.cuda.is_available() else "cpu",
-        _compile=is_training
+        _compile=compile
     )
 
     return block_mask
