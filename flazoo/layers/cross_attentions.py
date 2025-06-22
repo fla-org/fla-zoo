@@ -104,7 +104,7 @@ class DeltaNetCrossAttentionHF(Attention):
             )
 
         batch_size, q_len, _ = q.shape
-        auto_dtype = hidden_states.dtype
+        auto_dtype = hidden_states.dtype if hidden_states.dtype != torch.float32 else torch.bfloat16
 
         last_state = None
 
@@ -273,7 +273,7 @@ class SlidingTileCrossAttentionHF3D(Attention):
     ):
         # Note that q, k, v here maybe includes both text and vision tokens.
         # we assume q, k, v is of shape [B, L, D]
-        auto_dtype = hidden_states.dtype
+        auto_dtype = hidden_states.dtype if hidden_states.dtype != torch.float32 else torch.bfloat16
         q = q.to(auto_dtype)
         k = k.to(auto_dtype)
         v = v.to(auto_dtype)
