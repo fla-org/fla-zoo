@@ -38,8 +38,6 @@ class DeltaNetCrossAttentionHF(Attention):
         super().__init__(*args, **kwargs)
         
         self.layer_idx = layer_idx
-
-        device = self.to_q.weight.device
         
         # some specific parameters for the DeltaNet layer
         self.train_scan_type = fla_config.get('train_scan_type', 'uni-scan')
@@ -57,14 +55,13 @@ class DeltaNetCrossAttentionHF(Attention):
         self.head_v_dim = self.query_dim // self.heads
         
         if self.use_beta:
-            self.b_proj = nn.Linear(self.query_dim, self.heads, bias=False, device=device,)
+            self.b_proj = nn.Linear(self.query_dim, self.heads, bias=False)
         
         if self.use_short_conv:
             self.q_conv1d = ShortConvolution(
                 hidden_size=self.inner_dim,
                 kernel_size=self.conv_size,
                 bias=self.conv_bias,
-                device=device,
                 activation='silu' if self.qk_activation == 'silu' else None
             )
             
@@ -72,7 +69,6 @@ class DeltaNetCrossAttentionHF(Attention):
                 hidden_size=self.inner_dim,
                 kernel_size=self.conv_size,
                 bias=self.conv_bias,
-                device=device,
                 activation='silu' if self.qk_activation == 'silu' else None
             )
             
@@ -80,15 +76,14 @@ class DeltaNetCrossAttentionHF(Attention):
                 hidden_size=self.inner_dim,
                 kernel_size=self.conv_size,
                 bias=self.conv_bias,
-                device=device,
                 activation='silu'
             )
         
         if self.use_gate:
-            self.g_proj = nn.Linear(self.query_dim, self.cross_attention_dim, bias=False, device=device)
-            self.o_norm = FusedRMSNormGated(self.head_v_dim, eps=self.norm_eps, device=device)
+            self.g_proj = nn.Linear(self.query_dim, self.cross_attention_dim, bias=False)
+            self.o_norm = FusedRMSNormGated(self.head_v_dim, eps=self.norm_eps)
         else:
-            self.o_norm = RMSNorm(self.head_v_dim, eps=self.norm_eps, device=device)
+            self.o_norm = RMSNorm(self.head_v_dim, eps=self.norm_eps)
         
     def op_forward_func(
         self,
