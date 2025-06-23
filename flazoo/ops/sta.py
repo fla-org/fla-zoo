@@ -219,6 +219,8 @@ def generate_sta_mask_2d(
         text_seq_len=text_seq_len,
     )
 
+    tile_numel = tile_hw[0] * tile_hw[1]
+
     block_mask = create_block_mask(
         mask_mod=sta2d_mask_mod,
         B=None,
@@ -226,6 +228,7 @@ def generate_sta_mask_2d(
         Q_LEN=total_seq_len,
         KV_LEN=total_seq_len,
         device="cuda" if torch.cuda.is_available() else "cpu",
+        BLOCK_SIZE=tile_numel if tile_numel > 128 else 128,
         _compile=compile
     )
 
@@ -250,6 +253,8 @@ def generate_sta_mask_3d(
         text_seq_len=text_seq_len,
     )
 
+    tile_numel = tile_thw[0] * tile_thw[1] * tile_thw[2]
+
     block_mask = create_block_mask(
         mask_mod=sta3d_mask_mod,
         B=None,
@@ -257,6 +262,7 @@ def generate_sta_mask_3d(
         Q_LEN=total_seq_len,
         KV_LEN=total_seq_len,
         device="cuda" if torch.cuda.is_available() else "cpu",
+        BLOCK_SIZE=tile_numel if tile_numel > 128 else 128,
         _compile=compile
     )
 
