@@ -228,7 +228,6 @@ def generate_sta_mask_2d(
         Q_LEN=total_seq_len,
         KV_LEN=total_seq_len,
         device="cuda" if torch.cuda.is_available() else "cpu",
-        BLOCK_SIZE=tile_numel if tile_numel > 128 else 128,
         _compile=compile
     )
 
@@ -262,7 +261,6 @@ def generate_sta_mask_3d(
         Q_LEN=total_seq_len,
         KV_LEN=total_seq_len,
         device="cuda" if torch.cuda.is_available() else "cpu",
-        BLOCK_SIZE=tile_numel if tile_numel > 128 else 128,
         _compile=compile
     )
 
