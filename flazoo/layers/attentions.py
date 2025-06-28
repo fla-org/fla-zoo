@@ -34,9 +34,9 @@ except ImportError:
     )
     na2d = None
 try:
-    from native_sparse_attention.ops.parallel import ( 
+    from native_sparse_attention.ops.parallel import (
         parallel_nsa,
-    ) 
+    )
 except ImportError:
     warnings.warn(
         "Native Sparse Attention is not installed. Please check the package installation.",
@@ -893,7 +893,11 @@ class SlidingTileAttention2D(nn.Module):
 
         import os
 
-        compile = os.environ.get('COMPILE_BLOCK_MASK', 'False').lower() in ('true', '1', 'yes')
+        compile = os.environ.get("COMPILE_BLOCK_MASK", "False").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
         warnings.warn(
             f"Using compile={compile} for block mask generation. "
             "Set COMPILE_BLOCK_MASK environment variable to 'True' to enable compilation."
@@ -903,7 +907,7 @@ class SlidingTileAttention2D(nn.Module):
             canvas_hw=(self.h_dim, self.w_dim),
             kernel_hw=(self.window_size_h, self.window_size_w),
             tile_hw=(self.tile_size_h, self.tile_size_w),
-            total_seq_len= self.seq_len,
+            total_seq_len=self.seq_len,
             compile=compile,
         )
 
@@ -1063,7 +1067,11 @@ class SlidingTileAttention3D(nn.Module):
 
         import os
 
-        compile = os.environ.get('COMPILE_BLOCK_MASK', 'False').lower() in ('true', '1', 'yes')
+        compile = os.environ.get("COMPILE_BLOCK_MASK", "False").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
         warnings.warn(
             f"Using compile={compile} for block mask generation. "
             "Set COMPILE_BLOCK_MASK environment variable to 'True' to enable compilation."
@@ -1072,7 +1080,7 @@ class SlidingTileAttention3D(nn.Module):
         self.block_mask = generate_sta_mask_3d(
             canvas_thw=(self.t_dim, self.h_dim, self.w_dim),
             kernel_thw=(self.window_size_t, self.window_size_h, self.window_size_w),
-            tile_thw=(self.tile_size_t, self.tile_size_h, self.tile_size_w),    
+            tile_thw=(self.tile_size_t, self.tile_size_h, self.tile_size_w),
             total_seq_len=self.seq_len,
             compile=compile,
         )

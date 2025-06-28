@@ -40,6 +40,7 @@ from copy import deepcopy
 from flazoo.helpers.scanner import LearnableScan
 from flazoo.models.utils import compress_seq, decompress_seq
 from flazoo.layers.attentions import get_fla_attn
+
 logger = logging.get_logger(__name__)
 
 
@@ -177,7 +178,6 @@ class FLAVisionPreTrainedModel(PreTrainedModel):
     _no_split_modules = ["ImageEmbeddings", "FLAVisionBlock"]
     supports_gradient_checkpointing = True
 
-
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
             module.weight.data = nn.init.trunc_normal_(
@@ -275,7 +275,9 @@ class FLAVisionModel(FLAVisionPreTrainedModel):
         self.config = config
         self.embeddings = ImageEmbeddings(config, use_mask_token=use_mask_token)
         self.encoder = FLAVisionEncoder(config)
-        self.layernorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps, bias=True)
+        self.layernorm = LayerNorm(
+            config.hidden_size, eps=config.layer_norm_eps, bias=True
+        )
         self.pooler = Pooler(config) if add_pooling_layer else None
         self.init_weights()
 
@@ -539,7 +541,7 @@ class FLAVideoBlock(nn.Module):
         else:
             self.train_scan_type = config.train_scan_type
             self.test_scan_type = config.test_scan_type
-        
+
         if self.train_scan_type == "mh3d-scan" or self.test_scan_type == "mh3d-scan":
             self.canvas_thw = (config.t_dim, config.h_dim, config.w_dim)
             logger.info(f"Using canvas_thw: {self.canvas_thw} for layer {layer_idx}")
@@ -563,7 +565,7 @@ class FLAVideoBlock(nn.Module):
             train_scan_type=self.train_scan_type,
             test_scan_type=self.test_scan_type,
             training=self.training,
-            canvas_thw=self.canvas_thw if hasattr(self, 'canvas_thw') else None,
+            canvas_thw=self.canvas_thw if hasattr(self, "canvas_thw") else None,
         )
 
         hidden_states, attentions, past_key_values = self.attn(
@@ -579,7 +581,7 @@ class FLAVideoBlock(nn.Module):
             train_scan_type=self.train_scan_type,
             test_scan_type=self.test_scan_type,
             training=self.training,
-            canvas_thw=self.canvas_thw if hasattr(self, 'canvas_thw') else None,
+            canvas_thw=self.canvas_thw if hasattr(self, "canvas_thw") else None,
             layer_idx=self.layer_idx,
         )
 
@@ -689,7 +691,9 @@ class FLAVideoModel(FLAVideoPreTrainedModel):
 
         self.embeddings = VideoEmbeddings(config)
         self.encoder = FLAVideoEncoder(config)
-        self.layernorm = LayerNorm(config.hidden_size, eps=config.layer_norm_eps, bias=True)
+        self.layernorm = LayerNorm(
+            config.hidden_size, eps=config.layer_norm_eps, bias=True
+        )
         self.pooler = Pooler(config)
 
         self.post_init()

@@ -22,6 +22,7 @@ from flazoo.models.utils import (
 from .configuration_delta_net import DeltaNetGen2DConfig
 import logging
 
+
 class DeltaNetGen2DMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -96,11 +97,12 @@ class DeltaNetGen2DBlock(nn.Module):
         # directly log train and test scan types
         if self.train_scan_type != "uni-scan" or self.test_scan_type != "uni-scan":
             import warnings
+
             warnings.warn(
                 f"DeltaNetGen2DBlock {layer_idx} train_scan_type: {self.train_scan_type}, test_scan_type: {self.test_scan_type}."
                 " This is not a uni-scan block, which may affect training and inference."
             )
-        
+
         self.num_heads = config.num_heads
 
     def forward(self, x, c):
@@ -158,11 +160,11 @@ class DeltaNetGen2DFinalLayer(nn.Module):
         x = self.linear(x)
         return x
 
+
 class DeltaNetGen2DPreTrainedModel(PreTrainedModel):
-    config_class =  DeltaNetGen2DConfig
+    config_class = DeltaNetGen2DConfig
     base_model_prefix = "deltanet_gen2d"
     supports_gradient_checkpointing = True
-
 
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):

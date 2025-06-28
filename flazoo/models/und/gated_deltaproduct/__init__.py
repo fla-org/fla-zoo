@@ -14,7 +14,9 @@ from .modeling_gated_deltaproduct import (
     GatedDeltaProductForMaskedImageModeling,
 )
 
-AutoConfig.register(GatedDeltaProductVisionConfig.model_type, GatedDeltaProductVisionConfig)
+AutoConfig.register(
+    GatedDeltaProductVisionConfig.model_type, GatedDeltaProductVisionConfig
+)
 AutoModelForImageClassification.register(
     GatedDeltaProductVisionConfig, GatedDeltaProductForImageClassification
 )
@@ -37,7 +39,9 @@ from .modeling_gated_deltaproduct import (
     GatedDeltaProductForVideoPreTraining,
 )
 
-AutoConfig.register(GatedDeltaProductVideoConfig.model_type, GatedDeltaProductVideoConfig)
+AutoConfig.register(
+    GatedDeltaProductVideoConfig.model_type, GatedDeltaProductVideoConfig
+)
 AutoModel.register(GatedDeltaProductVideoConfig, GatedDeltaProductVideoModel)
 AutoModelForVideoClassification.register(
     GatedDeltaProductVideoConfig, GatedDeltaProductForVideoClassification

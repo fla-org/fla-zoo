@@ -20,12 +20,21 @@ from torch import nn
 
 from diffusers.configuration_utils import ConfigMixin, register_to_config
 from diffusers.loaders import PeftAdapterMixin
-from diffusers.utils import USE_PEFT_BACKEND, logging, scale_lora_layers, unscale_lora_layers
+from diffusers.utils import (
+    USE_PEFT_BACKEND,
+    logging,
+    scale_lora_layers,
+    unscale_lora_layers,
+)
 from diffusers.utils.torch_utils import maybe_allow_in_graph
 from diffusers.models.attention import FeedForward
 from flazoo.layers import DeltaNetCrossAttentionHF, SlidingTileCrossAttentionHF3D
 from diffusers.models.cache_utils import CacheMixin
-from diffusers.models.embeddings import CogVideoXPatchEmbed, TimestepEmbedding, Timesteps
+from diffusers.models.embeddings import (
+    CogVideoXPatchEmbed,
+    TimestepEmbedding,
+    Timesteps,
+)
 from diffusers.models.modeling_outputs import Transformer2DModelOutput
 from diffusers.models.modeling_utils import ModelMixin
 from diffusers.models.normalization import AdaLayerNorm, CogVideoXLayerNormZero
@@ -43,7 +52,9 @@ class ENACogVideoXAttnProcessor2_0:
 
     def __init__(self):
         if not hasattr(F, "scaled_dot_product_attention"):
-            raise ImportError("CogVideoXAttnProcessor requires PyTorch 2.0, to use it, please upgrade PyTorch to 2.0.")
+            raise ImportError(
+                "CogVideoXAttnProcessor requires PyTorch 2.0, to use it, please upgrade PyTorch to 2.0."
+            )
 
     def __call__(
         self,
@@ -62,8 +73,12 @@ class ENACogVideoXAttnProcessor2_0:
         batch_size, sequence_length, _ = hidden_states.shape
 
         if attention_mask is not None:
-            attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
-            attention_mask = attention_mask.view(batch_size, attn.heads, -1, attention_mask.shape[-1])
+            attention_mask = attn.prepare_attention_mask(
+                attention_mask, sequence_length, batch_size
+            )
+            attention_mask = attention_mask.view(
+                batch_size, attn.heads, -1, attention_mask.shape[-1]
+            )
 
         query = attn.to_q(hidden_states)
         key = attn.to_k(hidden_states)
@@ -85,13 +100,13 @@ class ENACogVideoXAttnProcessor2_0:
         if image_rotary_emb is not None and attn.layer_idx % 2 == 0:
             from diffusers.models.embeddings import apply_rotary_emb
 
-            query[:, :, text_seq_length:] = apply_rotary_emb(query[:, :, text_seq_length:], image_rotary_emb)
+            query[:, :, text_seq_length:] = apply_rotary_emb(
+                query[:, :, text_seq_length:], image_rotary_emb
+            )
             if not attn.is_cross_attention:
-                key[:, :, text_seq_length:] = apply_rotary_emb(key[:, :, text_seq_length:], image_rotary_emb)
-
-        # hidden_states = F.scaled_dot_product_attention(
-        #     query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
-        # )
+                key[:, :, text_seq_length:] = apply_rotary_emb(
+                    key[:, :, text_seq_length:], image_rotary_emb
+                )
 
         query = query.transpose(1, 2).flatten(2, 3)
         key = key.transpose(1, 2).flatten(2, 3)
@@ -100,9 +115,15 @@ class ENACogVideoXAttnProcessor2_0:
         # move text part to the end of the sequence
         if attn.layer_idx % 2 == 0:
             # STA currently needs vision, text order
-            query = torch.cat([query[:, text_seq_length:, :], query[:, :text_seq_length, :]], dim=1)
-            key = torch.cat([key[:, text_seq_length:, :], key[:, :text_seq_length, :]], dim=1)
-            value = torch.cat([value[:, text_seq_length:, :], value[:, :text_seq_length, :]], dim=1)
+            query = torch.cat(
+                [query[:, text_seq_length:, :], query[:, :text_seq_length, :]], dim=1
+            )
+            key = torch.cat(
+                [key[:, text_seq_length:, :], key[:, :text_seq_length, :]], dim=1
+            )
+            value = torch.cat(
+                [value[:, text_seq_length:, :], value[:, :text_seq_length, :]], dim=1
+            )
 
         hidden_states = attn.op_forward_func(
             q=query,
@@ -122,6 +143,7 @@ class ENACogVideoXAttnProcessor2_0:
                 [vision_seq_length, text_seq_length], dim=1
             )
         return hidden_states, encoder_hidden_states
+
 
 @maybe_allow_in_graph
 class ENACogVideoXBlock(nn.Module):
@@ -181,11 +203,11 @@ class ENACogVideoXBlock(nn.Module):
         super().__init__()
 
         # 1. Self Attention
-        self.norm1 = CogVideoXLayerNormZero(time_embed_dim, dim, norm_elementwise_affine, norm_eps, bias=True)
-
+        self.norm1 = CogVideoXLayerNormZero(
+            time_embed_dim, dim, norm_elementwise_affine, norm_eps, bias=True
+        )
 
         if layer_idx % 2 == 0:
-
             self.attn1 = SlidingTileCrossAttentionHF3D(
                 query_dim=dim,
                 dim_head=attention_head_dim,
@@ -198,7 +220,7 @@ class ENACogVideoXBlock(nn.Module):
                 fla_config=fla_config,
                 layer_idx=layer_idx,
             )
-        
+
         else:
             self.attn1 = DeltaNetCrossAttentionHF(
                 query_dim=dim,
@@ -213,9 +235,10 @@ class ENACogVideoXBlock(nn.Module):
                 layer_idx=layer_idx,
             )
 
-
         # 2. Feed Forward
-        self.norm2 = CogVideoXLayerNormZero(time_embed_dim, dim, norm_elementwise_affine, norm_eps, bias=True)
+        self.norm2 = CogVideoXLayerNormZero(
+            time_embed_dim, dim, norm_elementwise_affine, norm_eps, bias=True
+        )
 
         self.ff = FeedForward(
             dim,
@@ -238,8 +261,8 @@ class ENACogVideoXBlock(nn.Module):
         attention_kwargs = attention_kwargs or {}
 
         # norm & modulate
-        norm_hidden_states, norm_encoder_hidden_states, gate_msa, enc_gate_msa = self.norm1(
-            hidden_states, encoder_hidden_states, temb
+        norm_hidden_states, norm_encoder_hidden_states, gate_msa, enc_gate_msa = (
+            self.norm1(hidden_states, encoder_hidden_states, temb)
         )
 
         # attention
@@ -251,24 +274,32 @@ class ENACogVideoXBlock(nn.Module):
         )
 
         hidden_states = hidden_states + gate_msa * attn_hidden_states
-        encoder_hidden_states = encoder_hidden_states + enc_gate_msa * attn_encoder_hidden_states
+        encoder_hidden_states = (
+            encoder_hidden_states + enc_gate_msa * attn_encoder_hidden_states
+        )
 
         # norm & modulate
-        norm_hidden_states, norm_encoder_hidden_states, gate_ff, enc_gate_ff = self.norm2(
-            hidden_states, encoder_hidden_states, temb
+        norm_hidden_states, norm_encoder_hidden_states, gate_ff, enc_gate_ff = (
+            self.norm2(hidden_states, encoder_hidden_states, temb)
         )
 
         # feed-forward
-        norm_hidden_states = torch.cat([norm_encoder_hidden_states, norm_hidden_states], dim=1)
+        norm_hidden_states = torch.cat(
+            [norm_encoder_hidden_states, norm_hidden_states], dim=1
+        )
         ff_output = self.ff(norm_hidden_states)
 
         hidden_states = hidden_states + gate_ff * ff_output[:, text_seq_length:]
-        encoder_hidden_states = encoder_hidden_states + enc_gate_ff * ff_output[:, :text_seq_length]
+        encoder_hidden_states = (
+            encoder_hidden_states + enc_gate_ff * ff_output[:, :text_seq_length]
+        )
 
         return hidden_states, encoder_hidden_states
 
 
-class ENACogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, CacheMixin):
+class ENACogVideoXTransformer3DModel(
+    ModelMixin, ConfigMixin, PeftAdapterMixin, CacheMixin
+):
     """
     A Transformer model for video-like data in [CogVideoX](https://github.com/THUDM/CogVideo).
 
@@ -394,7 +425,9 @@ class ENACogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
         # 2. Time embeddings and ofs embedding(Only CogVideoX1.5-5B I2V have)
 
         self.time_proj = Timesteps(inner_dim, flip_sin_to_cos, freq_shift)
-        self.time_embedding = TimestepEmbedding(inner_dim, time_embed_dim, timestep_activation_fn)
+        self.time_embedding = TimestepEmbedding(
+            inner_dim, time_embed_dim, timestep_activation_fn
+        )
 
         self.ofs_proj = None
         self.ofs_embedding = None
@@ -456,7 +489,11 @@ class ENACogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
         # set recursively
         processors = {}
 
-        def fn_recursive_add_processors(name: str, module: torch.nn.Module, processors: Dict[str, ENACogVideoXAttnProcessor2_0]):
+        def fn_recursive_add_processors(
+            name: str,
+            module: torch.nn.Module,
+            processors: Dict[str, ENACogVideoXAttnProcessor2_0],
+        ):
             if hasattr(module, "get_processor"):
                 processors[f"{name}.processor"] = module.get_processor()
 
@@ -471,7 +508,12 @@ class ENACogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
         return processors
 
     # Copied from diffusers.models.unets.unet_2d_condition.UNet2DConditionModel.set_attn_processor
-    def set_attn_processor(self, processor: Union[ENACogVideoXAttnProcessor2_0, Dict[str, ENACogVideoXAttnProcessor2_0]]):
+    def set_attn_processor(
+        self,
+        processor: Union[
+            ENACogVideoXAttnProcessor2_0, Dict[str, ENACogVideoXAttnProcessor2_0]
+        ],
+    ):
         r"""
         Sets the attention processor to use to compute attention.
 
@@ -505,7 +547,6 @@ class ENACogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
         for name, module in self.named_children():
             fn_recursive_attn_processor(name, module, processor)
 
-
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -527,7 +568,10 @@ class ENACogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
             # weight the lora layers by setting `lora_scale` for each PEFT layer
             scale_lora_layers(self, lora_scale)
         else:
-            if attention_kwargs is not None and attention_kwargs.get("scale", None) is not None:
+            if (
+                attention_kwargs is not None
+                and attention_kwargs.get("scale", None) is not None
+            ):
                 logger.warning(
                     "Passing `scale` via `attention_kwargs` when not using the PEFT backend is ineffective."
                 )
@@ -561,13 +605,15 @@ class ENACogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
         # 3. Transformer blocks
         for i, block in enumerate(self.transformer_blocks):
             if torch.is_grad_enabled() and self.gradient_checkpointing:
-                hidden_states, encoder_hidden_states = self._gradient_checkpointing_func(
-                    block,
-                    hidden_states,
-                    encoder_hidden_states,
-                    emb,
-                    image_rotary_emb,
-                    attention_kwargs,
+                hidden_states, encoder_hidden_states = (
+                    self._gradient_checkpointing_func(
+                        block,
+                        hidden_states,
+                        encoder_hidden_states,
+                        emb,
+                        image_rotary_emb,
+                        attention_kwargs,
+                    )
                 )
             else:
                 hidden_states, encoder_hidden_states = block(
@@ -589,13 +635,27 @@ class ENACogVideoXTransformer3DModel(ModelMixin, ConfigMixin, PeftAdapterMixin, 
         p_t = self.config.patch_size_t
 
         if p_t is None:
-            output = hidden_states.reshape(batch_size, num_frames, height // p, width // p, -1, p, p)
+            output = hidden_states.reshape(
+                batch_size, num_frames, height // p, width // p, -1, p, p
+            )
             output = output.permute(0, 1, 4, 2, 5, 3, 6).flatten(5, 6).flatten(3, 4)
         else:
             output = hidden_states.reshape(
-                batch_size, (num_frames + p_t - 1) // p_t, height // p, width // p, -1, p_t, p, p
+                batch_size,
+                (num_frames + p_t - 1) // p_t,
+                height // p,
+                width // p,
+                -1,
+                p_t,
+                p,
+                p,
             )
-            output = output.permute(0, 1, 5, 4, 2, 6, 3, 7).flatten(6, 7).flatten(4, 5).flatten(1, 2)
+            output = (
+                output.permute(0, 1, 5, 4, 2, 6, 3, 7)
+                .flatten(6, 7)
+                .flatten(4, 5)
+                .flatten(1, 2)
+            )
 
         if USE_PEFT_BACKEND:
             # remove `lora_scale` from each PEFT layer

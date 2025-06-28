@@ -85,10 +85,15 @@ def prepare_hidden_states_for_scan(
 
     elif scan_type == "mh2d-scan":
         return multi_head_2d_scan(hidden_states, num_heads=num_heads, operation="split")
-    
+
     elif scan_type == "mh3d-scan":
         assert canvas_thw is not None, "canvas_thw should be provided for mh3d-scan"
-        return multi_head_3d_scan(hidden_states=hidden_states, num_heads=num_heads, canvas_thw=canvas_thw, operation="split")
+        return multi_head_3d_scan(
+            hidden_states=hidden_states,
+            num_heads=num_heads,
+            canvas_thw=canvas_thw,
+            operation="split",
+        )
 
     # cross-scan
     B, L, D = hidden_states.shape
@@ -170,15 +175,20 @@ def prepare_hidden_states_for_merge(
             hw = int(math.sqrt(L))
             hidden_states = einops.rearrange(
                 hidden_states, "b (h w) d -> b (w h) d", h=hw, w=hw
-            ) 
+            )
 
         return hidden_states
     elif scan_type == "mh2d-scan":
         return multi_head_2d_scan(hidden_states, num_heads=num_heads, operation="merge")
-    
+
     elif scan_type == "mh3d-scan":
         assert canvas_thw is not None, "canvas_thw should be provided for mh3d-scan"
-        return multi_head_3d_scan(hidden_states=hidden_states, num_heads=num_heads, canvas_thw=canvas_thw, operation="merge")
+        return multi_head_3d_scan(
+            hidden_states=hidden_states,
+            num_heads=num_heads,
+            canvas_thw=canvas_thw,
+            operation="merge",
+        )
 
     # cross scan
 

@@ -182,7 +182,6 @@ class LaCTVisionPreTrainedModel(PreTrainedModel):
     _no_split_modules = ["ImageEmbeddings", "LaCTVisionBlock"]
     supports_gradient_checkpointing = True
 
-
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
             module.weight.data = nn.init.trunc_normal_(

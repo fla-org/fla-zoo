@@ -6,6 +6,7 @@ import torch.cuda.amp as amp
 from einops import rearrange
 from fla.modules import ShortConvolution
 
+
 @torch.compile()
 def silu_backprop(dy: torch.Tensor, x: torch.Tensor):
     """
@@ -88,7 +89,7 @@ def bidirectional_lact_swiglu(
     w0, w1, w2 are the fast weights. f(x) =  w1 @ (silu(w0 @ x) * (w2 @ x))
 
     About precision:
-        w0, w1, w2 are mostly likely fp32. 
+        w0, w1, w2 are mostly likely fp32.
         q, k, v are fp16.
         lr0, lr1, lr2 are fp32.
         The forward, backward produce bf16 gradients, updated fast weights are fp32.
@@ -134,7 +135,6 @@ def bidirectional_lact_swiglu(
     # [b, dh, l] @ [b, l, dk] -> [b, dh, dk]
     dw0 = torch.bmm(dgate_before_act, (k * lr0).type_as(dgate_before_act))
     dw2 = torch.bmm(dhidden_before_mul, (k * lr2).type_as(dhidden_before_mul))
-    
 
     if use_muon:
         w0 = zeropower_via_newtonschulz5(dw0)
@@ -169,7 +169,6 @@ def inv_softplus(x):
 
 
 class BidirectionalLaCTSwiGLU(torch.nn.Module):
-
     def __init__(
         self,
         dim: int,
@@ -203,22 +202,16 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
         if use_short_conv:
             self.conv_size = conv_size
             self.q_conv1d = ShortConvolution(
-                hidden_size=dim,
-                kernel_size=conv_size,
-                activation='silu'
+                hidden_size=dim, kernel_size=conv_size, activation="silu"
             )
             self.k_conv1d = ShortConvolution(
-                hidden_size=dim,
-                kernel_size=conv_size,
-                activation='silu'
+                hidden_size=dim, kernel_size=conv_size, activation="silu"
             )
             self.v_conv1d = ShortConvolution(
-                hidden_size=dim,
-                kernel_size=conv_size,
-                activation='silu'
+                hidden_size=dim, kernel_size=conv_size, activation="silu"
             )
 
-        self.lr_dim = 1   # single scalar learning rate for each head
+        self.lr_dim = 1  # single scalar learning rate for each head
         self.lr_proj = nn.Linear(dim, self.lr_dim * 3 * self.num_heads, bias=False)
         self.base_lr = base_lr
         self.base_lr_inv = inv_softplus(base_lr)
@@ -229,9 +222,7 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
 
         self.w0 = nn.Parameter(torch.randn(self.num_heads, d_h, d_in) / math.sqrt(d_in))
         self.w1 = nn.Parameter(torch.randn(self.num_heads, d_out, d_h) / math.sqrt(d_h))
-        self.w2 = nn.Parameter(
-            torch.randn(self.num_heads, d_h, d_in) / math.sqrt(d_in)
-        )
+        self.w2 = nn.Parameter(torch.randn(self.num_heads, d_h, d_in) / math.sqrt(d_in))
 
         self.qk_l2_norm = qk_l2_norm
         self.use_muon = use_muon
@@ -310,10 +301,9 @@ class BidirectionalLaCTSwiGLU(torch.nn.Module):
         return output, None, None
 
 
-
 def _test_layer():
     B, L, D, HeadDim = 4, 32768, 2048, 512
-    
+
     layer = BidirectionalLaCTSwiGLU(D, HeadDim, use_muon=True)
 
     layer = layer.to("cuda")

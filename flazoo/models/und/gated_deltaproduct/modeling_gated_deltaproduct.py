@@ -21,7 +21,10 @@ from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 from fla.layers.gated_deltaproduct import GatedDeltaProduct
 from flazoo.layers.attentions import get_attn
-from .configuration_gated_deltaproduct import GatedDeltaProductVisionConfig, GatedDeltaProductVideoConfig
+from .configuration_gated_deltaproduct import (
+    GatedDeltaProductVisionConfig,
+    GatedDeltaProductVideoConfig,
+)
 from fla.models.utils import Cache
 from fla.modules import FusedCrossEntropyLoss, FusedLinearCrossEntropyLoss, RMSNorm
 from fla.modules.activations import swiglu_linear
@@ -86,7 +89,7 @@ class GatedDeltaProductVisionBlock(nn.Module):
                 norm_eps=config.norm_eps,
                 allow_neg_eigval=config.allow_neg_eigval,
                 num_householder=config.num_householder,
-                layer_idx=layer_idx
+                layer_idx=layer_idx,
             )
 
         if not config.norm_first:
@@ -514,7 +517,7 @@ class GatedDeltaProductVideoBlock(nn.Module):
                 norm_eps=config.norm_eps,
                 allow_neg_eigval=config.allow_neg_eigval,
                 num_householder=config.num_householder,
-                layer_idx=layer_idx
+                layer_idx=layer_idx,
             )
 
         self.ln_2 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)

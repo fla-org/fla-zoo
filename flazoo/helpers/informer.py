@@ -3,6 +3,7 @@ import os
 import re
 from typing import Dict
 
+
 def get_parameter_count(model: nn.Module) -> Dict[str, int]:
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -13,6 +14,7 @@ def get_parameter_count(model: nn.Module) -> Dict[str, int]:
         "frozen": total_params - trainable_params,
     }
 
+
 def _natural_sort_key(s):
     """
     Helper function for natural sorting (e.g., layer1, layer2, layer10 instead of layer1, layer10, layer2).
@@ -22,9 +24,7 @@ def _natural_sort_key(s):
     ]
 
 
-def log_model(
-    model: nn.Module, log_path: str = None
-) -> None:
+def log_model(model: nn.Module, log_path: str = None) -> None:
     """
     Get detailed parameter information from a model and save it to a log file in a flat format.
 
@@ -59,7 +59,7 @@ def log_model(
             else:
                 f.write("=" * 100 + "\n")
                 f.write(f"This is a pure FLA Model!\n")
-                f.write("=" * 100 + "\n")    
+                f.write("=" * 100 + "\n")
             if model.config.attn is not None:
                 f.write("=" * 100 + "\n")
                 # attn is a dict, write in a nice format
@@ -95,9 +95,8 @@ def log_model(
                 f"{name:<60} {shape_str:<20} {size:>12,} {trainable:>6} {dtype:>15}\n"
             )
 
-def log_model_with_emoji(
-    model: nn.Module, log_path: str = None
-) -> None:
+
+def log_model_with_emoji(model: nn.Module, log_path: str = None) -> None:
     """
     Get detailed parameter information from a model and save it to a log file in a flat format.
 
@@ -130,7 +129,7 @@ def log_model_with_emoji(
             else:
                 f.write("💪" + "=" * 98 + "💪\n")
                 f.write(f"⚡ This is a pure FLA Model! 🚀✨\n")
-                f.write("💪" + "=" * 98 + "💪\n")    
+                f.write("💪" + "=" * 98 + "💪\n")
             if model.config.attn is not None:
                 f.write("⚙️" + "=" * 98 + "⚙️\n")
                 f.write("🔧 Hybrid Attn Config:\n")
@@ -144,7 +143,7 @@ def log_model_with_emoji(
         f.write(f"🎓 Trainable Parameters: {counts['trainable']:,} ✅\n")
         f.write(f"🧊 Frozen Parameters:    {counts['frozen']:,} ❄️\n")
         if counts["total"] > 0:
-            percentage = counts['trainable'] / counts['total'] * 100
+            percentage = counts["trainable"] / counts["total"] * 100
             emoji = "🔥" if percentage > 90 else "⚡" if percentage > 50 else "🌟"
             f.write(f"📊 Trainable Percentage: {percentage:.2f}% {emoji}\n")
         f.write("\n" + "🎨" + "=" * 150 + "🎨\n\n")

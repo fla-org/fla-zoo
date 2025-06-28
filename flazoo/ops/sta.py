@@ -1,12 +1,18 @@
 # -*- coding: utf-8 -*-
 
 import torch
-from torch.nn.attention.flex_attention import _mask_mod_signature, BlockMask, create_block_mask, flex_attention
+from torch.nn.attention.flex_attention import (
+    _mask_mod_signature,
+    BlockMask,
+    create_block_mask,
+    flex_attention,
+)
 from einops import rearrange
 from typing import Tuple
 from torch import IntTensor, BoolTensor
 
 flex_attention = torch.compile(flex_attention)
+
 
 def generate_sta_mask_mod_2d(
     canvas_hw: Tuple[int, int],
@@ -199,6 +205,7 @@ def generate_sta_mask_mod_3d(
     sta_mask_mod_3d.__name__ = f"sta_3d_c{canvas_t}x{canvas_h}x{canvas_w}_k{kernel_t}x{kernel_h}x{kernel_w}_t{tile_t}x{tile_h}x{tile_w}"
     return sta_mask_mod_3d
 
+
 def generate_sta_mask_2d(
     canvas_hw: Tuple[int, int],
     kernel_hw: Tuple[int, int],
@@ -206,12 +213,10 @@ def generate_sta_mask_2d(
     text_seq_len: int = 0,
     total_seq_len: int = None,
     compile: bool = False,
-
 ) -> BlockMask:
-    
     if total_seq_len is None:
         total_seq_len = canvas_hw[0] * canvas_hw[1] + text_seq_len
-    
+
     sta2d_mask_mod = generate_sta_mask_mod_2d(
         canvas_hw=canvas_hw,
         kernel_hw=kernel_hw,
@@ -228,10 +233,11 @@ def generate_sta_mask_2d(
         Q_LEN=total_seq_len,
         KV_LEN=total_seq_len,
         device="cuda" if torch.cuda.is_available() else "cpu",
-        _compile=compile
+        _compile=compile,
     )
 
     return block_mask
+
 
 def generate_sta_mask_3d(
     canvas_thw: Tuple[int, int, int],
@@ -241,10 +247,9 @@ def generate_sta_mask_3d(
     total_seq_len: int = None,
     compile: bool = False,
 ) -> BlockMask:
-    
     if total_seq_len is None:
         total_seq_len = canvas_thw[0] * canvas_thw[1] * canvas_thw[2] + text_seq_len
-    
+
     sta3d_mask_mod = generate_sta_mask_mod_3d(
         canvas_thw=canvas_thw,
         kernel_thw=kernel_thw,
@@ -261,7 +266,7 @@ def generate_sta_mask_3d(
         Q_LEN=total_seq_len,
         KV_LEN=total_seq_len,
         device="cuda" if torch.cuda.is_available() else "cpu",
-        _compile=compile
+        _compile=compile,
     )
 
     return block_mask
@@ -322,9 +327,7 @@ def sta_2d_func(
     )
 
     if flex_attention is None:
-        raise ImportError(
-            "Please install Flex Attention via `pip install torch` first"
-        )
+        raise ImportError("Please install Flex Attention via `pip install torch` first")
 
     o = flex_attention(
         q,
@@ -344,6 +347,7 @@ def sta_2d_func(
     )
 
     return o
+
 
 def sta_3d_func(
     q: torch.Tensor,
@@ -387,7 +391,7 @@ def sta_3d_func(
             tw=tile_size_w,
             th=tile_size_h,
         )
-    
+
     def untile(x: torch.Tensor, num_of_heads: IntTensor) -> torch.Tensor:
         return rearrange(
             x,
@@ -400,16 +404,13 @@ def sta_3d_func(
             tw=tile_size_w,
             th=tile_size_h,
         )
-    
 
     q = tile(q, num_heads)
     k = tile(k, num_kv_heads)
     v = tile(v, num_kv_heads)
 
     if flex_attention is None:
-        raise ImportError(
-            "Please install Flex Attention via `pip install torch` first"
-        )
+        raise ImportError("Please install Flex Attention via `pip install torch` first")
 
     o = flex_attention(
         q,
@@ -421,6 +422,7 @@ def sta_3d_func(
     o = untile(o, num_heads)
 
     return o
+
 
 def sta_3d_with_text_func(
     q: torch.Tensor,
@@ -479,7 +481,7 @@ def sta_3d_with_text_func(
             tw=tile_size_w,
             th=tile_size_h,
         )
-    
+
     def untile(x: torch.Tensor, num_of_heads: IntTensor) -> torch.Tensor:
         return rearrange(
             x,
@@ -492,17 +494,33 @@ def sta_3d_with_text_func(
             tw=tile_size_w,
             th=tile_size_h,
         )
-    
+
     vision_seq_len = q.shape[1] - text_seq_len
 
-    q = torch.concat((tile(q[:, :vision_seq_len, :], num_heads), split_heads(q[:, vision_seq_len:, :], num_heads)), dim=2)
-    k = torch.concat((tile(k[:, :vision_seq_len, :], num_kv_heads), split_heads(k[:, vision_seq_len:, :], num_kv_heads)), dim=2)
-    v = torch.concat((tile(v[:, :vision_seq_len, :], num_kv_heads), split_heads(v[:, vision_seq_len:, :], num_kv_heads)), dim=2)
+    q = torch.concat(
+        (
+            tile(q[:, :vision_seq_len, :], num_heads),
+            split_heads(q[:, vision_seq_len:, :], num_heads),
+        ),
+        dim=2,
+    )
+    k = torch.concat(
+        (
+            tile(k[:, :vision_seq_len, :], num_kv_heads),
+            split_heads(k[:, vision_seq_len:, :], num_kv_heads),
+        ),
+        dim=2,
+    )
+    v = torch.concat(
+        (
+            tile(v[:, :vision_seq_len, :], num_kv_heads),
+            split_heads(v[:, vision_seq_len:, :], num_kv_heads),
+        ),
+        dim=2,
+    )
 
     if flex_attention is None:
-        raise ImportError(
-            "Please install Flex Attention via `pip install torch` first"
-        )
+        raise ImportError("Please install Flex Attention via `pip install torch` first")
 
     o = flex_attention(
         q,
@@ -513,10 +531,10 @@ def sta_3d_with_text_func(
 
     o = torch.concat(
         (
-            untile(o[:, :, :vision_seq_len, :], num_heads),  
-            merge_heads(o[:, :, vision_seq_len:, :]),        
+            untile(o[:, :, :vision_seq_len, :], num_heads),
+            merge_heads(o[:, :, vision_seq_len:, :]),
         ),
-        dim=1, 
+        dim=1,
     )
 
     return o

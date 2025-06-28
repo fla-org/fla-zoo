@@ -16,12 +16,8 @@ from .modeling_lact import (
 
 AutoConfig.register(LaCTVisionConfig.model_type, LaCTVisionConfig)
 AutoModel.register(LaCTVisionConfig, LaCTVisionModel)
-AutoModelForImageClassification.register(
-    LaCTVisionConfig, LaCTForImageClassification
-)
-AutoModelForMaskedImageModeling.register(
-    LaCTVisionConfig, LaCTForMaskedImageModeling
-)
+AutoModelForImageClassification.register(LaCTVisionConfig, LaCTForImageClassification)
+AutoModelForMaskedImageModeling.register(LaCTVisionConfig, LaCTForMaskedImageModeling)
 
 from transformers import (
     AutoConfig,
@@ -39,9 +35,7 @@ from .modeling_lact import (
 
 AutoConfig.register(LaCTVideoConfig.model_type, LaCTVideoConfig)
 AutoModel.register(LaCTVideoConfig, LaCTVideoModel)
-AutoModelForVideoClassification.register(
-    LaCTVideoConfig, LaCTForVideoClassification
-)
+AutoModelForVideoClassification.register(LaCTVideoConfig, LaCTForVideoClassification)
 AutoModelForPreTraining.register(LaCTVideoConfig, LaCTForVideoPreTraining)
 
 __all__ = [

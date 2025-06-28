@@ -111,7 +111,7 @@ class DeltaNetVisionConfig(PretrainedConfig):
                 )
             attn["num_kv_heads"] = attn.get("num_kv_heads", attn["num_heads"])
             attn["window_size"] = attn.get("window_size", None)
-            attn['rope_theta'] = attn.get('rope_theta', 10000.)
+            attn["rope_theta"] = attn.get("rope_theta", 10000.0)
 
         self.attn = attn
 
@@ -212,7 +212,6 @@ class DeltaNetVideoConfig(PretrainedConfig):
         self.use_swiglu = use_swiglu
         self.use_rope = use_rope
 
-
         # Initialize video specific parameters
         self.image_size = image_size
         self.patch_size = patch_size
@@ -254,7 +253,7 @@ class DeltaNetVideoConfig(PretrainedConfig):
                 )
             attn["num_kv_heads"] = attn.get("num_kv_heads", attn["num_heads"])
             attn["window_size"] = attn.get("window_size", None)
-            attn['rope_theta'] = attn.get('rope_theta', 10000.)
+            attn["rope_theta"] = attn.get("rope_theta", 10000.0)
 
         self.attn = attn
 

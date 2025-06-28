@@ -31,7 +31,6 @@ class DeltaNetGen2DConfig(PretrainedConfig):
         initializer_range: float = 0.02,
         fuse_cross_entropy: bool = True,
         layer_norm_eps: float = 1e-6,
-
         # Gen2D specific parameters
         path_type="edm",
         input_size=32,

@@ -124,7 +124,6 @@ class FLAVisionConfig(PretrainedConfig):
         gradient_checkpointing: bool = False,
         attn_type: str = "full_attn",
         attn: Optional[Dict] = None,
-
         expand_k: float = 1,
         expand_v: float = 1,
         use_gate: bool = None,
@@ -137,7 +136,6 @@ class FLAVisionConfig(PretrainedConfig):
         compress_attention: bool = False,
         use_swiglu: bool = False,
         use_rope: bool = False,
-
         num_kv_heads: int = None,
         window_size: Optional[int] = None,
         rope_theta: Optional[float] = None,
@@ -147,17 +145,14 @@ class FLAVisionConfig(PretrainedConfig):
         qkv_bias: bool = None,
         feature_map: Optional[str] = None,
         use_output_gate: bool = None,
-
         lambda_lower_bound: float = None,
         fuse_swiglu: bool = None,
         max_cg_step_training: int = None,
         max_cg_step_decoding: int = None,
-
         tie_feature_map_qk: bool = None,
         norm_q: bool = None,
         norm_k: bool = None,
         norm_feature_map: bool = None,
-
         expand_ratio: Optional[int] = None,
         gate_low_rank_dim: int = None,
         use_lower_bound: bool = None,
@@ -166,14 +161,11 @@ class FLAVisionConfig(PretrainedConfig):
         num_slots: Optional[int] = None,
         gate_logit_normalizer: Optional[int] = None,
         use_norm: bool = None,
-
         use_forget_gate: bool = None,
         allow_neg_eigval: bool = None,
         num_householder: int = None,
-
         use_gk: bool = None,
         use_gv: bool = None,
-
         # Vision specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -192,8 +184,10 @@ class FLAVisionConfig(PretrainedConfig):
         # Get the default values for the chosen model variant
         defaults = FLA_ARGS_DEFAULTS.get(fla_attn_type)
         if defaults is None:
-            raise ValueError(f"Unknown fla_attn_type: '{fla_attn_type}'. "
-                             f"Available options: {list(FLA_ARGS_DEFAULTS.keys())}")
+            raise ValueError(
+                f"Unknown fla_attn_type: '{fla_attn_type}'. "
+                f"Available options: {list(FLA_ARGS_DEFAULTS.keys())}"
+            )
 
         self.fla_attn_type = fla_attn_type
         self.hidden_size = hidden_size
@@ -217,7 +211,11 @@ class FLAVisionConfig(PretrainedConfig):
         self.use_beta = use_beta
         self.use_output_norm = use_output_norm
         self.qk_norm = qk_norm if qk_norm is not None else defaults.get("qk_norm")
-        self.qk_activation = qk_activation if qk_activation is not None else defaults.get("qk_activation")
+        self.qk_activation = (
+            qk_activation
+            if qk_activation is not None
+            else defaults.get("qk_activation")
+        )
         self.intermediate_size = intermediate_size
         self.norm_first = norm_first
         self.compress_attention = compress_attention
@@ -225,32 +223,96 @@ class FLAVisionConfig(PretrainedConfig):
         self.use_rope = use_rope
         self.num_kv_heads = num_kv_heads
         self.window_size = window_size
-        self.rope_theta = rope_theta if rope_theta is not None else defaults.get("rope_theta")
-        self.elementwise_affine = elementwise_affine if elementwise_affine is not None else defaults.get("elementwise_affine")
-        self.attention_bias = attention_bias if attention_bias is not None else defaults.get("attention_bias")
-        self.fuse_norm = fuse_norm if fuse_norm is not None else defaults.get("fuse_norm")
+        self.rope_theta = (
+            rope_theta if rope_theta is not None else defaults.get("rope_theta")
+        )
+        self.elementwise_affine = (
+            elementwise_affine
+            if elementwise_affine is not None
+            else defaults.get("elementwise_affine")
+        )
+        self.attention_bias = (
+            attention_bias
+            if attention_bias is not None
+            else defaults.get("attention_bias")
+        )
+        self.fuse_norm = (
+            fuse_norm if fuse_norm is not None else defaults.get("fuse_norm")
+        )
         self.qkv_bias = qkv_bias if qkv_bias is not None else defaults.get("qkv_bias")
-        self.feature_map = feature_map if feature_map is not None else defaults.get("feature_map")
-        self.use_output_gate = use_output_gate if use_output_gate is not None else defaults.get("use_output_gate")
-        self.lambda_lower_bound = lambda_lower_bound if lambda_lower_bound is not None else defaults.get("lambda_lower_bound")
-        self.fuse_swiglu = fuse_swiglu if fuse_swiglu is not None else defaults.get("fuse_swiglu")
-        self.max_cg_step_training = max_cg_step_training if max_cg_step_training is not None else defaults.get("max_cg_step_training")
-        self.max_cg_step_decoding = max_cg_step_decoding if max_cg_step_decoding is not None else defaults.get("max_cg_step_decoding")
+        self.feature_map = (
+            feature_map if feature_map is not None else defaults.get("feature_map")
+        )
+        self.use_output_gate = (
+            use_output_gate
+            if use_output_gate is not None
+            else defaults.get("use_output_gate")
+        )
+        self.lambda_lower_bound = (
+            lambda_lower_bound
+            if lambda_lower_bound is not None
+            else defaults.get("lambda_lower_bound")
+        )
+        self.fuse_swiglu = (
+            fuse_swiglu if fuse_swiglu is not None else defaults.get("fuse_swiglu")
+        )
+        self.max_cg_step_training = (
+            max_cg_step_training
+            if max_cg_step_training is not None
+            else defaults.get("max_cg_step_training")
+        )
+        self.max_cg_step_decoding = (
+            max_cg_step_decoding
+            if max_cg_step_decoding is not None
+            else defaults.get("max_cg_step_decoding")
+        )
         self.tie_feature_map_qk = tie_feature_map_qk
         self.norm_q = norm_q
         self.norm_k = norm_k
         self.norm_feature_map = norm_feature_map
-        self.expand_ratio = expand_ratio if expand_ratio is not None else defaults.get("expand_ratio")
-        self.gate_low_rank_dim = gate_low_rank_dim if gate_low_rank_dim is not None else defaults.get("gate_low_rank_dim")
-        self.use_lower_bound = use_lower_bound if use_lower_bound is not None else defaults.get("use_lower_bound")
-        self.clamp_min = clamp_min if clamp_min is not None else defaults.get("clamp_min")
-        self.clamp_max = clamp_max if clamp_max is not None else defaults.get("clamp_max")
-        self.num_slots = num_slots if num_slots is not None else defaults.get("num_slots")
-        self.gate_logit_normalizer = gate_logit_normalizer if gate_logit_normalizer is not None else defaults.get("gate_logit_normalizer")
+        self.expand_ratio = (
+            expand_ratio if expand_ratio is not None else defaults.get("expand_ratio")
+        )
+        self.gate_low_rank_dim = (
+            gate_low_rank_dim
+            if gate_low_rank_dim is not None
+            else defaults.get("gate_low_rank_dim")
+        )
+        self.use_lower_bound = (
+            use_lower_bound
+            if use_lower_bound is not None
+            else defaults.get("use_lower_bound")
+        )
+        self.clamp_min = (
+            clamp_min if clamp_min is not None else defaults.get("clamp_min")
+        )
+        self.clamp_max = (
+            clamp_max if clamp_max is not None else defaults.get("clamp_max")
+        )
+        self.num_slots = (
+            num_slots if num_slots is not None else defaults.get("num_slots")
+        )
+        self.gate_logit_normalizer = (
+            gate_logit_normalizer
+            if gate_logit_normalizer is not None
+            else defaults.get("gate_logit_normalizer")
+        )
         self.use_norm = use_norm if use_norm is not None else defaults.get("use_norm")
-        self.use_forget_gate = use_forget_gate if use_forget_gate is not None else defaults.get("use_forget_gate")
-        self.allow_neg_eigval = allow_neg_eigval if allow_neg_eigval is not None else defaults.get("allow_neg_eigval")
-        self.num_householder = num_householder if num_householder is not None else defaults.get("num_householder")
+        self.use_forget_gate = (
+            use_forget_gate
+            if use_forget_gate is not None
+            else defaults.get("use_forget_gate")
+        )
+        self.allow_neg_eigval = (
+            allow_neg_eigval
+            if allow_neg_eigval is not None
+            else defaults.get("allow_neg_eigval")
+        )
+        self.num_householder = (
+            num_householder
+            if num_householder is not None
+            else defaults.get("num_householder")
+        )
         self.use_gk = use_gk if use_gk is not None else defaults.get("use_gk")
         self.use_gv = use_gv
         self.image_size = image_size
@@ -263,7 +325,7 @@ class FLAVisionConfig(PretrainedConfig):
         self.interpolate_pos_encoding = interpolate_pos_encoding
         self.encoder_stride = encoder_stride
         self.train_scan_type = train_scan_type
-        
+
         if test_scan_type is None:
             self.test_scan_type = train_scan_type
         else:
@@ -283,7 +345,7 @@ class FLAVisionConfig(PretrainedConfig):
                 )
             attn["num_kv_heads"] = attn.get("num_kv_heads", attn["num_heads"])
             attn["window_size"] = attn.get("window_size", None)
-            attn['rope_theta'] = attn.get('rope_theta', 10000.)
+            attn["rope_theta"] = attn.get("rope_theta", 10000.0)
 
         self.attn = attn
 
@@ -319,7 +381,6 @@ class FLAVideoConfig(PretrainedConfig):
         gradient_checkpointing: bool = False,
         attn_type: str = "full_attn",
         attn: Optional[Dict] = None,
-
         expand_k: float = 1,
         expand_v: float = 1,
         use_gate: bool = None,
@@ -332,7 +393,6 @@ class FLAVideoConfig(PretrainedConfig):
         compress_attention: bool = False,
         use_swiglu: bool = False,
         use_rope: bool = False,
-
         num_kv_heads: int = None,
         window_size: Optional[int] = None,
         rope_theta: Optional[float] = None,
@@ -342,17 +402,14 @@ class FLAVideoConfig(PretrainedConfig):
         qkv_bias: bool = None,
         feature_map: Optional[str] = None,
         use_output_gate: bool = None,
-
         lambda_lower_bound: float = None,
         fuse_swiglu: bool = None,
         max_cg_step_training: int = None,
         max_cg_step_decoding: int = None,
-
         tie_feature_map_qk: bool = None,
         norm_q: bool = None,
         norm_k: bool = None,
         norm_feature_map: bool = None,
-
         expand_ratio: Optional[int] = None,
         gate_low_rank_dim: int = None,
         use_lower_bound: bool = None,
@@ -361,14 +418,11 @@ class FLAVideoConfig(PretrainedConfig):
         num_slots: Optional[int] = None,
         gate_logit_normalizer: Optional[int] = None,
         use_norm: bool = None,
-
         use_forget_gate: bool = None,
         allow_neg_eigval: bool = None,
         num_householder: int = None,
-
         use_gk: bool = None,
         use_gv: bool = None,
-
         # Video specific parameters
         image_size: int = 224,
         patch_size: int = 16,
@@ -397,8 +451,10 @@ class FLAVideoConfig(PretrainedConfig):
         # Get the default values for the chosen model variant
         defaults = FLA_ARGS_DEFAULTS.get(fla_attn_type)
         if defaults is None:
-            raise ValueError(f"Unknown fla_attn_type: '{fla_attn_type}'. "
-                             f"Available options: {list(FLA_ARGS_DEFAULTS.keys())}")
+            raise ValueError(
+                f"Unknown fla_attn_type: '{fla_attn_type}'. "
+                f"Available options: {list(FLA_ARGS_DEFAULTS.keys())}"
+            )
 
         self.fla_attn_type = fla_attn_type
         self.hidden_size = hidden_size
@@ -422,7 +478,11 @@ class FLAVideoConfig(PretrainedConfig):
         self.use_beta = use_beta
         self.use_output_norm = use_output_norm
         self.qk_norm = qk_norm if qk_norm is not None else defaults.get("qk_norm")
-        self.qk_activation = qk_activation if qk_activation is not None else defaults.get("qk_activation")
+        self.qk_activation = (
+            qk_activation
+            if qk_activation is not None
+            else defaults.get("qk_activation")
+        )
         self.intermediate_size = intermediate_size
         self.norm_first = norm_first
         self.compress_attention = compress_attention
@@ -430,32 +490,96 @@ class FLAVideoConfig(PretrainedConfig):
         self.use_rope = use_rope
         self.num_kv_heads = num_kv_heads
         self.window_size = window_size
-        self.rope_theta = rope_theta if rope_theta is not None else defaults.get("rope_theta")
-        self.elementwise_affine = elementwise_affine if elementwise_affine is not None else defaults.get("elementwise_affine")
-        self.attention_bias = attention_bias if attention_bias is not None else defaults.get("attention_bias")
-        self.fuse_norm = fuse_norm if fuse_norm is not None else defaults.get("fuse_norm")
+        self.rope_theta = (
+            rope_theta if rope_theta is not None else defaults.get("rope_theta")
+        )
+        self.elementwise_affine = (
+            elementwise_affine
+            if elementwise_affine is not None
+            else defaults.get("elementwise_affine")
+        )
+        self.attention_bias = (
+            attention_bias
+            if attention_bias is not None
+            else defaults.get("attention_bias")
+        )
+        self.fuse_norm = (
+            fuse_norm if fuse_norm is not None else defaults.get("fuse_norm")
+        )
         self.qkv_bias = qkv_bias if qkv_bias is not None else defaults.get("qkv_bias")
-        self.feature_map = feature_map if feature_map is not None else defaults.get("feature_map")
-        self.use_output_gate = use_output_gate if use_output_gate is not None else defaults.get("use_output_gate")
-        self.lambda_lower_bound = lambda_lower_bound if lambda_lower_bound is not None else defaults.get("lambda_lower_bound")
-        self.fuse_swiglu = fuse_swiglu if fuse_swiglu is not None else defaults.get("fuse_swiglu")
-        self.max_cg_step_training = max_cg_step_training if max_cg_step_training is not None else defaults.get("max_cg_step_training")
-        self.max_cg_step_decoding = max_cg_step_decoding if max_cg_step_decoding is not None else defaults.get("max_cg_step_decoding")
+        self.feature_map = (
+            feature_map if feature_map is not None else defaults.get("feature_map")
+        )
+        self.use_output_gate = (
+            use_output_gate
+            if use_output_gate is not None
+            else defaults.get("use_output_gate")
+        )
+        self.lambda_lower_bound = (
+            lambda_lower_bound
+            if lambda_lower_bound is not None
+            else defaults.get("lambda_lower_bound")
+        )
+        self.fuse_swiglu = (
+            fuse_swiglu if fuse_swiglu is not None else defaults.get("fuse_swiglu")
+        )
+        self.max_cg_step_training = (
+            max_cg_step_training
+            if max_cg_step_training is not None
+            else defaults.get("max_cg_step_training")
+        )
+        self.max_cg_step_decoding = (
+            max_cg_step_decoding
+            if max_cg_step_decoding is not None
+            else defaults.get("max_cg_step_decoding")
+        )
         self.tie_feature_map_qk = tie_feature_map_qk
         self.norm_q = norm_q
         self.norm_k = norm_k
         self.norm_feature_map = norm_feature_map
-        self.expand_ratio = expand_ratio if expand_ratio is not None else defaults.get("expand_ratio")
-        self.gate_low_rank_dim = gate_low_rank_dim if gate_low_rank_dim is not None else defaults.get("gate_low_rank_dim")
-        self.use_lower_bound = use_lower_bound if use_lower_bound is not None else defaults.get("use_lower_bound")
-        self.clamp_min = clamp_min if clamp_min is not None else defaults.get("clamp_min")
-        self.clamp_max = clamp_max if clamp_max is not None else defaults.get("clamp_max")
-        self.num_slots = num_slots if num_slots is not None else defaults.get("num_slots")
-        self.gate_logit_normalizer = gate_logit_normalizer if gate_logit_normalizer is not None else defaults.get("gate_logit_normalizer")
+        self.expand_ratio = (
+            expand_ratio if expand_ratio is not None else defaults.get("expand_ratio")
+        )
+        self.gate_low_rank_dim = (
+            gate_low_rank_dim
+            if gate_low_rank_dim is not None
+            else defaults.get("gate_low_rank_dim")
+        )
+        self.use_lower_bound = (
+            use_lower_bound
+            if use_lower_bound is not None
+            else defaults.get("use_lower_bound")
+        )
+        self.clamp_min = (
+            clamp_min if clamp_min is not None else defaults.get("clamp_min")
+        )
+        self.clamp_max = (
+            clamp_max if clamp_max is not None else defaults.get("clamp_max")
+        )
+        self.num_slots = (
+            num_slots if num_slots is not None else defaults.get("num_slots")
+        )
+        self.gate_logit_normalizer = (
+            gate_logit_normalizer
+            if gate_logit_normalizer is not None
+            else defaults.get("gate_logit_normalizer")
+        )
         self.use_norm = use_norm if use_norm is not None else defaults.get("use_norm")
-        self.use_forget_gate = use_forget_gate if use_forget_gate is not None else defaults.get("use_forget_gate")
-        self.allow_neg_eigval = allow_neg_eigval if allow_neg_eigval is not None else defaults.get("allow_neg_eigval")
-        self.num_householder = num_householder if num_householder is not None else defaults.get("num_householder")
+        self.use_forget_gate = (
+            use_forget_gate
+            if use_forget_gate is not None
+            else defaults.get("use_forget_gate")
+        )
+        self.allow_neg_eigval = (
+            allow_neg_eigval
+            if allow_neg_eigval is not None
+            else defaults.get("allow_neg_eigval")
+        )
+        self.num_householder = (
+            num_householder
+            if num_householder is not None
+            else defaults.get("num_householder")
+        )
         self.use_gk = use_gk if use_gk is not None else defaults.get("use_gk")
         self.use_gv = use_gv
         self.image_size = image_size
@@ -467,7 +591,7 @@ class FLAVideoConfig(PretrainedConfig):
         self.layer_norm_eps = layer_norm_eps
         self.interpolate_pos_encoding = interpolate_pos_encoding
         self.train_scan_type = train_scan_type
-        
+
         if test_scan_type is None:
             self.test_scan_type = train_scan_type
         else:
@@ -496,7 +620,7 @@ class FLAVideoConfig(PretrainedConfig):
                 )
             attn["num_kv_heads"] = attn.get("num_kv_heads", attn["num_heads"])
             attn["window_size"] = attn.get("window_size", None)
-            attn['rope_theta'] = attn.get('rope_theta', 10000.)
+            attn["rope_theta"] = attn.get("rope_theta", 10000.0)
 
         self.attn = attn
 

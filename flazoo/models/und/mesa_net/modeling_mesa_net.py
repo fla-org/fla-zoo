@@ -86,7 +86,7 @@ class MesaNetVisionBlock(nn.Module):
                 lambda_lower_bound=config.lambda_lower_bound,
                 layer_idx=layer_idx,
                 max_cg_step_training=config.max_cg_step_training,
-                max_cg_step_decoding=config.max_cg_step_decoding
+                max_cg_step_decoding=config.max_cg_step_decoding,
             )
 
         if (
@@ -191,7 +191,6 @@ class MesaNetVisionPreTrainedModel(PreTrainedModel):
     main_input_name = "pixel_values"
     _no_split_modules = ["ImageEmbeddings", "MesaNetVisionBlock"]
     supports_gradient_checkpointing = True
-
 
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Conv2d)):
@@ -545,7 +544,7 @@ class MesaNetVideoBlock(nn.Module):
                 lambda_lower_bound=config.lambda_lower_bound,
                 layer_idx=layer_idx,
                 max_cg_step_training=config.max_cg_step_training,
-                max_cg_step_decoding=config.max_cg_step_decoding
+                max_cg_step_decoding=config.max_cg_step_decoding,
             )
 
         self.ln_2 = LayerNorm(config.hidden_size, bias=True, eps=config.layer_norm_eps)
