@@ -293,5 +293,4 @@ class SlidingTileCrossAttentionHF3D(Attention):
             num_heads=self.heads,
             num_kv_heads= self.heads, # TODO: support different kv heads in the future
         )
-        
-        return o
+    
