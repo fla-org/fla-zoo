@@ -74,6 +74,7 @@ class ENACogVideoXAttnProcessor2_0:
                 train_scan_type=attn.train_scan_type,
                 test_scan_type=attn.test_scan_type,
                 training=attn.training,
+                num_heads=attn.heads,
                 canvas_thw=attn.canvas_thw,
             )
 
@@ -150,6 +151,7 @@ class ENACogVideoXAttnProcessor2_0:
                 test_scan_type=attn.test_scan_type,
                 training=attn.training,
                 canvas_thw=attn.canvas_thw,
+                num_heads=attn.heads,
                 layer_idx=attn.layer_idx,
             )
 
