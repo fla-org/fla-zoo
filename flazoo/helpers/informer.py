@@ -24,7 +24,7 @@ def _natural_sort_key(s):
     ]
 
 
-def log_model(model: nn.Module, log_path: str = None) -> None:
+def log_model(model: nn.Module, log_path: str = None, log_config: bool = False) -> None:
     """
     Get detailed parameter information from a model and save it to a log file in a flat format.
 
@@ -42,7 +42,7 @@ def log_model(model: nn.Module, log_path: str = None) -> None:
     with open(log_path, "w") as f:
         f.write("=" * 100 + "\n")
         f.write(f"Model Parameter Information: {model.__class__.__name__}\n")
-        if hasattr(model, "config"):
+        if hasattr(model, "config") and log_config:
             f.write("=" * 100 + "\n")
             f.write(f"Number of Layers: {model.config.num_hidden_layers}\n")
             f.write(f"Hidden Size: {model.config.hidden_size}\n")
@@ -94,7 +94,7 @@ def log_model(model: nn.Module, log_path: str = None) -> None:
             )
 
 
-def log_model_with_emoji(model: nn.Module, log_path: str = None) -> None:
+def log_model_with_emoji(model: nn.Module, log_path: str = None, log_config: bool = False) -> None:
     """
     Get detailed parameter information from a model and save it to a log file in a flat format.
 
@@ -112,7 +112,7 @@ def log_model_with_emoji(model: nn.Module, log_path: str = None) -> None:
     with open(log_path, "w") as f:
         f.write("🎯" + "=" * 98 + "🎯\n")
         f.write(f"📊 Model Parameter Information: {model.__class__.__name__} 🚀\n")
-        if hasattr(model, "config"):
+        if hasattr(model, "config") and log_config:
             f.write("🎯" + "=" * 98 + "🎯\n")
             f.write(f"🏗️  Number of Layers: {model.config.num_hidden_layers}\n")
             f.write(f"📏 Hidden Size: {model.config.hidden_size}\n")
