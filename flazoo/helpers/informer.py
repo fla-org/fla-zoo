@@ -42,13 +42,11 @@ def log_model(model: nn.Module, log_path: str = None) -> None:
     with open(log_path, "w") as f:
         f.write("=" * 100 + "\n")
         f.write(f"Model Parameter Information: {model.__class__.__name__}\n")
-        # write model.config.num_layers, config.hidden_size, config.num_heads
-        f.write("=" * 100 + "\n")
-        f.write(f"Number of Layers: {model.config.num_hidden_layers}\n")
-        f.write(f"Hidden Size: {model.config.hidden_size}\n")
-        f.write(f"Number of Heads: {model.config.num_heads}\n")
-        # write model.config.fla_attn_type and config.attn is not None
         if hasattr(model, "config"):
+            f.write("=" * 100 + "\n")
+            f.write(f"Number of Layers: {model.config.num_hidden_layers}\n")
+            f.write(f"Hidden Size: {model.config.hidden_size}\n")
+            f.write(f"Number of Heads: {model.config.num_heads}\n")
             f.write("=" * 100 + "\n")
             f.write(f"FLA Attn Type: {model.config.fla_attn_type}\n")
             if model.config.attn is not None:
@@ -114,11 +112,11 @@ def log_model_with_emoji(model: nn.Module, log_path: str = None) -> None:
     with open(log_path, "w") as f:
         f.write("🎯" + "=" * 98 + "🎯\n")
         f.write(f"📊 Model Parameter Information: {model.__class__.__name__} 🚀\n")
-        f.write("🎯" + "=" * 98 + "🎯\n")
-        f.write(f"🏗️  Number of Layers: {model.config.num_hidden_layers}\n")
-        f.write(f"📏 Hidden Size: {model.config.hidden_size}\n")
-        f.write(f"🧠 Number of Heads: {model.config.num_heads}\n")
         if hasattr(model, "config"):
+            f.write("🎯" + "=" * 98 + "🎯\n")
+            f.write(f"🏗️  Number of Layers: {model.config.num_hidden_layers}\n")
+            f.write(f"📏 Hidden Size: {model.config.hidden_size}\n")
+            f.write(f"🧠 Number of Heads: {model.config.num_heads}\n")
             f.write("⚡" + "=" * 98 + "⚡\n")
             f.write(f"🔥 FLA Attn Type: {model.config.fla_attn_type}\n")
             if model.config.attn is not None:
