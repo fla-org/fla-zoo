@@ -33,7 +33,7 @@ class DeltaNetCrossAttentionHF(Attention):
 
         # some specific parameters for the DeltaNet layer
         self.train_scan_type = fla_config.get("train_scan_type", "uni-scan")
-        self.test_scan_type = fla_config.get("test_scan_type", "uni-scan")
+        self.test_scan_type = fla_config.get("test_scan_type", self.train_scan_type)
         self.mode = fla_config.get("mode", "chunk")
         self.use_beta = fla_config.get("use_beta", True)
         self.use_short_conv = fla_config.get("use_short_conv", True)
