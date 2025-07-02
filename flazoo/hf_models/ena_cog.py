@@ -39,6 +39,7 @@ from diffusers.models.modeling_outputs import Transformer2DModelOutput
 from diffusers.models.modeling_utils import ModelMixin
 from diffusers.models.normalization import AdaLayerNorm, CogVideoXLayerNormZero
 import torch.nn.functional as F
+from flazoo.models.utils import prepare_hidden_states_for_merge, prepare_hidden_states_for_scan
 
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -66,6 +67,15 @@ class ENACogVideoXAttnProcessor2_0:
     ) -> torch.Tensor:
         text_seq_length = encoder_hidden_states.size(1)
         vision_seq_length = hidden_states.size(1)
+
+        if attn.layer_idx % 2 == 1:
+            hidden_states = prepare_hidden_states_for_scan(
+                hidden_states,
+                train_scan_type=attn.train_scan_type,
+                test_scan_type=attn.test_scan_type,
+                training=attn.training,
+                canvas_thw=attn.canvas_thw,
+            )
 
         if attn.layer_idx % 2 == 0:
             hidden_states = torch.cat([encoder_hidden_states, hidden_states], dim=1)
@@ -132,6 +142,16 @@ class ENACogVideoXAttnProcessor2_0:
             hidden_states=hidden_states,
             attention_mask=attention_mask,
         )
+
+        if attn.layer_idx % 2 == 1:
+            hidden_states = prepare_hidden_states_for_merge(
+                hidden_states,
+                train_scan_type=attn.train_scan_type,
+                test_scan_type=attn.test_scan_type,
+                training=attn.training,
+                canvas_thw=attn.canvas_thw,
+                layer_idx=attn.layer_idx,
+            )
 
         # linear proj
         hidden_states = attn.to_out[0](hidden_states)

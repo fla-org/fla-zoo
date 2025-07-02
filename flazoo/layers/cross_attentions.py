@@ -46,6 +46,13 @@ class DeltaNetCrossAttentionHF(Attention):
         self.allow_neg_eigval = fla_config.get("allow_neg_eigval", False)
         self.head_v_dim = self.query_dim // self.heads
 
+        # for scan
+        attn_config = fla_config["attn"]
+        t_dim = attn_config.get("t_dim", 32)
+        h_dim = attn_config.get("h_dim", 32)
+        w_dim = attn_config.get("w_dim", 32)
+        self.canvas_thw = (t_dim, h_dim, w_dim)
+
         if self.use_beta:
             self.b_proj = nn.Linear(self.query_dim, self.heads, bias=False)
 
